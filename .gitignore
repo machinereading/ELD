@@ -1,0 +1,8 @@
+corpus/
+word_embeddings/
+saves/
+utils/datamodule/
+__pycache__/
+src/ner_etri/
+scripts/
+testdir/*.json
