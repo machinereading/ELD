@@ -5,7 +5,7 @@ from copy import deepcopy
 from collections import namedtuple, defaultdict
 
 import numpy as np
-from .. import GlobalValues as gl
+from ..utils import GlobalValues as gl
 Entity = namedtuple("Entity", "e_type start_offset end_offset")
 
 def collect_named_entities(tokens):

@@ -1,8 +1,11 @@
 corpus/
 word_embeddings/
-saves/
-utils/datamodule/
 __pycache__/
-src/ner_etri/
+data/
 scripts/
-testdir/*.json
+testdir/
+tests/
+EmbeddingGenerator.py
+nptest.py
+testscript.py
+wtest.py

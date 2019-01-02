@@ -21,7 +21,7 @@ def _separate_sentence(sentence):
 			buf = ""
 	return result
 
-def _decode_label_default(sentence, labels):
+def _decode_label_default(sentence, labels, type_marker="-"):
 	result = []
 	buf = []
 	parse_mode = 0
@@ -30,7 +30,8 @@ def _decode_label_default(sentence, labels):
 	sin = 0
 	ind = 0
 	for s, l in zip(sentence, labels):
-		if type(l) in (np.int32, int):
+
+		if type(l) in (np.int32, np.int64, int):
 			l = gl.ner.label_dict_inv[l] if l in gl.ner.label_dict_inv else "O"
 		if l[0] == "B":
 			if last[0] != "O":
@@ -44,7 +45,7 @@ def _decode_label_default(sentence, labels):
 						"index": len(result)+1
 						})
 				buf = []
-			type_buf = l.split("-")[-1]
+			type_buf = l.split(type_marker)[-1]
 			parse_mode = 1
 			sin = ind
 		if parse_mode == 1 and l[0] == "O":
@@ -246,7 +247,7 @@ class HCLTMorphParser(AbstractDataParser):
 		return sbuf, pbuf, lbuf
 	
 	def decode_label(self, sentence, labels):
-		return _decode_label_default(sentence, labels)
+		return _decode_label_default(sentence, labels, type_marker="_")
 
 
 class HCLTCharacterParser(AbstractDataParser):
@@ -278,6 +279,32 @@ class CoNLLParser(AbstractDataParser):
 
 	def decode_label(self, sentence, labels):
 		return _decode_label_default(sentence, labels)
+
+class NaverContestParser(AbstractDataParser):
+	def unit_generator(self, input_file):
+		buf = []
+		for line in input_file.readlines():
+			line = line.strip()
+			if len(line) == 0: 
+				yield buf
+				buf = []
+				continue
+			buf.append(line)
+
+	def unit_to_data(self, unit):
+		sbuf = []
+		pbuf = []
+		lbuf = []
+		for line in unit:
+			_, morph, label = line.split("\t")
+			sbuf.append(morph)
+			pbuf.append(None)
+			label = "_".join(label.split("_")[::-1])
+			lbuf.append("O" if label == "-" else label)
+		return sbuf, pbuf, lbuf
+
+	def decode_label(self, sentence, labels):
+		return _decode_label_default(sentence, labels, type_marker="_")
 
 class CrowdsourcingParser(AbstractDataParser):
 	def unit_generator(self, input_file):
@@ -361,7 +388,7 @@ class CrowdsourcingParser(AbstractDataParser):
 
 
 if __name__ == '__main__':
-	x = CrowdsourcingParser("corpus/mta_postprocessed/")
+	x = NaverContestParser("corpus/naver_contest/")
 	for s, p, l in x.get_devset():
 		for ss, pp, ll in zip(s,p,l):
 			print(ss, pp, ll)
