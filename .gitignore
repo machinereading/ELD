@@ -5,6 +5,7 @@ data/
 scripts/
 testdir/
 tests/
+naver1/
 EmbeddingGenerator.py
 nptest.py
 testscript.py
