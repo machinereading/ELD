@@ -53,7 +53,6 @@ def read_csv_from_str(texts):
     for line in texts:
         if len(line.strip()) == 0: continue
         comps = line.strip().split('\t')
-        print(comps, len(comps))
         doc_name = comps[0] + ' ' + comps[1]
         mention = comps[2]
         lctx = comps[3]
@@ -225,9 +224,6 @@ def read_conll_from_str(data, texts):
         cur_conll_m_id = 0
         conll_m_id_buf = 0
         check = 0
-        # print(len(conll_doc["mentions"]))
-        # if (len(conll_doc["mentions"]) != len(content)):
-        #     print(doc_name.split()[0])
         errorous_mentions = []
         for m in content:
             mention = m['mention']
@@ -254,16 +250,15 @@ def read_conll_from_str(data, texts):
         data[doc_name] = content
         if len(content) == 0:
             no_entity_docs.append(doc_name)
-
     print("%d mentions removed" % removed_mentions)
     print("%d docs removed" % len(no_entity_docs))
-    data = {k: v for k,v in data.items() if k not in no_entity_docs}
+    data = {k: v for k, v in data.items() if k not in no_entity_docs}
     return data
 
 def generate_dataset_from_str(conll_str, tsv_str):
     dataset = read_csv_from_str(tsv_str)
     # with_coref(dataset, person_names)
-    read_conll_from_str(dataset, conll_str)
+    dataset = read_conll_from_str(dataset, conll_str)
     return dataset
 
 def find_coref(ment, mentlist, person_names):

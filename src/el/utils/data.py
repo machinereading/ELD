@@ -55,9 +55,9 @@ def getETRI(text):
 def find_ne_pos(j):
 	def find_in_wsd(wsd, ind):
 		for item in wsd:
-			if item["begin"] == ind or item["end"] == ind:
+			if item["id"] == ind:
 				return item
-		print(wsd)
+		print(wsd, ind)
 		raise IndexError(ind)
 	original_text = reduce(lambda x, y: x+y, list(map(lambda z: z["text"], j["sentence"])))
 	# original_text = j["sentence"]
@@ -68,7 +68,7 @@ def find_ne_pos(j):
 		for v in j["sentence"]:
 			sentence = v["text"]
 			for ne in v["NE"]:
-				morph_start = find_in_wsd(v["WSD"],ne["begin"])
+				morph_start = find_in_wsd(v["morp"],ne["begin"])
 				# morph_end = find_in_wsd(v["WSD"],ne["end"])
 				byte_start = morph_start["position"]
 				# print(ne["text"], byte_start)
@@ -215,7 +215,6 @@ def change_to_conll(j, filter_emptycand=False):
 		
 		added = False
 		for m, link in morph_split((morph, pos), links):
-			
 			if link is None:
 				result.append(m)
 				last_link = None
@@ -235,7 +234,6 @@ def change_to_conll(j, filter_emptycand=False):
 
 
 def get_context_words(text, pos, direction, maximum_context=30):
-	# text = text.replace("[.<line>.]", "")
 	result = []
 	ind = pos
 	buf = ""
@@ -284,14 +282,13 @@ def change_to_tsv(j, filter_emptycand=False):
 		candidate_list = entity["candidates"]
 		sp = entity["start"]
 		ep = entity["end"]
-		f = [fname, fname, entity["surface"], get_context_words(text, sp, -1), get_context_words(text, ep, 1), "CANDIDATES"]
+		f = [fname, fname, entity["surface"], get_context_words(text, sp, -1), get_context_words(text, ep-1, 1), "CANDIDATES"]
 		gold_ind = -1
 		gold_sent = ""
 		ind = 0
 		cand_list = []
 		for cand_name, cand_score in sorted(candidate_list.items(), key=lambda x: -x[1][0]):
 			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_score))
-		# cand_list.append(("#UNK#", ent_dict["#UNK#"]))
 		if redirected_entity == "NOT_IN_CANDIDATE": redirected_entity = "#UNK#"
 		for cand_name, cand_score in cand_list:
 			# print(cand_score)
@@ -307,7 +304,6 @@ def change_to_tsv(j, filter_emptycand=False):
 		result.append("\t".join(f))
 	return result
 
-
 def prepare(*sentences):
 	conlls = []
 	tsvs = []
@@ -322,5 +318,4 @@ def prepare(*sentences):
 		except Exception as e:
 			import traceback
 			traceback.print_exc()
-			# print(e)
-	return cw_form, "\n\n".join(conlls).split("\n"), tsvs
+	return cw_form, conlls, tsvs

@@ -8,7 +8,6 @@ def merge_item(j, result_list):
 	ind = 0
 
 	for line in result_list[1:]:
-		# print(line)
 		l = line.strip().split("\t")
 		if len(l) == 1:
 			target_name = l[0].split(" ")[0]
@@ -28,10 +27,6 @@ def merge_item(j, result_list):
 			else:
 				raise Exception("No such file name: %s" % target_name)
 			continue
-		# print(len(target_json["entities"]), ind)
-
-		# del target_json["entities"][ind]["candidates"]
-		# print(target_json, l)
 		target_json["entities"][ind]["entity"] = l[2]
 		ind += 1
 	return j

@@ -6,6 +6,7 @@ scripts/
 testdir/
 tests/
 naver1/
+lbox_sentencefetcher.py
 EmbeddingGenerator.py
 nptest.py
 testscript.py

@@ -108,7 +108,7 @@ class EDRanker:
                       'mask': [],
                       'true_pos': -1}
                 m['selected_cands'] = sm
-
+ 
                 selected = set(top_pos[i])
                 idx = 0
                 while len(selected) < self.args.keep_ctx_ent + self.args.keep_p_e_m:
