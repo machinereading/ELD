@@ -13,7 +13,7 @@ def time_analysis(except_keys=[]):
 	longest = max([len(x) for x in k])
 	for item in k:
 		v = time_checker[item]
-		print(("{0:%d}|{1:10}|{2:10}" % (longest+5)).format(item, "%.2fs" % (v / 1000), "%.2f%%" % (v / total_time * 100)))
+		print(("{0:%d}{1:10}{2:10}" % (longest+5)).format(item, "%.2fs" % (v / 1000), "%.2f%%" % (v / total_time * 100)))
 	del time_checker["Time Total"]
 
 def add_time_elem(key, amount):

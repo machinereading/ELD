@@ -16,6 +16,9 @@ with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
 ent_form = ent_form.keys()
 with open("data/el/redirects.pickle", "rb") as f:
 	redirects = pickle.load(f)
+type_map = {
+	
+}
 
 def candidates(word):
 	candidates = ent_dict[word] if word in ent_dict else {}
@@ -59,6 +62,8 @@ def find_ne_pos(j):
 				return item
 		print(wsd, ind)
 		raise IndexError(ind)
+	if j is None:
+		return None
 	original_text = reduce(lambda x, y: x+y, list(map(lambda z: z["text"], j["sentence"])))
 	# original_text = j["sentence"]
 	# print(original_text)

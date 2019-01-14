@@ -59,8 +59,4 @@ class EL():
 		if type(sentences) is str:
 			sentences = [sentences]
 		result = predict(*prepare_data(sentences))
-		try:
-			TimeUtil.time_analysis()
-		except Exception:
-			pass
 		return result
