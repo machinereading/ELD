@@ -63,8 +63,8 @@ class CandidateDict():
 		return [v.to_dict() for v in self.surface_dict.values()]
 
 	@classmethod
-	def from_file(cls, f, d=None):
-		result = CandidateDict() if d is not None else d
+	def from_file(cls, f):
+		result = CandidateDict()
 		for v in json.load(f):
 			result.add_candidate(LinkElem.from_dict(v))
 		return result
@@ -73,7 +73,8 @@ class CandidateDict():
 	def load_entity_from_file(cls, f, d=None):
 		result = CandidateDict() if d is not None else d
 		for line in f.readlines():
-			self.entity_set.append()
+			result.entity_set.add(line.strip())
+		return result
 
 	def items(self):
 		for k, v in self.surface_dict.items():
@@ -147,7 +148,7 @@ class LinkElem():
 			elif k in d:
 				t = disambiguation_list[k]
 				v = self.link_dict[k]
-				del slf.link_dict[k]
+				del self.link_dict[k]
 				for ii in t:
 					self.link_dict[ii] = v / len(t)
 					if ii not in end_list:
@@ -174,12 +175,12 @@ class LinkElem():
 			"surface": self.surface,
 			"link_dict": self.link_dict,
 			"exact_entity": self.exact_entity
-		}e
+		}
 
 	@classmethod
 	def from_dict(cls, d):
 		result = LinkElem(d["surface"])
 		result.link_dict = d["link_dict"]
 		result.exact_entity = d["exact_entity"]
-		result.containing_entity = set(d["containing_entity"])
+		# result.containing_entity = set(d["containing_entity"])
 		return result

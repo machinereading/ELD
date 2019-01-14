@@ -4,31 +4,35 @@ import pickle
 from konlpy.tag import Okt
 import socket
 from functools import reduce
+from .CandidateDict import CandidateDict
+from ...utils import TimeUtil
 import os
 
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
 
-with open("data/el/unk_entity_calc.pickle", "rb") as f:
-	ent_dict = pickle.load(f)
-with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
-	ent_form = pickle.load(f)
-ent_form = ent_form.keys()
-with open("data/el/redirects.pickle", "rb") as f:
-	redirects = pickle.load(f)
-type_map = {
-	
-}
 
+
+# with open("data/el/unk_entity_calc.pickle", "rb") as f:
+# 	ent_dict = pickle.load(f)
+# with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
+# 	ent_form = pickle.load(f)
+# ent_form = ent_form.keys()
+# with open("data/el/redirects.pickle", "rb") as f:
+# 	redirects = pickle.load(f)
+with open("data/el/wiki_entity_dict.json", encoding="UTF8") as f:
+	candidate_dict = CandidateDict.from_file(f)
+with open("data/el/kb_entities", encoding="UTF8") as f:
+	candidate_dict = CandidateDict.load_entity_from_file(f, candidate_dict)
 def candidates(word):
-	candidates = ent_dict[word] if word in ent_dict else {}
-	cand_list = {}
-	for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
+	candidates = candidate_dict[word]
+	# cand_list = {}
+	# for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
 		# print(cand_name, cand_score)
-		cand_name = redirects[cand_name] if cand_name in redirects else cand_name
-		if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
-			cand_list[cand_name] = cand_score
-	return cand_list
+		# cand_name = redirects[cand_name] if cand_name in redirects else cand_name
+		# if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
+		# 	cand_list[cand_name] = cand_score
+	return candidates
 
 def getETRI(text):
 	host = '143.248.135.146'
@@ -36,7 +40,7 @@ def getETRI(text):
 	
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	try:
+	try: 
 		clientSocket.connect(ADDR)
 	except Exception as e:
 		return None
@@ -309,10 +313,11 @@ def change_to_tsv(j, filter_emptycand=False):
 		result.append("\t".join(f))
 	return result
 
-def prepare(*sentences):
+@TimeUtil.measure_time
+def prepare(*sentences, is_json=False):
 	conlls = []
 	tsvs = []
-	cw_form = change_into_crowdsourcing_form(text=sentences)
+	cw_form = change_into_crowdsourcing_form(text=sentences) if not is_json else sentences
 	for sentence in cw_form:
 		try:
 			conll = change_to_conll(sentence)

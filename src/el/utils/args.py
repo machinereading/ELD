@@ -59,7 +59,7 @@ def get_args():
 	                    default=200)
 	parser.add_argument("--dev_f1_change_lr", type=float,
 	                    help="dev f1 to change learning rate",
-	                    default=0.843)
+	                    default=0.800)
 	parser.add_argument("--n_not_inc", type=int,
 	                    help="number of evals after dev f1 not increase",
 	                    default=10)
@@ -87,6 +87,6 @@ def get_args():
 
 
 	args = parser.parse_args()
-	args.mode = "test"
-	args.model_path = "data/el/unk_0.1"
+	# args.mode = "test"
+	args.model_path = "data/el/new_candidates"
 	return args

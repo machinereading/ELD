@@ -1,7 +1,7 @@
 import re
 import time
 import pickle
-
+from ...utils import TimeUtil
 
 def load_person_names(path):
     data = []
@@ -255,6 +255,7 @@ def read_conll_from_str(data, texts):
     data = {k: v for k, v in data.items() if k not in no_entity_docs}
     return data
 
+@TimeUtil.measure_time
 def generate_dataset_from_str(conll_str, tsv_str):
     dataset = read_csv_from_str(tsv_str)
     # with_coref(dataset, person_names)
