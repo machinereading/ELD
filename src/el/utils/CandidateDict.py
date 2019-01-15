@@ -2,10 +2,12 @@ import json
 import math
 import re
 from ...utils.KoreanUtil import is_korean_character, is_digit
+from ...utils.Buffer import Buffer
 class CandidateDict():
 	def __init__(self):
 		self.surface_dict = {}
 		self.entity_set = {}
+		self.buf = Buffer(1000)
 		self.link_modifier = 0.2
 
 	def add_candidate(self, candidate_elem):
@@ -23,6 +25,7 @@ class CandidateDict():
 				print("Not a valid query!")
 				return None
 		elem = []
+		flag = False
 		if query in self.surface_dict:
 			e = self.surface_dict[query]
 			if e.exact_entity is not None:
@@ -30,6 +33,8 @@ class CandidateDict():
 			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
 		
 		if len(elem) == 0:
+			if query in self.buf:
+				return self.buf[query]
 			# print(query)
 			# more specified search
 			# exact match could be skipped since it is already constructed
@@ -46,10 +51,14 @@ class CandidateDict():
 						containing_score += 1
 				if containing_score > 0:
 					elem.append((entity, containing_score / len(words)))
+			flag = True
 		if len(elem) > 0:
 			elem = self.normalized_candidates(elem)
-
-		return [(ent, self.entity_set[ent], score) for ent, score in filter(lambda x: x[0] != "" and x[0] in self.entity_set, elem)]
+		result = [(ent, 0, score) for ent, score in filter(lambda x: x[0] != "", elem)] # TODO need to change 0 to entity id
+		
+		if flag:
+			self.buf[query] = result
+		return result
 
 	def __contains__(self, query):
 		if type(query) is not str:

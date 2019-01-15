@@ -59,6 +59,7 @@ class EL():
 
 		print("TRAINSET")
 		tj, tc, tt = data.prepare(*train_items, ne_marked=True)
+		print(len(train_items), len(tj))
 		# for item in train_items:
 		# 	try:
 		# 		j, c, t = data.prepare_sentence(item, ne_marked=True)
@@ -70,14 +71,15 @@ class EL():
 
 		print("DEVSET")
 		dj, dc, dt = data.prepare(*dev_items, ne_marked=True)
-		for item in dev_items:
-			try:
-				j, c, t = data.prepare_sentence(item, ne_marked=True)
-				dj.append(j)
-				dc += c + [""]
-				dt += t
-			except:
-				pass
+		# for item in dev_items:
+		# 	try:
+		# 		j, c, t = data.prepare_sentence(item, ne_marked=True)
+		# 		dj.append(j)
+		# 		dc += c + [""]
+		# 		dt += t
+		# 	except:
+		# 		pass
+		print(len(dev_items), len(dj))
 		# tj, tc, tt = data.prepare(*train_items, is_json=True)
 		# dj, dc, dt = data.prepare(*dev_items, is_json=True)
 		train_data = D.generate_dataset_from_str(tc, tt)

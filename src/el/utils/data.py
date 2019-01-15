@@ -4,14 +4,14 @@ import pickle
 from konlpy.tag import Okt
 import socket
 from functools import reduce
-from ...utils import TimeUtil
+from ...utils import TimeUtil, progress, printfunc
 from . import candidate_dict
 import os
 import random
 
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
-
+lock = False
 
 # with open("data/el/unk_entity_calc.pickle", "rb") as f:
 # 	ent_dict = pickle.load(f)
@@ -32,6 +32,7 @@ def candidates(word):
 		# 	cand_list[cand_name] = cand_score
 	return candidates
 
+@TimeUtil.measure_time
 def getETRI(text):
 	host = '143.248.135.146'
 	port = 33344
@@ -352,20 +353,50 @@ def prepare_sentence(sentence, ne_marked=False, predict=False):
 
 
 @TimeUtil.measure_time
-def prepare(*sentences, ne_marked=False, predict=False):
+def prepare(*sentences, ne_marked=False, predict=False, worker=5):
+	import threading, time
+
+	lock = threading.Lock()
 	conlls = []
 	tsvs = []
 	cw_form = []
-	for sentence in sentences:
-		try:
-			j, c, t = prepare_sentence(sentence, ne_marked, predict)
-			# conll = change_to_conll(sentence)
-			# tsv = change_to_tsv(sentence)
-			cw_form.append(j)
-			conlls += c
-			conlls += [""]
-			tsvs += t
-		except Exception as e:
-			import traceback
-			traceback.print_exc()
+	prog = 0
+	def job(sents, ne_marked, predict, lock, conlls, tsvs, cw_form):
+		print(len(sents))
+		for sentence in sents:
+			try:
+				j, c, t = prepare_sentence(sentence, ne_marked, predict)
+				# conll = change_to_conll(sentence)
+				# tsv = change_to_tsv(sentence)
+				with lock:
+					print(sentence)
+					cw_form.append(j)
+					conlls += c
+					conlls += [""]
+					tsvs += t
+					print(len(cw_form))
+			except Exception as e:
+				import traceback
+				traceback.print_exc()
+	l = len(sentences)//worker
+	partition = [sentences[(k*l):((k+1)*l)] for k in range(worker)]
+	threads = []
+	for p in partition:
+		threads.append(threading.Thread(target=job, args=[p, ne_marked, predict, lock, conlls, tsvs, cw_form]))
+	for t in threads:
+		t.start()
+	for t in threads:
+		t.join()
+	# for sentence in sentences:
+	# 	try:
+	# 		j, c, t = prepare_sentence(sentence, ne_marked, predict)
+	# 		# conll = change_to_conll(sentence)
+	# 		# tsv = change_to_tsv(sentence)
+	# 		cw_form.append(j)
+	# 		conlls += c
+	# 		conlls += [""]
+	# 		tsvs += t
+	# 	except Exception as e:
+	# 		import traceback
+	# 		traceback.print_exc()
 	return cw_form, conlls, tsvs
