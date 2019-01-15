@@ -1,4 +1,5 @@
 import time
+import functools
 
 time_checker = {}
 time_millis = lambda: int(round(time.time() * 1000))
@@ -25,6 +26,7 @@ def reset_time():
 	time_checker = {}
 
 def measure_time(fn):
+	@functools.wraps(fn)
 	def wrapper(*args, **kwargs):
 		start_time = time_millis()
 		result = fn(*args, **kwargs)

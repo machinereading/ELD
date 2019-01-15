@@ -4,8 +4,8 @@ import pickle
 from konlpy.tag import Okt
 import socket
 from functools import reduce
-from .CandidateDict import CandidateDict
 from ...utils import TimeUtil
+from . import candidate_dict
 import os
 
 okt = Okt()
@@ -15,15 +15,12 @@ dbpedia_prefix = "ko.dbpedia.org/resource/"
 
 # with open("data/el/unk_entity_calc.pickle", "rb") as f:
 # 	ent_dict = pickle.load(f)
-# with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
-# 	ent_form = pickle.load(f)
-# ent_form = ent_form.keys()
-# with open("data/el/redirects.pickle", "rb") as f:
-# 	redirects = pickle.load(f)
-with open("data/el/wiki_entity_dict.json", encoding="UTF8") as f:
-	candidate_dict = CandidateDict.from_file(f)
-with open("data/el/kb_entities", encoding="UTF8") as f:
-	candidate_dict = CandidateDict.load_entity_from_file(f, candidate_dict)
+with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
+	ent_form = pickle.load(f)
+ent_form = ent_form.keys()
+with open("data/el/redirects.pickle", "rb") as f:
+	redirects = pickle.load(f)
+
 def candidates(word):
 	candidates = candidate_dict[word]
 	# cand_list = {}

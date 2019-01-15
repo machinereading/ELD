@@ -54,9 +54,9 @@ class EL():
 		tj, tc, tt = data.prepare(*train_items, is_json=True)
 		dj, dc, dt = data.prepare(*dev_items, is_json=True)
 		train_data = D.generate_dataset_from_str(tc, tt)
-		print(train_data)
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		self.ranker.train([("train", train_data)], [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
+
 
 	def __call__(self, sentences):
 		def prepare_data(sentences):
