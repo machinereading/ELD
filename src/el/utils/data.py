@@ -7,10 +7,10 @@ from functools import reduce
 from ...utils import TimeUtil
 from . import candidate_dict
 import os
+import random
 
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
-
 
 
 # with open("data/el/unk_entity_calc.pickle", "rb") as f:
@@ -21,6 +21,7 @@ ent_form = ent_form.keys()
 with open("data/el/redirects.pickle", "rb") as f:
 	redirects = pickle.load(f)
 
+@TimeUtil.measure_time
 def candidates(word):
 	candidates = candidate_dict[word]
 	# cand_list = {}
@@ -100,6 +101,33 @@ def find_ne_pos(j):
 
 def is_not_korean(char):
 	return not (0xAC00 <= ord(char) <= 0xD7A3)
+
+def mark_ne(text):
+	return find_ne_pos(getETRI(text))
+
+def make_json(ne_marked_dict, predict=False):
+	cs_form = {}
+	cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
+	cs_form["entities"] = []
+	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(N)) if "fileName" not in ne_marked_dict else ne_marked_dict["fileName"]
+	entities = ne_marked_dict["NE"] if "NE" in ne_marked_dict else ne_marked_dict["entities"]
+	for item in entities:
+		skip_flag = False
+		for prefix in ["QT", "DT"]: # HARD-CODED: ONLY WORKS FOR ETRI TYPES
+			if item["type"].startswith(prefix): skip_flag = True
+		if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
+		
+		if all(list(map(is_not_korean, item["text"]))): continue
+		cs_form["entities"].append({
+			"surface": item["text"],
+			"candidates": candidates(item["text"]),
+			"keyword": "NOT_IN_CANDIDATE" if predict else item["keyword"],
+			"start": item["char_start"],
+			"end": item["char_end"],
+			"ne_type": item["type"], 
+			"type": "ETRI"
+			})
+	return cs_form
 
 def change_into_crowdsourcing_form(_arg=None, text=None, file=None):
 	if _arg is not None or not ((text is None) ^ (file is None)):
@@ -293,12 +321,12 @@ def change_to_tsv(j, filter_emptycand=False):
 		gold_sent = ""
 		ind = 0
 		cand_list = []
-		for cand_name, cand_score in sorted(candidate_list.items(), key=lambda x: -x[1][0]):
-			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_score))
-		if redirected_entity == "NOT_IN_CANDIDATE": redirected_entity = "#UNK#"
-		for cand_name, cand_score in cand_list:
+		for cand_name, cand_id, cand_score in sorted(candidate_list, key=lambda x: -x[-1]):
+			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_id, cand_score))
+		if redirected_entity in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY"]: redirected_entity = "#UNK#"
+		for cand_name, cand_id, cand_score in cand_list:
 			# print(cand_score)
-			f.append(",".join([str(cand_score[1]), str(cand_score[0]), cand_name]))
+			f.append(",".join([str(cand_id), str(cand_score), cand_name])) # order: ID SCORE ENTITY
 			if cand_name == redirected_entity:
 				gold_ind = ind
 				gold_sent = f[-1]
@@ -310,18 +338,33 @@ def change_to_tsv(j, filter_emptycand=False):
 		result.append("\t".join(f))
 	return result
 
+def prepare_sentence(sentence, ne_marked=False, predict=False):
+	ne_marked = sentence if ne_marked else mark_ne(sentence)
+	j = make_json(ne_marked, predict)
+	try:
+		conll = change_to_conll(j)
+		tsv = change_to_tsv(j)
+		return j, conll, tsv
+	except:
+		import traceback
+		traceback.print_exc()
+
+
+
 @TimeUtil.measure_time
-def prepare(*sentences, is_json=False):
+def prepare(*sentences, ne_marked=False, predict=False):
 	conlls = []
 	tsvs = []
-	cw_form = change_into_crowdsourcing_form(text=sentences) if not is_json else sentences
-	for sentence in cw_form:
+	cw_form = []
+	for sentence in sentences:
 		try:
-			conll = change_to_conll(sentence)
-			tsv = change_to_tsv(sentence)
-			conlls += conll
+			j, c, t = prepare_sentence(sentence, ne_marked, predict)
+			# conll = change_to_conll(sentence)
+			# tsv = change_to_tsv(sentence)
+			cw_form.append(j)
+			conlls += c
 			conlls += [""]
-			tsvs += tsv
+			tsvs += t
 		except Exception as e:
 			import traceback
 			traceback.print_exc()

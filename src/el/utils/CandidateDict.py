@@ -1,9 +1,11 @@
 import json
 import math
+import re
+from ...utils.KoreanUtil import is_korean_character, is_digit
 class CandidateDict():
 	def __init__(self):
 		self.surface_dict = {}
-		self.entity_set = set([])
+		self.entity_set = {}
 		self.link_modifier = 0.2
 
 	def add_candidate(self, candidate_elem):
@@ -25,16 +27,17 @@ class CandidateDict():
 			e = self.surface_dict[query]
 			if e.exact_entity is not None:
 				elem += [(e.exact_entity, 1)]
-			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query]]
+			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
 		
 		if len(elem) == 0:
+			# print(query)
 			# more specified search
 			# exact match could be skipped since it is already constructed
 			# containing search & sharing word search
 			words = [word for word in re.sub("[()_,.<>/?!\-]", " ", query).split(" ") if len(word) > 0]
-			for entity in self.entity_dict:
+			for entity in self.entity_set:
 				# length 1, 2 words are worthless to get containing entities
-				if len(query) > 2 and query in entity or entity in query:
+				if len(query) > 2 and not all(list(map(is_digit, query))) and (query in entity or entity in query):
 					elem.append((entity, 0.3))
 				ent_words = [word for word in re.sub("[()_,.<>/?!\-]", " ", entity).split(" ") if len(word) > 0]
 				containing_score = 0
@@ -46,7 +49,7 @@ class CandidateDict():
 		if len(elem) > 0:
 			elem = self.normalized_candidates(elem)
 
-		return elem
+		return [(ent, self.entity_set[ent], score) for ent, score in filter(lambda x: x[0] != "" and x[0] in self.entity_set, elem)]
 
 	def __contains__(self, query):
 		if type(query) is not str:
@@ -71,9 +74,10 @@ class CandidateDict():
 
 	@classmethod
 	def load_entity_from_file(cls, f, d=None):
-		result = CandidateDict() if d is not None else d
+		result = CandidateDict() if d is None else d
 		for line in f.readlines():
-			result.entity_set.add(line.strip())
+			result.entity_set[line.strip()] = len(result.entity_set)
+		result.entity_set["#UNK#"] = -1
 		return result
 
 	def items(self):
@@ -113,7 +117,7 @@ class LinkElem():
 		# softmax is not applied here
 		s = sum(self.link_dict.values())
 
-		for item in  [(k, v / s) for k, v in self.link_dict]:
+		for item in  [(k, v / s) for k, v in self.link_dict.items()]:
 			yield item
 
 	def postprocess(self, entity_list, redirect_list, disambiguation_list):

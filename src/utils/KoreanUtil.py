@@ -6,7 +6,8 @@ jamo_len = len(cho) + len(jung) + len(jong)
 
 def is_korean_character(char):
 	return  0xAC00 <= ord(char) <= 0xD7A3
-
+def is_digit(char):
+	return '0' <= char <= '9'
 def decompose_sent(sentence, decompose=False):
 	if type(sentence) is not str:
 		print(sentence, "is not string")

@@ -51,16 +51,43 @@ class EL():
 			dev_items: List of dictionary
 		Output: None
 		"""
-		tj, tc, tt = data.prepare(*train_items, is_json=True)
-		dj, dc, dt = data.prepare(*dev_items, is_json=True)
+		# tj = []
+		# dj = []
+		# for item in train_items:
+		# 	j, c, t = data.prepare_sentence(item, ne_marked=True)
+		# 	tj.append(j)
+
+		print("TRAINSET")
+		tj, tc, tt = data.prepare(*train_items, ne_marked=True)
+		# for item in train_items:
+		# 	try:
+		# 		j, c, t = data.prepare_sentence(item, ne_marked=True)
+		# 		tj.append(j)
+		# 		tc += c + [""]
+		# 		tt += t
+		# 	except:
+		# 		pass
+
+		print("DEVSET")
+		dj, dc, dt = data.prepare(*dev_items, ne_marked=True)
+		for item in dev_items:
+			try:
+				j, c, t = data.prepare_sentence(item, ne_marked=True)
+				dj.append(j)
+				dc += c + [""]
+				dt += t
+			except:
+				pass
+		# tj, tc, tt = data.prepare(*train_items, is_json=True)
+		# dj, dc, dt = data.prepare(*dev_items, is_json=True)
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
-		self.ranker.train([("train", train_data)], [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
+		self.ranker.train({"train": [train_data]}, [("dev",{"dev": [dev_data]})], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
 
 
-	def __call__(self, sentences):
+	def __call__(self, sentences, ne_marked=False):
 		def prepare_data(sentences):
-			j, conll_str, tsv_str = data.prepare(*sentences)
+			j, conll_str, tsv_str = data.prepare(*sentences, ne_marked)
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
 			return j, dataset, self.ranker.get_data_items(dataset, predict=True)
 		

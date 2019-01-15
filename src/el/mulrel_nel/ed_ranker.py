@@ -164,6 +164,7 @@ class EDRanker:
             conll_doc = content[0].get('conll_doc', None)
 
             for m in content:
+                print(m)
                 try:
                     named_cands = [c[0] for c in m[cand_source]]
                     p_e_m = [min(1., max(1e-3, c[1])) for c in m[cand_source]]
