@@ -317,15 +317,15 @@ def eval(testset, system_pred):
 
     true_pos = 0
     for g, p, in zip(gold, pred):
-        if g == p and p != 'NIL':
+        if g == p and p not in ['NIL', "NOT_IN_CANDIDATE"]:
             true_pos += 1
 
-    precision = true_pos / len([p for p in pred if p != 'NIL'])
-    recall = true_pos / len(gold)
-    print(precision)
-    print(recall)
-    f1 = 2 * precision * recall / (precision + recall) if precision+recall >0 else 0
-    return f1
+    # precision = true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]])
+    # recall = true_pos / len(gold)
+    # print(precision)
+    # print(recall)
+    # f1 = 2 * precision * recall / (precision + recall) if precision+recall >0 else 0
+    return true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]]) # only accuracy
 
 
 
@@ -346,26 +346,41 @@ def eval_to_log(testset, system_pred):
     pred_num = 0
     gold_num = 0
     result = []
-    result.append('ment' + '\t' + 'gold' + '\t' + 'pred' + '\t' + 'cand_length' + '\n')
-    for doc_name, content in testset.items():
-        if doc_name not in system_pred:
-            continue
-        result.append(doc_name.split()[0]+"\n")
-        cand_length = [len(c['candidates']) for c in content]
-        mention = [c['mention'] for c in content]
-        gold = [c['gold'][0] for c in content]
-        pred = [c['pred'][0] for c in system_pred[doc_name]]
-        for m, g, p, l in zip(mention, gold, pred, cand_length):
-            if l > 1:
-                gold_num += 1
-                if p != 'NIL':
-                    pred_num += 1
-            if g == p and p != 'NIL':
-                true_pos += 1
-                if l > 1:
-                    true_pos_2 += 1                 
-            line = m + '\t' + g + '\t' + p + '\t' + str(l) + '\n'
-            result.append(line)
+    result = {}
+    for doc_name, pred in system_pred.items():
+        # print(doc_name)
+        result[doc_name.split()[0]] = []
+        mention = [c["mention"] for c in testset[doc_name]]
+        gold = [c["gold"][0] for c in testset[doc_name]]
+        # print(len(mention), len(gold), len(pred))
+        if len(mention) != len(pred):
+            print(doc_name.split()[0], len(mention), len(pred))
+        # assert len(gold) == len(mention) == len(pred)
+        for m, g, p in zip(mention, gold, pred):
+            result[doc_name.split()[0]].append((m, g, p))
+
+
+    # result.append('ment' + '\t' + 'gold' + '\t' + 'pred' + '\t' + 'cand_length' + '\n')
+    # for doc_name, content in testset.items():
+    #     if doc_name not in system_pred:
+    #         continue
+    #     result.append(doc_name.split()[0])
+    #     cand_length = [len(c['candidates']) for c in content]
+    #     mention = [c['mention'] for c in content]
+    #     gold = [c['gold'][0] for c in content]
+    #     pred = [c['pred'][0] for c in system_pred[doc_name]]
+    #     print(len(gold), len(pred))
+    #     for m, g, p, l in zip(mention, gold, pred, cand_length):
+    #         if l > 1:
+    #             gold_num += 1
+    #             if p != 'NIL':
+    #                 pred_num += 1
+    #         if g == p and p != 'NIL':
+    #             true_pos += 1
+    #             if l > 1:
+    #                 true_pos_2 += 1                 
+    #         line = m + '\t' + g + '\t' + p + '\t' + str(l)
+    #         result.append(line)
     return result
 
     # precision = true_pos / len([p for p in pred if p != 'NIL'])

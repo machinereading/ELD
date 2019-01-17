@@ -6,7 +6,7 @@ from .mulrel_nel import dataset as D
 from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
-from ..utils import write
+from ..utils import jsondump
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -105,7 +105,7 @@ class EL():
 
 	def predict(self, sentences, form):
 		def prepare_data(sentences):
-			j, conll_str, tsv_str = data.prepare(*sentences, form=form, predict=True)
+			j, conll_str, tsv_str = data.prepare(*sentences, form=form)
 			if self.debug:
 				import json
 				with open("debug.json", "w", encoding="UTF8") as f:
@@ -117,14 +117,25 @@ class EL():
 					for item in tsv_str:
 						f.write(item+"\n")
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
-			return j, dataset, self.ranker.get_data_items(dataset, predict=True)
+			return j, dataset, self.ranker.get_data_items(dataset)
 		
 		@TimeUtil.measure_time
 		def _predict(j, dataset, data):
+			# doc_stat = {}
+			# for content in data:
+			# 	print(content)
+			# 	if doc_name not in doc_stat:
+			# 		doc_stat[doc_name] = 0
+			# 	doc_stat[doc_name] += 1
+			# for k, v in doc_stat.items():
+			# 	for i in j:
+			# 		if j["fileName"] == k:
+			# 			print(len(j["entities"], v))
+
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data)
 			e = D.eval_to_log(dataset, predictions)
-			write(e, "debug_prediction.txt")
+			jsondump(e, "debug_prediction.json")
 			return merge_item(j, e)
 
 		if type(sentences) is str:

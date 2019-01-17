@@ -1,36 +1,35 @@
-def merge_item(j, result_list):
+def merge_item(j, result_dict):
 	if type(j) is not list:
 		j = [j]
 
 	result = {}
 	target_name = ""
 	target_json = None
-	ind = 0
+	# ind = 0
 
-	for line in result_list[1:]:
-		l = line.strip().split("\t")
-		if len(l) == 1:
-			target_name = l[0].split(" ")[0]
-			# print(target_name)
-			result[target_name] = []
-			ind = 0
-			for item in j:
-				if item["fileName"] == target_name:
-					target_json = item
-					for item in target_json["entities"]:
-						# del item["candidates"]
-						# to get precise result, don't remove candidates
-						item["text"] = item["surface"]
-						del item["surface"]
-					break
-			else:
-				raise Exception("No such file name: %s" % target_name)
-			
-			continue
+	for doc_name, pred in result_dict.items():
+		# ind = 0
+		# print("----")
+		for item in j:
+			if item["fileName"] == doc_name:
+				target_json = item
+				for item in target_json["entities"]:
+					# del item["candidates"]
+					# to get precise result, don't remove candidates
+					item["text"] = item["surface"]
+					del item["surface"]
+				break
+		else:
+			raise Exception("No such file name: %s" % target_name)
 		# print(l[2], target_json["entities"][ind]["keyword"])
 		target_json["entities"] = sorted(target_json["entities"], key=lambda x: x["start"])
-		target_json["entities"][ind]["entity"] = l[2]
-		ind += 1
+		for m, g, p in pred:
+			for ent in target_json["entities"]:
+				if ent["text"] == m and ent["keyword"] == g:
+					ent["entity"] = p
+		# target_json["entities"][ind]["entity"] = l[2]
+		# print(target_json["entities"][ind]["start"])
+		# ind += 1
 	return j
 
 

@@ -16,9 +16,9 @@ lock = False
 
 with open("data/el/wiki_entity_calc.pickle", "rb") as f:
 	ent_dict = pickle.load(f)
-# with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
-# 	ent_form = pickle.load(f)
-# ent_form = ent_form.keys()
+with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
+	ent_form = pickle.load(f)
+ent_form = ent_form.keys()
 with open("data/el/redirects.pickle", "rb") as f:
 	redirects = pickle.load(f)
 
@@ -370,6 +370,8 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	for entity in sentence["entities"]:
 		ans = entity["keyword"] if "keyword" in entity else entity["entity"]
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
+		if redirected_entity not in ent_form:
+			continue
 		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"], tuple(entity["candidates"])))
 	filter_entity = set([])
 	for i1 in links:

@@ -126,9 +126,9 @@ class EDRanker:
                     if idx == m['true_pos']:
                         sm['true_pos'] = len(sm['cands']) - 1
 
-                if not predict:
-                    if sm['true_pos'] == -1:
-                        continue
+                # if not predict:
+                #     if sm['true_pos'] == -1:
+                #         continue
                         # this insertion only makes the performance worse (why???)
                         # sm['true_pos'] = 0
                         # sm['cands'][0] = m['cands'][m['true_pos']]
@@ -141,10 +141,10 @@ class EDRanker:
                     has_gold += 1
                 total += 1
 
-                if predict:
-                    # only for oracle model, not used for eval
-                    if sm['true_pos'] == -1:
-                        sm['true_pos'] = 0  # a fake gold, happens only 2%, but avoid the non-gold
+                # if predict:
+                #     # only for oracle model, not used for eval
+                #     if sm['true_pos'] == -1:
+                #         sm['true_pos'] = 0  # a fake gold, happens only 2%, but avoid the non-gold
 
             if len(items) > 0:
                 new_dataset.append(items)
@@ -275,14 +275,15 @@ class EDRanker:
         return self.prerank(data, predict)
 
     def train(self, org_train_dataset, org_dev_datasets, config):
-        print('extracting training data')
-        train_dataset = self.get_data_items(org_train_dataset, predict=False)
-        print('#train docs', len(train_dataset))
+        with TimeUtil.TimeChecker("EL Data Extraction"):
+            print('extracting training data')
+            train_dataset = self.get_data_items(org_train_dataset, predict=False)
+            print('#train docs', len(train_dataset))
 
-        dev_datasets = []
-        for dname, data in org_dev_datasets:
-            dev_datasets.append((dname, self.get_data_items(data, predict=True)))
-            print(dname, '#dev docs', len(dev_datasets[-1][1]))
+            dev_datasets = []
+            for dname, data in org_dev_datasets:
+                dev_datasets.append((dname, self.get_data_items(data, predict=True)))
+                print(dname, '#dev docs', len(dev_datasets[-1][1]))
 
         print('creating optimizer')
         optimizer = optim.Adam([p for p in self.model.parameters() if p.requires_grad], lr=config['lr'])
@@ -453,6 +454,7 @@ class EDRanker:
             pred_entities = [m['selected_cands']['named_cands'][i] if m['selected_cands']['mask'][i] == 1
                              else (m['selected_cands']['named_cands'][0] if m['selected_cands']['mask'][0] == 1 else 'NOT_IN_CANDIDATE')
                              for (i, m) in zip(pred_ids, batch)]
+            # print(, len(pred_entities))
             doc_names = [m['doc_name'] for m in batch]
 
             if self.args.mode == 'eval' and self.args.print_incorrect:

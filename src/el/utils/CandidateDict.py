@@ -28,8 +28,8 @@ class CandidateDict():
 		flag = False
 		if query in self.surface_dict:
 			e = self.surface_dict[query]
-			# if e.exact_entity is not None:
-			# 	elem += [(e.exact_entity, 1)]
+			if e.exact_entity is not None:
+				elem += [(e.exact_entity, 0.3)]
 			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
 		if len(elem) > 0:
 			elem = self.normalized_candidates(elem)
