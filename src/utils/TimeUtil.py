@@ -33,3 +33,13 @@ def measure_time(fn):
 		add_time_elem(fn.__name__, time_millis() - start_time)
 		return result
 	return wrapper
+
+class TimeChecker():
+	def __init__(self, name):
+		self.name = name
+
+	def __enter__(self):
+		self.start_time = time_millis()
+
+	def __exit__(self, type, value, traceback):
+		add_time_elem(self.name, time_millis() - self.start_time)

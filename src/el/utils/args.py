@@ -56,10 +56,10 @@ def get_args():
 	# args for training
 	parser.add_argument("--n_epochs", type=int,
 	                    help="max number of epochs",
-	                    default=200)
+	                    default=100)
 	parser.add_argument("--dev_f1_change_lr", type=float,
 	                    help="dev f1 to change learning rate",
-	                    default=0.800)
+	                    default=0.690)
 	parser.add_argument("--n_not_inc", type=int,
 	                    help="number of evals after dev f1 not increase",
 	                    default=10)
@@ -88,5 +88,5 @@ def get_args():
 
 	args = parser.parse_args()
 	# args.mode = "test"
-	args.model_path = "data/el/new_candidates"
+	
 	return args

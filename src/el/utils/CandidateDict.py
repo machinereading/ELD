@@ -28,10 +28,12 @@ class CandidateDict():
 		flag = False
 		if query in self.surface_dict:
 			e = self.surface_dict[query]
-			if e.exact_entity is not None:
-				elem += [(e.exact_entity, 1)]
+			# if e.exact_entity is not None:
+			# 	elem += [(e.exact_entity, 1)]
 			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
-		
+		if len(elem) > 0:
+			elem = self.normalized_candidates(elem)
+		return [(ent, 0, score) for ent, score in filter(lambda x: x[0] != "", elem)]
 		if len(elem) == 0:
 			if query in self.buf:
 				return self.buf[query]
@@ -52,8 +54,7 @@ class CandidateDict():
 				if containing_score > 0:
 					elem.append((entity, containing_score / len(words)))
 			flag = True
-		if len(elem) > 0:
-			elem = self.normalized_candidates(elem)
+		
 		result = [(ent, 0, score) for ent, score in filter(lambda x: x[0] != "", elem)] # TODO need to change 0 to entity id
 		
 		if flag:

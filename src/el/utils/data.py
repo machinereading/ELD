@@ -8,29 +8,34 @@ from ...utils import TimeUtil, progress, printfunc
 from . import candidate_dict
 import os
 import random
+import string
 
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
 lock = False
 
-# with open("data/el/unk_entity_calc.pickle", "rb") as f:
-# 	ent_dict = pickle.load(f)
-with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
-	ent_form = pickle.load(f)
-ent_form = ent_form.keys()
+with open("data/el/wiki_entity_calc.pickle", "rb") as f:
+	ent_dict = pickle.load(f)
+# with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
+# 	ent_form = pickle.load(f)
+# ent_form = ent_form.keys()
 with open("data/el/redirects.pickle", "rb") as f:
 	redirects = pickle.load(f)
 
 @TimeUtil.measure_time
 def candidates(word):
 	candidates = candidate_dict[word]
-	# cand_list = {}
-	# for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
-		# print(cand_name, cand_score)
-		# cand_name = redirects[cand_name] if cand_name in redirects else cand_name
-		# if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
-		# 	cand_list[cand_name] = cand_score
 	return candidates
+
+def candidates_old(word):
+	candidates = ent_dict[word] if word in ent_dict else {}
+	cand_list = []
+	for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
+		cand_name = redirects[cand_name] if cand_name in redirects else cand_name
+		if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
+			id, score = cand_score
+			cand_list.append((cand_name, id, score))
+	return cand_list
 
 @TimeUtil.measure_time
 def getETRI(text):
@@ -110,23 +115,27 @@ def make_json(ne_marked_dict, predict=False):
 	cs_form = {}
 	cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
 	cs_form["entities"] = []
-	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(N)) if "fileName" not in ne_marked_dict else ne_marked_dict["fileName"]
+	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict["fileName"] == "" else ne_marked_dict["fileName"]
 	entities = ne_marked_dict["NE"] if "NE" in ne_marked_dict else ne_marked_dict["entities"]
 	for item in entities:
 		skip_flag = False
-		for prefix in ["QT", "DT"]: # HARD-CODED: ONLY WORKS FOR ETRI TYPES
-			if item["type"].startswith(prefix): skip_flag = True
-		if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
+		if "type" in item:
+			for prefix in ["QT", "DT"]: # HARD-CODED: ONLY WORKS FOR ETRI TYPES
+				if item["type"].startswith(prefix): skip_flag = True
+			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
+		surface = item["text"] if "text" in item else item["surface"]
+		keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		start = item["char_start"] if "char_start" in item else item["start"]
+		end = item["char_end"] if "char_end" in item else item["end"]
+		if all(list(map(is_not_korean, surface))): continue
 		
-		if all(list(map(is_not_korean, item["text"]))): continue
 		cs_form["entities"].append({
-			"surface": item["text"],
-			"candidates": candidates(item["text"]),
-			"keyword": "NOT_IN_CANDIDATE" if predict else item["keyword"],
-			"start": item["char_start"],
-			"end": item["char_end"],
-			"ne_type": item["type"], 
-			"type": "ETRI"
+			"surface": surface,
+			"candidates": candidates(surface),
+			"keyword": keyword,
+			"start": start,
+			"end": end,
+			"ne_type": item["type"] if "type" in item else ""
 			})
 	return cs_form
 
@@ -152,19 +161,20 @@ def change_into_crowdsourcing_form(_arg=None, text=None, file=None):
 		cs_form["fileName"] = "%d" % c
 		for item in j["NE"]:
 			skip_flag = False
-			for prefix in ["QT", "DT"]:
-				if item["type"].startswith(prefix): skip_flag = True
-			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
+			if "type" in item:
+				for prefix in ["QT", "DT"]:
+					if item["type"].startswith(prefix): skip_flag = True
+				if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 			
 			if all(list(map(is_not_korean, item["text"]))): continue
 
 			cs_form["entities"].append({
 				"surface": item["text"],
-				"candidates": candidates(item["text"]),
+				"candidates": candidates_old(item["text"]),
 				"keyword": "NOT_IN_CANDIDATE",
 				"start": item["char_start"],
 				"end": item["char_end"],
-				"ne_type": item["type"], 
+				"ne_type": item["type"] if "type" in item else "", 
 				"type": "ETRI"
 				})
 		result.append(cs_form)
@@ -172,6 +182,11 @@ def change_into_crowdsourcing_form(_arg=None, text=None, file=None):
 		if c % 1000 == 0:
 			print("\r%d" % c, end = "", flush=True)
 	return result
+
+def add_candidates(j):
+	for entity in j["entities"]:
+		if "candidates" in entity: continue
+		entity["candidates"] = candidates(entity["surface"])
 
 def overlap(ent1, ent2):
 	s1 = ent1["start"]
@@ -184,7 +199,7 @@ def morph_split(morph_pos, links):
 	result = []
 	morph, pos = morph_pos
 	for link in links:
-		ne, en, sp, ep = link
+		ne, en, sp, ep, _ = link
 		if sp <= pos < ep or pos <= sp < pos+len(morph):
 			if pos < sp:
 				m1 = morph[:sp-pos]
@@ -216,10 +231,10 @@ def change_to_conll(j, filter_emptycand=False):
 	links = []
 	for entity in j["entities"]:
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
-			continue
-		if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
-			continue
+		# if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
+		# 	continue
+		# if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
+		# 	continue
 		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"]))
 
 	filter_entity = set([])
@@ -232,6 +247,7 @@ def change_to_conll(j, filter_emptycand=False):
 				shorter = i1 if i1[3] - i1[2] <= i2[3] - i2[2] else i2
 				filter_entity.add(shorter)
 	links = list(filter(lambda x: x not in filter_entity, links))
+	# print(links)
 	sentence = j["text"]
 	for char in "   ":
 		sentence.replace(char, " ")
@@ -260,7 +276,6 @@ def change_to_conll(j, filter_emptycand=False):
 			last_link = link
 			assert m in ne
 			result.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
-
 
 	result = list(map(lambda x: x if type(x) is str else "\t".join(x), result))
 	if result[-1] in ["", "\n"]:
@@ -298,7 +313,7 @@ def change_to_tsv(j, filter_emptycand=False):
 	fname = j["fileName"]
 	entity_to_text = lambda x: ",".join(["0", "0", x["entity"]])# 0을 entity id로 바꿔야 함
 	entities = j["entities"]
-	filter_entity = []
+	filter_entity = set([])
 	for i1 in entities:
 		if i1 in filter_entity: continue
 		for i2 in entities:
@@ -306,14 +321,14 @@ def change_to_tsv(j, filter_emptycand=False):
 			if overlap(i1, i2):
 				# overlaps
 				shorter = i1 if i1["end"] - i1["start"] <= i2["end"] - i2["start"] else i2
-				filter_entity.append(shorter)
+				filter_entity.add(shorter)
 	entities = list(filter(lambda x: x not in filter_entity, entities))
 	for entity in entities:
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
-			continue
-		if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
-			continue
+		# if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
+		# 	continue
+		# if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
+		# 	continue
 		candidate_list = entity["candidates"]
 		sp = entity["start"]
 		ep = entity["end"]
@@ -339,13 +354,105 @@ def change_to_tsv(j, filter_emptycand=False):
 		result.append("\t".join(f))
 	return result
 
-def prepare_sentence(sentence, ne_marked=False, predict=False):
-	ne_marked = sentence if ne_marked else mark_ne(sentence)
-	j = make_json(ne_marked, predict)
+def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
+	if form not in ["PLAIN_SENTENCE", "ETRI", "CROWDSOURCING"]: raise Exception("Form not match")
+	# print(sentence)
+	if form == "PLAIN_SENTENCE":
+		sentence = mark_ne(sentence)
+	else:
+		sentence = make_json(sentence, predict=predict)
+	# if form == "CROWDSOURCING":
+	# 	add_candidates(sentence)
+	# print(sentence)
+	# at this point, sentence should be in Crowdsourcing form
+	result = []
+	links = []
+	for entity in sentence["entities"]:
+		ans = entity["keyword"] if "keyword" in entity else entity["entity"]
+		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
+		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"], tuple(entity["candidates"])))
+	filter_entity = set([])
+	for i1 in links:
+		if i1 in filter_entity: continue
+		for i2 in links:
+			if i1 == i2: continue
+			if i1[2] <= i2[2] < i1[3] or i1[2] < i2[3] <= i1[3]:
+				# overlaps
+				shorter = i1 if i1[3] - i1[2] <= i2[3] - i2[2] else i2
+				filter_entity.add(shorter)
+	links = list(filter(lambda x: x not in filter_entity, links))
+
+	sent = sentence["text"]
+	for char in "   ":
+		sent.replace(char, " ")
+	morphs = okt.morphs(sent)
+	inds = []
+	last_char_ind = 0
+	conlls = []
+	tsvs = []
+	fname = sentence["fileName"]
+	conlls.append("-DOCSTART- (%s" % fname)
+	for item in morphs:
+		ind = sent.find(item, last_char_ind) 
+		inds.append(ind)
+		last_char_ind = ind+len(item)
+	assert(len(morphs) == len(inds))
+	last_link = None
+	added = []
+	for morph, pos in zip(morphs, inds):
+		for m, link in morph_split((morph, pos), links):
+			if link is None:
+				conlls.append(m)
+				last_link = None
+				continue
+			last_label = conlls[-1][1] if len(conlls) > 0 and type(conlls[-1]) is not str else "O"
+			bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
+			ne, en, sp, ep, cand = link
+			last_link = link
+			assert m in ne
+			conlls.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
+			if bi == "B":
+				added.append(link)
+	not_added = list(filter(lambda x: x not in added, links))
+	if len(not_added) > 0:
+		print(not_added)
+	for ne, en, sp, ep, cand in added:
+		f = [fname, fname, ne, get_context_words(sent, sp, -1), get_context_words(sent, ep-1, 1), "CANDIDATES"]
+		cand_list = []
+		gold_ind = -1
+		for cand_name, cand_id, cand_score in sorted(cand, key=lambda x: -x[-1]):
+			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_id, cand_score))
+		if en in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY"]: en = "#UNK#"
+		for cand_name, cand_id, cand_score in cand_list:
+			# print(cand_score)
+			f.append(",".join([str(cand_id), str(cand_score), cand_name])) # order: ID SCORE ENTITY
+			if cand_name == en:
+				gold_ind = ind
+				gold_sent = f[-1]
+			ind += 1
+		if len(cand_list) == 0:
+			f.append("EMPTYCAND")
+		f.append("GE:")
+		f.append("%d,%s" %(gold_ind, gold_sent) if gold_ind != -1 else "-1")
+		tsvs.append("\t".join(f))
+
+
+	conlls = list(map(lambda x: x if type(x) is str else "\t".join(x), conlls))
+	if conlls[-1] in ["", "\n"]:
+		conlls = conlls[:-1]
+	return sentence, conlls, tsvs
+
+
+
+def prepare_sentence(sentence, form, predict=False):
 	try:
-		conll = change_to_conll(j)
-		tsv = change_to_tsv(j)
-		return j, conll, tsv
+		return generate_input(sentence, predict, form)
+	# ne_marked = sentence if ne_marked else mark_ne(sentence)
+	# j = make_json(ne_marked, predict)
+	# try:
+	# 	conll = change_to_conll(j)
+	# 	tsv = change_to_tsv(j)
+	# 	return j, conll, tsv
 	except:
 		import traceback
 		traceback.print_exc()
@@ -353,50 +460,49 @@ def prepare_sentence(sentence, ne_marked=False, predict=False):
 
 
 @TimeUtil.measure_time
-def prepare(*sentences, ne_marked=False, predict=False, worker=5):
-	import threading, time
-
-	lock = threading.Lock()
+def prepare(*sentences, form, predict=False, worker=5):
 	conlls = []
 	tsvs = []
 	cw_form = []
-	prog = 0
-	def job(sents, ne_marked, predict, lock, conlls, tsvs, cw_form):
-		print(len(sents))
-		for sentence in sents:
-			try:
-				j, c, t = prepare_sentence(sentence, ne_marked, predict)
-				# conll = change_to_conll(sentence)
-				# tsv = change_to_tsv(sentence)
-				with lock:
-					print(sentence)
-					cw_form.append(j)
-					conlls += c
-					conlls += [""]
-					tsvs += t
-					print(len(cw_form))
-			except Exception as e:
-				import traceback
-				traceback.print_exc()
-	l = len(sentences)//worker
-	partition = [sentences[(k*l):((k+1)*l)] for k in range(worker)]
-	threads = []
-	for p in partition:
-		threads.append(threading.Thread(target=job, args=[p, ne_marked, predict, lock, conlls, tsvs, cw_form]))
-	for t in threads:
-		t.start()
-	for t in threads:
-		t.join()
-	# for sentence in sentences:
-	# 	try:
-	# 		j, c, t = prepare_sentence(sentence, ne_marked, predict)
-	# 		# conll = change_to_conll(sentence)
-	# 		# tsv = change_to_tsv(sentence)
-	# 		cw_form.append(j)
-	# 		conlls += c
-	# 		conlls += [""]
-	# 		tsvs += t
-	# 	except Exception as e:
-	# 		import traceback
-	# 		traceback.print_exc()
+	# prog = 0
+	# def job(sents, ne_marked, predict, lock, conlls, tsvs, cw_form):
+	# 	# print(len(sents))
+	# 	for sentence in sents:
+	# 		try:
+	# 			j, c, t = prepare_sentence(sentence, ne_marked, predict)
+	# 			# conll = change_to_conll(sentence)
+	# 			# tsv = change_to_tsv(sentence)
+	# 			with lock:
+	# 				# print(sentence)
+	# 				cw_form.append(j)
+	# 				conlls += c
+	# 				conlls += [""]
+	# 				tsvs += t
+	# 				print(len(cw_form))
+	# 		except Exception as e:
+	# 			import traceback
+	# 			traceback.print_exc()
+	# l = len(sentences)//worker
+	# partition = [sentences[(k*l):((k+1)*l)] for k in range(worker)]
+	# threads = []
+	# for p in partition:
+	# 	threads.append(threading.Thread(target=job, args=[p, ne_marked, predict, lock, conlls, tsvs, cw_form]))
+	# for t in threads:
+	# 	t.start()
+	# for t in threads:
+	# 	t.join()
+	for sentence in sentences:
+		try:
+			j, c, t = prepare_sentence(sentence, form, predict)
+			# conll = change_to_conll(sentence)
+			# tsv = change_to_tsv(sentence)
+			cw_form.append(j)
+			conlls += c
+			conlls += [""]
+			tsvs += t
+		except Exception as e:
+			
+			import traceback
+			traceback.print_exc()
 	return cw_form, conlls, tsvs
+

@@ -10,6 +10,7 @@ from .abstract_word_entity import load as load_model
 from .mulrel_ranker import MulRelRanker
 
 from . import utils as utils
+from ...utils import TimeUtil
 
 from random import shuffle
 import torch.optim as optim
@@ -164,7 +165,6 @@ class EDRanker:
             conll_doc = content[0].get('conll_doc', None)
 
             for m in content:
-                print(m)
                 try:
                     named_cands = [c[0] for c in m[cand_source]]
                     p_e_m = [min(1., max(1e-3, c[1])) for c in m[cand_source]]
@@ -266,7 +266,7 @@ class EDRanker:
                 # note: this shouldn't affect the order of prediction because we use doc_name to add predicted entities,
                 # and we don't shuffle the data for prediction
                 if len(items) > 100:
-                    print(len(items))
+                    # print(len(items))
                     for k in range(0, len(items), 100):
                         data.append(items[k:min(len(items), k + 100)])
                 else:
@@ -290,98 +290,98 @@ class EDRanker:
         not_better_count = 0
         is_counting = False
         eval_after_n_epochs = self.args.eval_after_n_epochs
+        with TimeUtil.TimeChecker("EL_Train"):
+            for e in range(config['n_epochs']):
+                shuffle(train_dataset)
 
-        for e in range(config['n_epochs']):
-            shuffle(train_dataset)
+                total_loss = 0
+                for dc, batch in enumerate(train_dataset):  # each document is a minibatch
+                    self.model.train()
+                    optimizer.zero_grad()
 
-            total_loss = 0
-            for dc, batch in enumerate(train_dataset):  # each document is a minibatch
-                self.model.train()
-                optimizer.zero_grad()
+                    # convert data items to pytorch inputs
+                    token_ids = [m['context'][0] + m['context'][1]
+                                 if len(m['context'][0]) + len(m['context'][1]) > 0
+                                 else [self.model.word_voca.unk_id]
+                                 for m in batch]
+                    s_ltoken_ids = [m['snd_ctx'][0] for m in batch]
+                    s_rtoken_ids = [m['snd_ctx'][1] for m in batch]
+                    s_mtoken_ids = [m['snd_ment'] for m in batch]
 
-                # convert data items to pytorch inputs
-                token_ids = [m['context'][0] + m['context'][1]
-                             if len(m['context'][0]) + len(m['context'][1]) > 0
-                             else [self.model.word_voca.unk_id]
-                             for m in batch]
-                s_ltoken_ids = [m['snd_ctx'][0] for m in batch]
-                s_rtoken_ids = [m['snd_ctx'][1] for m in batch]
-                s_mtoken_ids = [m['snd_ment'] for m in batch]
+                    entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).cuda())
+                    true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).cuda())
+                    p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).cuda())
+                    entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).cuda())
 
-                entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).cuda())
-                true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).cuda())
-                p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).cuda())
-                entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).cuda())
+                    token_ids, token_mask = utils.make_equal_len(token_ids, self.model.word_voca.unk_id)
+                    s_ltoken_ids, s_ltoken_mask = utils.make_equal_len(s_ltoken_ids, self.model.snd_word_voca.unk_id,
+                                                                       to_right=False)
+                    s_rtoken_ids, s_rtoken_mask = utils.make_equal_len(s_rtoken_ids, self.model.snd_word_voca.unk_id)
+                    s_rtoken_ids = [l[::-1] for l in s_rtoken_ids]
+                    s_rtoken_mask = [l[::-1] for l in s_rtoken_mask]
+                    s_mtoken_ids, s_mtoken_mask = utils.make_equal_len(s_mtoken_ids, self.model.snd_word_voca.unk_id)
 
-                token_ids, token_mask = utils.make_equal_len(token_ids, self.model.word_voca.unk_id)
-                s_ltoken_ids, s_ltoken_mask = utils.make_equal_len(s_ltoken_ids, self.model.snd_word_voca.unk_id,
-                                                                   to_right=False)
-                s_rtoken_ids, s_rtoken_mask = utils.make_equal_len(s_rtoken_ids, self.model.snd_word_voca.unk_id)
-                s_rtoken_ids = [l[::-1] for l in s_rtoken_ids]
-                s_rtoken_mask = [l[::-1] for l in s_rtoken_mask]
-                s_mtoken_ids, s_mtoken_mask = utils.make_equal_len(s_mtoken_ids, self.model.snd_word_voca.unk_id)
+                    token_ids = Variable(torch.LongTensor(token_ids).cuda())
+                    token_mask = Variable(torch.FloatTensor(token_mask).cuda())
+                    # too ugly but too lazy to fix it
+                    self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).cuda())
+                    self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).cuda())
+                    self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).cuda())
+                    self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).cuda())
+                    self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).cuda())
+                    self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).cuda())
 
-                token_ids = Variable(torch.LongTensor(token_ids).cuda())
-                token_mask = Variable(torch.FloatTensor(token_mask).cuda())
-                # too ugly but too lazy to fix it
-                self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).cuda())
-                self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).cuda())
-                self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).cuda())
-                self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).cuda())
-                self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).cuda())
-                self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).cuda())
+                    scores = self.model.forward(token_ids, token_mask, entity_ids, entity_mask, p_e_m,
+                                                gold=true_pos.view(-1, 1))
+                    loss = self.model.loss(scores, true_pos)
 
-                scores = self.model.forward(token_ids, token_mask, entity_ids, entity_mask, p_e_m,
-                                            gold=true_pos.view(-1, 1))
-                loss = self.model.loss(scores, true_pos)
+                    loss.backward()
+                    optimizer.step()
+                    self.model.regularize(max_norm=100)
 
-                loss.backward()
-                optimizer.step()
-                self.model.regularize(max_norm=100)
+                    loss = loss.cpu().data.numpy()
+                    total_loss += loss
+                    print('epoch', e, "%0.2f%%" % (dc/len(train_dataset) * 100), loss, end='\r')
 
-                loss = loss.cpu().data.numpy()
-                total_loss += loss
-                print('epoch', e, "%0.2f%%" % (dc/len(train_dataset) * 100), loss, end='\r')
+                print('epoch', e, 'total loss', total_loss, total_loss / len(train_dataset))
 
-            print('epoch', e, 'total loss', total_loss, total_loss / len(train_dataset))
+                if (e + 1) % eval_after_n_epochs == 0:
+                    dev_f1 = 0
+                    for di, (dname, data) in enumerate(dev_datasets):
+                        predictions = self.predict(data)
+                        f1 = D.eval(org_dev_datasets[di][1], predictions)
+                        print(dname, utils.tokgreen('micro F1: ' + str(f1)))
 
-            if (e + 1) % eval_after_n_epochs == 0:
-                dev_f1 = 0
-                for di, (dname, data) in enumerate(dev_datasets):
-                    predictions = self.predict(data)
-                    f1 = D.eval(org_dev_datasets[di][1], predictions)
-                    print(dname, utils.tokgreen('micro F1: ' + str(f1)))
+                        if dname == 'test':
+                            dev_f1 = f1
 
-                    if dname == 'test':
-                        dev_f1 = f1
-
-                if config['lr'] == 1e-4 and dev_f1 >= self.args.dev_f1_change_lr:
-                    eval_after_n_epochs = 2
-                    is_counting = True
-                    best_f1 = dev_f1
-                    not_better_count = 0
-
-                    config['lr'] = 1e-5
-                    print('change learning rate to', config['lr'])
-                    if self.args.mulrel_type == 'rel-norm':
-                        optimizer = optim.Adam([p for p in self.model.parameters() if p.requires_grad], lr=config['lr'])
-                    elif self.args.mulrel_type == 'ment-norm':
-                        for param_group in optimizer.param_groups:
-                            param_group['lr'] = config['lr']
-
-                if is_counting:
-                    if dev_f1 < best_f1:
-                        not_better_count += 1
-                    else:
-                        not_better_count = 0
+                    if config['lr'] == 1e-4 and dev_f1 >= self.args.dev_f1_change_lr:
+                        eval_after_n_epochs = 2
+                        is_counting = True
                         best_f1 = dev_f1
-                        print('save model to', self.args.model_path)
-                        self.model.save(self.args.model_path)
+                        not_better_count = 0
 
-                if not_better_count == self.args.n_not_inc:
-                    break
+                        config['lr'] = 1e-5
+                        print('change learning rate to', config['lr'])
+                        if self.args.mulrel_type == 'rel-norm':
+                            optimizer = optim.Adam([p for p in self.model.parameters() if p.requires_grad], lr=config['lr'])
+                        elif self.args.mulrel_type == 'ment-norm':
+                            for param_group in optimizer.param_groups:
+                                param_group['lr'] = config['lr']
 
-                self.model.print_weight_norm()
+                    if is_counting:
+                        if dev_f1 < best_f1:
+                            not_better_count += 1
+                        else:
+                            not_better_count = 0
+                            best_f1 = dev_f1
+                            print('save model to', self.args.model_path)
+                            self.model.save(self.args.model_path)
+
+                    if not_better_count == self.args.n_not_inc:
+                        break
+
+                    self.model.print_weight_norm()
 
         if not is_counting:
             print('save not the best model to', self.args.model_path)
@@ -451,7 +451,7 @@ class EDRanker:
 
             pred_ids = np.argmax(scores, axis=1)
             pred_entities = [m['selected_cands']['named_cands'][i] if m['selected_cands']['mask'][i] == 1
-                             else (m['selected_cands']['named_cands'][0] if m['selected_cands']['mask'][0] == 1 else 'NIL')
+                             else (m['selected_cands']['named_cands'][0] if m['selected_cands']['mask'][0] == 1 else 'NOT_IN_CANDIDATE')
                              for (i, m) in zip(pred_ids, batch)]
             doc_names = [m['doc_name'] for m in batch]
 

@@ -48,7 +48,7 @@ def read_csv_file(path):
 
     return data
 
-def read_csv_from_str(texts):
+def read_tsv_from_str(texts):
     data = {}
     for line in texts:
         if len(line.strip()) == 0: continue
@@ -79,104 +79,104 @@ def read_csv_from_str(texts):
     return data
 
 
-def read_conll_file(data, path):
-    conll = {}
-    with open(path, 'r', encoding='utf8') as f:
-        cur_sent = None
-        cur_doc = None
+# def read_conll_file(data, path):
+#     conll = {}
+#     with open(path, 'r', encoding='utf8') as f:
+#         cur_sent = None
+#         cur_doc = None
 
-        for line in f:
-            line = line.strip()
-            if line.startswith('-DOCSTART-'):
-                docname = line.split()[1][1:]
-                conll[docname] = {'sentences': [], 'mentions': []}
-                cur_doc = conll[docname]
-                cur_sent = []
+#         for line in f:
+#             line = line.strip()
+#             if line.startswith('-DOCSTART-'):
+#                 docname = line.split()[1][1:]
+#                 conll[docname] = {'sentences': [], 'mentions': []}
+#                 cur_doc = conll[docname]
+#                 cur_sent = []
 
-            else:
-                if line == '' and cur_sent != []:
-                    cur_doc['sentences'].append(cur_sent)
-                    cur_sent = []
+#             else:
+#                 if line == '' and cur_sent != []:
+#                     cur_doc['sentences'].append(cur_sent)
+#                     cur_sent = []
 
-                else:
-                    comps = line.split('\t')
-                    tok = comps[0]
-                    if tok == " ": continue
-                    cur_sent.append(tok)
+#                 else:
+#                     comps = line.split('\t')
+#                     tok = comps[0]
+#                     if tok == " ": continue
+#                     cur_sent.append(tok)
 
-                    if len(comps) >=6 :
-                        bi = comps[1]
-                        wikilink = comps[4]
-                        if bi == 'I':
-                            cur_doc['mentions'][-1]['end'] += 1
-                        else:
-                            new_ment = {'sent_id': len(cur_doc['sentences']),
-                                        'start': len(cur_sent) - 1,
-                                        'end': len(cur_sent),
-                                        'wikilink': wikilink}
-                            cur_doc['mentions'].append(new_ment)
+#                     if len(comps) >=6 :
+#                         bi = comps[1]
+#                         wikilink = comps[4]
+#                         if bi == 'I':
+#                             cur_doc['mentions'][-1]['end'] += 1
+#                         else:
+#                             new_ment = {'sent_id': len(cur_doc['sentences']),
+#                                         'start': len(cur_sent) - 1,
+#                                         'end': len(cur_sent),
+#                                         'wikilink': wikilink}
+#                             cur_doc['mentions'].append(new_ment)
 
-    # merge with data
-    rmpunc = re.compile('[^a-zA-Z0-9ㄱ-ㅣ가-힣]+')
-    removed_mentions = 0
-    no_entity_docs = []
-    for doc_name, content in data.items():
-        conll_doc = conll[doc_name.split()[0]]
-        content[0]['conll_doc'] = conll_doc
-        cur_conll_m_id = 0
-        conll_m_id_buf = 0
-        check = 0
-        # print(len(conll_doc["mentions"]))
-        # if (len(conll_doc["mentions"]) != len(content)):
-        #     print(doc_name.split()[0])
-        errorous_mentions = []
-        for m in content:
-            mention = m['mention']
-            gold = m['gold']
+#     # merge with data
+#     rmpunc = re.compile('[^a-zA-Z0-9ㄱ-ㅣ가-힣]+')
+#     removed_mentions = 0
+#     no_entity_docs = []
+#     for doc_name, content in data.items():
+#         conll_doc = conll[doc_name.split()[0]]
+#         content[0]['conll_doc'] = conll_doc
+#         cur_conll_m_id = 0
+#         conll_m_id_buf = 0
+#         check = 0
+#         # print(len(conll_doc["mentions"]))
+#         # if (len(conll_doc["mentions"]) != len(content)):
+#         #     print(doc_name.split()[0])
+#         errorous_mentions = []
+#         for m in content:
+#             mention = m['mention']
+#             gold = m['gold']
 
-            while True:
-                try:
-                    cur_conll_m = conll_doc['mentions'][cur_conll_m_id]
-                except IndexError:
-                    # print(doc_name.split()[0])
-                    # print(mention)
-                    # print(cur_conll_m_id)
-                    # time.sleep(5)
-                    errorous_mentions.append(m)
-                    cur_conll_m_id = conll_m_id_buf
-                    break
-                # if len(conll_doc['sentences']) == 0:
-                #     print(doc_name.split()[0])
-                # print(len(conll_doc['sentences']))
-                # print(cur_conll_m['sent_id'])
-                 # print(len(conll_doc['sentences'][cur_conll_m['sent_id']]))
-                # print(cur_conll_m['end'])
+#             while True:
+#                 try:
+#                     cur_conll_m = conll_doc['mentions'][cur_conll_m_id]
+#                 except IndexError:
+#                     # print(doc_name.split()[0])
+#                     # print(mention)
+#                     # print(cur_conll_m_id)
+#                     # time.sleep(5)
+#                     errorous_mentions.append(m)
+#                     cur_conll_m_id = conll_m_id_buf
+#                     break
+#                 # if len(conll_doc['sentences']) == 0:
+#                 #     print(doc_name.split()[0])
+#                 # print(len(conll_doc['sentences']))
+#                 # print(cur_conll_m['sent_id'])
+#                  # print(len(conll_doc['sentences'][cur_conll_m['sent_id']]))
+#                 # print(cur_conll_m['end'])
 
-                cur_conll_mention = ' '.join(conll_doc['sentences'][cur_conll_m['sent_id']][cur_conll_m['start']:cur_conll_m['end']])
-                # print(rmpunc.sub('', cur_conll_mention.lower()), rmpunc.sub('', mention.lower()))
-                # if doc_name.split()[0] == "현대_(기업)":
-                #     print(rmpunc.sub('', cur_conll_mention.lower()) , '|',  rmpunc.sub('', mention.lower()))
-                # print(rmpunc.sub('', cur_conll_mention.lower()) == rmpunc.sub('', mention.lower()))
-                if rmpunc.sub('', cur_conll_mention.lower()) == rmpunc.sub('', mention.lower()): # 이부분 개조해서 대충 맞으면 그냥 넘어가게 만들자 TODO 내일 바로 ㄱㄱ
-                    m['conll_m'] = cur_conll_m
-                    conll_m_id_buf = cur_conll_m_id
-                    cur_conll_m_id += 1
-                    break
-                else:
-                    cur_conll_m_id += 1
-                    # errorous_mentions.append(m)
-                    # print(doc_name.split()[0], mention)
-                    # break
-        content = list(filter(lambda x: x not in errorous_mentions, content))
-        removed_mentions += len(errorous_mentions)
-        data[doc_name] = content
-        if len(content) == 0:
-            no_entity_docs.append(doc_name)
+#                 cur_conll_mention = ' '.join(conll_doc['sentences'][cur_conll_m['sent_id']][cur_conll_m['start']:cur_conll_m['end']])
+#                 # print(rmpunc.sub('', cur_conll_mention.lower()), rmpunc.sub('', mention.lower()))
+#                 # if doc_name.split()[0] == "현대_(기업)":
+#                 #     print(rmpunc.sub('', cur_conll_mention.lower()) , '|',  rmpunc.sub('', mention.lower()))
+#                 # print(rmpunc.sub('', cur_conll_mention.lower()) == rmpunc.sub('', mention.lower()))
+#                 if rmpunc.sub('', cur_conll_mention.lower()) == rmpunc.sub('', mention.lower()):
+#                     m['conll_m'] = cur_conll_m
+#                     conll_m_id_buf = cur_conll_m_id
+#                     cur_conll_m_id += 1
+#                     break
+#                 else:
+#                     cur_conll_m_id += 1
+#                     # errorous_mentions.append(m)
+#                     # print(doc_name.split()[0], mention)
+#                     # break
+#         content = list(filter(lambda x: x not in errorous_mentions, content))
+#         removed_mentions += len(errorous_mentions)
+#         data[doc_name] = content
+#         if len(content) == 0:
+#             no_entity_docs.append(doc_name)
 
-    print("%d mentions removed" % removed_mentions)
-    print("%d docs removed" % len(no_entity_docs))
-    data = {k: v for k,v in data.items() if k not in no_entity_docs}
-    return data
+#     print("%d mentions removed" % removed_mentions)
+#     print("%d docs removed" % len(no_entity_docs))
+#     data = {k: v for k,v in data.items() if k not in no_entity_docs}
+#     return data
 
 def read_conll_from_str(data, texts):
     conll = {}
@@ -228,16 +228,20 @@ def read_conll_from_str(data, texts):
         for m in content:
             mention = m['mention']
             gold = m['gold']
-
+            # if "candidates" not in m:
+            #     print(m)
             while True:
                 try:
                     cur_conll_m = conll_doc['mentions'][cur_conll_m_id]
                 except IndexError:
+                    # print(m["mention"], m["gold"])
                     errorous_mentions.append(m)
                     cur_conll_m_id = conll_m_id_buf
                     break
 
                 cur_conll_mention = ' '.join(conll_doc['sentences'][cur_conll_m['sent_id']][cur_conll_m['start']:cur_conll_m['end']])
+                # if rmpunc.sub('', cur_conll_mention.lower()) != rmpunc.sub('', mention.lower()):
+                #     print(rmpunc.sub('', cur_conll_mention.lower()), rmpunc.sub('', mention.lower()))
                 if rmpunc.sub('', cur_conll_mention.lower()) == rmpunc.sub('', mention.lower()):
                     m['conll_m'] = cur_conll_m
                     conll_m_id_buf = cur_conll_m_id
@@ -253,13 +257,20 @@ def read_conll_from_str(data, texts):
     print("%d mentions removed" % removed_mentions)
     print("%d docs removed" % len(no_entity_docs))
     data = {k: v for k, v in data.items() if k not in no_entity_docs}
+    
     return data
 
 @TimeUtil.measure_time
 def generate_dataset_from_str(conll_str, tsv_str):
-    dataset = read_csv_from_str(tsv_str)
+    dataset = read_tsv_from_str(tsv_str)
+    # with open("data_tsv.json", "w", encoding="UTF8") as f:
+    #     import json
+    #     json.dump(dataset, f, ensure_ascii=False, indent="\t")
     # with_coref(dataset, person_names)
     dataset = read_conll_from_str(dataset, conll_str)
+    # with open("data_conll.json", "w", encoding="UTF8") as f:
+    #     import json
+    #     json.dump(dataset, f, ensure_ascii=False, indent="\t")
     return dataset
 
 def find_coref(ment, mentlist, person_names):
@@ -372,39 +383,39 @@ def eval_to_log(testset, system_pred):
     # return f1
 
 
-class CoNLLDataset:
-    """
-    reading dataset from CoNLL dataset, extracted by https://github.com/dalab/deep-ed/
-    """
+# class CoNLLDataset:
+#     """
+#     reading dataset from CoNLL dataset, extracted by https://github.com/dalab/deep-ed/
+#     """
 
-    def __init__(self, path, person_path, conll_path):
-        print('load csv')
-        self.train = read_csv_file(path + '/cs_train.tsv')
-        self.test = read_csv_file(path + '/cs_test.tsv')
-        self.dev = read_csv_file(path + '/cs_dev.tsv')
-        self.tta_test = read_csv_file(path + "/tta.tsv")
+#     def __init__(self, path, person_path, conll_path):
+#         print('load csv')
+#         self.train = read_csv_file(path + '/cs_train.tsv')
+#         self.test = read_csv_file(path + '/cs_test.tsv')
+#         self.dev = read_csv_file(path + '/cs_dev.tsv')
+#         self.tta_test = read_csv_file(path + "/tta.tsv")
 
         
-        # print('process coref')
-        # person_names = load_person_names(person_path)
-        # with_coref(self.train, person_names)
-        # with_coref(self.test, person_names)
-        # with_coref(self.dev, person_names)
-        # with_coref(self.tta_test, person_names)
+#         # print('process coref')
+#         # person_names = load_person_names(person_path)
+#         # with_coref(self.train, person_names)
+#         # with_coref(self.test, person_names)
+#         # with_coref(self.dev, person_names)
+#         # with_coref(self.tta_test, person_names)
 
-        print('load conll')
-        read_conll_file(self.train, path + '/cs_train.conll')
-        read_conll_file(self.test, path + '/cs_test.conll')
-        read_conll_file(self.dev, path + '/cs_dev.conll')
-        read_conll_file(self.tta_test, path + "/tta.conll")
+#         print('load conll')
+#         read_conll_file(self.train, path + '/cs_train.conll')
+#         read_conll_file(self.test, path + '/cs_test.conll')
+#         read_conll_file(self.dev, path + '/cs_dev.conll')
+#         read_conll_file(self.tta_test, path + "/tta.conll")
 
-if __name__ == "__main__":
-    path = 'data/generated/test_train_data'
-    conll_path = 'data/basic_data/test_datasets'
-    person_path = 'data/basic_data/p_e_m_data/persons.txt'
+# if __name__ == "__main__":
+#     path = 'data/generated/test_train_data'
+#     conll_path = 'data/basic_data/test_datasets'
+#     person_path = 'data/basic_data/p_e_m_data/persons.txt'
 
-    dataset = CoNLLDataset(path, person_path, conll_path)
-    train_dataset = dataset.train
+#     dataset = CoNLLDataset(path, person_path, conll_path)
+#     train_dataset = dataset.train
     # for doc_name, content in train_dataset.items():
     #     print(doc_name)
     #     for c in content:

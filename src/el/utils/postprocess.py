@@ -18,15 +18,17 @@ def merge_item(j, result_list):
 				if item["fileName"] == target_name:
 					target_json = item
 					for item in target_json["entities"]:
-						del item["candidates"]
-						del item["keyword"]
+						# del item["candidates"]
+						# to get precise result, don't remove candidates
 						item["text"] = item["surface"]
 						del item["surface"]
-
 					break
 			else:
 				raise Exception("No such file name: %s" % target_name)
+			
 			continue
+		# print(l[2], target_json["entities"][ind]["keyword"])
+		target_json["entities"] = sorted(target_json["entities"], key=lambda x: x["start"])
 		target_json["entities"][ind]["entity"] = l[2]
 		ind += 1
 	return j
