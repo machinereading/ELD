@@ -3,11 +3,11 @@ import functools
 
 time_checker = {}
 time_millis = lambda: int(round(time.time() * 1000))
-
+global_start_time = time_millis()
 
 def time_analysis(except_keys=[]):
 
-	total_time = sum(time_checker.values())
+	total_time = time_millis() - global_start_time
 	time_checker["Time Total"] = total_time
 	k = list(sorted([x for x in time_checker.keys() if x not in except_keys], key=lambda x: -time_checker[x]))
 

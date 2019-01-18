@@ -55,35 +55,9 @@ class EL():
 			dev_items: List of dictionary
 		Output: None
 		"""
-		# tj = []
-		# dj = []
-		# for item in train_items:
-		# 	j, c, t = data.prepare_sentence(item, ne_marked=True)
-		# 	tj.append(j)
 
-		print("TRAINSET")
 		tj, tc, tt = data.prepare(*train_items, form="ETRI")
-		print(len(train_items), len(tj))
-		# for item in train_items:
-		# 	try:
-		# 		j, c, t = data.prepare_sentence(item, ne_marked=True)
-		# 		tj.append(j)
-		# 		tc += c + [""]
-		# 		tt += t
-		# 	except:
-		# 		pass
-
-		print("DEVSET")
 		dj, dc, dt = data.prepare(*dev_items, form="ETRI")
-		# for item in dev_items:
-		# 	try:
-		# 		j, c, t = data.prepare_sentence(item, ne_marked=True)
-		# 		dj.append(j)
-		# 		dc += c + [""]
-		# 		dt += t
-		# 	except:
-		# 		pass
-		print(len(dev_items), len(dj))
 		with open("tc", "w", encoding="UTF8") as f:
 			for line in tc:
 				f.write(line+"\n")
@@ -117,23 +91,16 @@ class EL():
 					for item in tsv_str:
 						f.write(item+"\n")
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
-			return j, dataset, self.ranker.get_data_items(dataset)
+			return j, dataset, self.ranker.get_data_items(dataset, predict=True)
 		
 		@TimeUtil.measure_time
 		def _predict(j, dataset, data):
-			# doc_stat = {}
-			# for content in data:
-			# 	print(content)
-			# 	if doc_name not in doc_stat:
-			# 		doc_stat[doc_name] = 0
-			# 	doc_stat[doc_name] += 1
-			# for k, v in doc_stat.items():
-			# 	for i in j:
-			# 		if j["fileName"] == k:
-			# 			print(len(j["entities"], v))
 
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data)
+			jsondump(predictions, "debug_prediction_raw.json")
+			jsondump(dataset, "dataset.json")
+			jsondump(data, "data.json")
 			e = D.eval_to_log(dataset, predictions)
 			jsondump(e, "debug_prediction.json")
 			return merge_item(j, e)

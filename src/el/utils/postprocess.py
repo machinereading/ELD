@@ -23,10 +23,14 @@ def merge_item(j, result_dict):
 			raise Exception("No such file name: %s" % target_name)
 		# print(l[2], target_json["entities"][ind]["keyword"])
 		target_json["entities"] = sorted(target_json["entities"], key=lambda x: x["start"])
+		ind = 0
 		for m, g, p in pred:
-			for ent in target_json["entities"]:
-				if ent["text"] == m and ent["keyword"] == g:
-					ent["entity"] = p
+			if p == "#UNK#":
+				p = "NOT_IN_CANDIDATE"
+			target_json["entities"][ind]["entity"] = p
+			ind += 1
+					
+
 		# target_json["entities"][ind]["entity"] = l[2]
 		# print(target_json["entities"][ind]["start"])
 		# ind += 1

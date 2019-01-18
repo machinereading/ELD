@@ -260,7 +260,7 @@ def read_conll_from_str(data, texts):
     
     return data
 
-@TimeUtil.measure_time
+# @TimeUtil.measure_time
 def generate_dataset_from_str(conll_str, tsv_str):
     dataset = read_tsv_from_str(tsv_str)
     # with open("data_tsv.json", "w", encoding="UTF8") as f:
@@ -268,9 +268,9 @@ def generate_dataset_from_str(conll_str, tsv_str):
     #     json.dump(dataset, f, ensure_ascii=False, indent="\t")
     # with_coref(dataset, person_names)
     dataset = read_conll_from_str(dataset, conll_str)
-    # with open("data_conll.json", "w", encoding="UTF8") as f:
-    #     import json
-    #     json.dump(dataset, f, ensure_ascii=False, indent="\t")
+    with open("data_conll.json", "w", encoding="UTF8") as f:
+        import json
+        json.dump(dataset, f, ensure_ascii=False, indent="\t")
     return dataset
 
 def find_coref(ment, mentlist, person_names):
@@ -357,86 +357,9 @@ def eval_to_log(testset, system_pred):
             print(doc_name.split()[0], len(mention), len(pred))
         # assert len(gold) == len(mention) == len(pred)
         for m, g, p in zip(mention, gold, pred):
-            result[doc_name.split()[0]].append((m, g, p))
+            result[doc_name.split()[0]].append((m, g, p["pred"][0]))
 
-
-    # result.append('ment' + '\t' + 'gold' + '\t' + 'pred' + '\t' + 'cand_length' + '\n')
-    # for doc_name, content in testset.items():
-    #     if doc_name not in system_pred:
-    #         continue
-    #     result.append(doc_name.split()[0])
-    #     cand_length = [len(c['candidates']) for c in content]
-    #     mention = [c['mention'] for c in content]
-    #     gold = [c['gold'][0] for c in content]
-    #     pred = [c['pred'][0] for c in system_pred[doc_name]]
-    #     print(len(gold), len(pred))
-    #     for m, g, p, l in zip(mention, gold, pred, cand_length):
-    #         if l > 1:
-    #             gold_num += 1
-    #             if p != 'NIL':
-    #                 pred_num += 1
-    #         if g == p and p != 'NIL':
-    #             true_pos += 1
-    #             if l > 1:
-    #                 true_pos_2 += 1                 
-    #         line = m + '\t' + g + '\t' + p + '\t' + str(l)
-    #         result.append(line)
     return result
 
-    # precision = true_pos / len([p for p in pred if p != 'NIL'])
-    # recall = true_pos / len(gold)
-    # precision2 = true_pos_2 / pred_num
-    # recall2 = true_pos_2 / gold_num
-    # print(precision)
-    # print(recall)
-    # f1 = 2 * precision * recall / (precision + recall) if precision+recall > 0 else 0
-    # f1_2 = 2 * precision2 * recall2 / (precision2 + recall2) if precision2 + recall2 > 0 else 0
-    # print("==========================")
-    # print(precision2)
-    # print(recall2)
-    # print(f1_2)
-    # return f1
 
-
-# class CoNLLDataset:
-#     """
-#     reading dataset from CoNLL dataset, extracted by https://github.com/dalab/deep-ed/
-#     """
-
-#     def __init__(self, path, person_path, conll_path):
-#         print('load csv')
-#         self.train = read_csv_file(path + '/cs_train.tsv')
-#         self.test = read_csv_file(path + '/cs_test.tsv')
-#         self.dev = read_csv_file(path + '/cs_dev.tsv')
-#         self.tta_test = read_csv_file(path + "/tta.tsv")
-
-        
-#         # print('process coref')
-#         # person_names = load_person_names(person_path)
-#         # with_coref(self.train, person_names)
-#         # with_coref(self.test, person_names)
-#         # with_coref(self.dev, person_names)
-#         # with_coref(self.tta_test, person_names)
-
-#         print('load conll')
-#         read_conll_file(self.train, path + '/cs_train.conll')
-#         read_conll_file(self.test, path + '/cs_test.conll')
-#         read_conll_file(self.dev, path + '/cs_dev.conll')
-#         read_conll_file(self.tta_test, path + "/tta.conll")
-
-# if __name__ == "__main__":
-#     path = 'data/generated/test_train_data'
-#     conll_path = 'data/basic_data/test_datasets'
-#     person_path = 'data/basic_data/p_e_m_data/persons.txt'
-
-#     dataset = CoNLLDataset(path, person_path, conll_path)
-#     train_dataset = dataset.train
-    # for doc_name, content in train_dataset.items():
-    #     print(doc_name)
-    #     for c in content:
-    #         print(c)
-    #         time.sleep(2)
-    #     time.sleep(5)
-    # from pprint import pprint
-    # pprint(dataset.ace2004, width=200)
 

@@ -367,11 +367,14 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	# at this point, sentence should be in Crowdsourcing form
 	result = []
 	links = []
+	# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 	for entity in sentence["entities"]:
 		ans = entity["keyword"] if "keyword" in entity else entity["entity"]
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
 		if redirected_entity not in ent_form:
-			continue
+			redirected_entity = "NOT_IN_ENTITY_LIST"
+		# if redirected_entity not in ent_form and redirected_entity not in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "EMPTY_CANDIDATES"]:
+		# 	continue
 		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"], tuple(entity["candidates"])))
 	filter_entity = set([])
 	for i1 in links:
@@ -383,7 +386,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 				shorter = i1 if i1[3] - i1[2] <= i2[3] - i2[2] else i2
 				filter_entity.add(shorter)
 	links = list(filter(lambda x: x not in filter_entity, links))
-
+	links = sorted(links, key=lambda x: x[2])
 	sent = sentence["text"]
 	for char in "   ":
 		sent.replace(char, " ")
@@ -393,6 +396,8 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	conlls = []
 	tsvs = []
 	fname = sentence["fileName"]
+	if fname == "1366301":
+		print(links)
 	conlls.append("-DOCSTART- (%s" % fname)
 	for item in morphs:
 		ind = sent.find(item, last_char_ind) 
@@ -403,6 +408,8 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	added = []
 	for morph, pos in zip(morphs, inds):
 		for m, link in morph_split((morph, pos), links):
+			if fname == "1366301":
+				print(m, link)
 			if link is None:
 				conlls.append(m)
 				last_link = None
