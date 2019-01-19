@@ -1,0 +1,58 @@
+import os
+import json
+from ...utils import jsondump
+def eval(module, corpus_dir):
+	eval_target = []
+	for item in os.listdir(corpus_dir):
+		with open(corpus_dir+item, encoding="UTF8") as f:
+			j = json.load(f)
+			j["fileName"] = item.split(".")[0]
+			eval_target.append(j)
+
+	prediction = module.predict(eval_target, form="CROWDSOURCING")
+	jsondump(prediction, "debug_prediction.json")
+	correct_count = 0
+	error_count = 0
+	wrong_count = [0, 0, 0, 0]
+	wrong_list = [[],[],[],[]]
+	for doc in prediction:
+		fname = doc["fileName"]
+		for entity in doc["entities"]:
+			if "entity" not in entity:
+				error_count += 1
+				continue
+			predict_entity = entity["entity"]
+			answer = entity["keyword"]
+			entity["fileName"] = fname
+			if predict_entity == answer:
+				correct_count += 1
+			else:
+				if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE"]:
+					if answer in entity["candidates"]:
+						wrong_count[0] += 1
+						del entity["candidates"]
+						wrong_list[0].append(entity)
+					else:
+						wrong_count[1] += 1
+						del entity["candidates"]
+						wrong_list[1].append(entity)
+				elif answer == "NOT_IN_CANDIDATE" and predict_entity != "NOT_AN_ENTITY":
+					wrong_count[2] += 1
+					del entity["candidates"]
+					wrong_list[1].append(entity)
+				elif answer == "NOT_AN_ENTITY" and predict_entity != "NOT_IN_CANDIDATE":
+					wrong_count[3] += 1
+					del entity["candidates"]
+					wrong_list[1].append(entity)
+
+	entity_count = sum(map(lambda x: len(x["entities"]), eval_target))
+	result = {
+		"Total": entity_count,
+		"Correct": correct_count,
+		"Error": error_count,
+		"Wrong": sum(wrong_count),
+		"Wrong Result": {"Type %d" % (i+1): wrong_list[i] for i in range(len(wrong_list))}
+	}
+	with open("eval_result.json", "w", encoding="UTF8") as f:
+		json.dump(result, f, ensure_ascii=False, indent="\t")
+	print("Acc: %.2f%%" % (correct_count / entity_count * 100))

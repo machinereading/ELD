@@ -6,6 +6,5 @@ scripts/
 testdir/
 tests/
 naver1/
-/*.py
-!Main.py
-!ELTrainScript.py
+stat/
+entity_fetcher.py
