@@ -12,6 +12,9 @@ def eval(module, corpus_dir):
 	prediction = module.predict(eval_target, form="CROWDSOURCING")
 	jsondump(prediction, "debug/debug_prediction.json")
 	correct_count = 0
+	dark_entity_correct_count = 0
+	dark_entity_count = 0
+	dark_entity_wrong_list = {}
 	error_count = 0
 	wrong_count = [0, 0, 0, 0]
 	wrong_list = [[],[],[],[]]
@@ -23,11 +26,15 @@ def eval(module, corpus_dir):
 				continue
 			predict_entity = entity["entity"]
 			answer = entity["keyword"]
+			if answer == "DARK_ENTITY":
+				dark_entity_count += 1
+
 			entity["fileName"] = fname
 			if predict_entity == answer:
 				correct_count += 1
 			elif predict_entity == "NOT_IN_CANDIDATE" and answer == "DARK_ENTITY":
 				correct_count += 1
+				dark_entity_correct_count += 1
 			else:
 
 				if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
@@ -54,10 +61,12 @@ def eval(module, corpus_dir):
 		"Correct": correct_count,
 		"Error": error_count,
 		"Wrong": {"Type %d" % (i+1): len(wrong_list[i]) for i in range(len(wrong_list))},
-		"Wrong Result": {"Type %d" % (i+1): wrong_list[i] for i in range(len(wrong_list))}
+		"Wrong Result": {"Type %d" % (i+1): wrong_list[i] for i in range(len(wrong_list))},
+		"Dark entity": "%d / %d" % (dark_entity_correct_count, dark_entity_count),
 	}
 	with open("debug/eval_result.json", "w", encoding="UTF8") as f:
 		json.dump(result, f, ensure_ascii=False, indent="\t")
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):
-		print("Type %d Error: %d" % (i+1, wrong_list[i]))
+		print("Type %d Error: %d" % (i+1, len(wrong_list[i])))
+	print("Dark entity detection rate: %.2f" % (dark_entity_correct_count / dark_entity_count * 100))

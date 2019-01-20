@@ -125,6 +125,8 @@ def make_json(ne_marked_dict, predict=False):
 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 		surface = item["text"] if "text" in item else item["surface"]
 		keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		if "dark_entity" in item:
+			keyword = "DARK_ENTITY"
 		start = item["char_start"] if "char_start" in item else item["start"]
 		end = item["char_end"] if "char_end" in item else item["end"]
 		if all(list(map(is_not_korean, surface))): continue
@@ -216,17 +218,22 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	# at this point, sentence should be in Crowdsourcing form
 	result = []
 	links = []
+	print_flag = False
 	# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 	for entity in sentence["entities"]:
-		ans = entity["keyword"] if "keyword" in entity else entity["entity"]
+		
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		if redirected_entity not in ent_form:
-			redirected_entity = "NOT_IN_ENTITY_LIST"
-		if "dark_entity" in entity:
-			redirected_entity = "DARK_ENTITY"
+		
+		# if redirected_entity not in ent_form:
+		# 	redirected_entity = "NOT_IN_ENTITY_LIST"
+		# if "dark_entity" in entity:
+		# 	print(entity["surface"])
+		# 	redirected_entity = "DARK_ENTITY"
+		entity["keyword"] = redirected_entity
 		# if redirected_entity not in ent_form and redirected_entity not in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "EMPTY_CANDIDATES"]:
 		# 	continue
 		links.append((entity["surface"], redirected_entity, entity["start"], entity["end"], tuple(entity["candidates"])))
+		
 	filter_entity = set([])
 	for i1 in links:
 		if i1 in filter_entity: continue
@@ -269,9 +276,9 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 			conlls.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
 			if bi == "B":
 				added.append(link)
-	not_added = list(filter(lambda x: x not in added, links))
-	if len(not_added) > 0:
-		print(not_added)
+	# not_added = list(filter(lambda x: x not in added, links))
+	# if len(not_added) > 0:
+	# 	print(not_added)
 	for ne, en, sp, ep, cand in added:
 		f = [fname, fname, ne, get_context_words(sent, sp, -1), get_context_words(sent, ep-1, 1), "CANDIDATES"]
 		cand_list = []
