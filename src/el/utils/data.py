@@ -125,6 +125,8 @@ def make_json(ne_marked_dict, predict=False):
 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 		surface = item["text"] if "text" in item else item["surface"]
 		keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		if "dark_entity" in item:
+			keyword = "DARK_ENTITY"
 		start = item["char_start"] if "char_start" in item else item["start"]
 		end = item["char_end"] if "char_end" in item else item["end"]
 		if all(list(map(is_not_korean, surface))): continue
@@ -139,49 +141,6 @@ def make_json(ne_marked_dict, predict=False):
 			})
 	return cs_form
 
-def change_into_crowdsourcing_form(_arg=None, text=None, file=None):
-	if _arg is not None or not ((text is None) ^ (file is None)):
-		raise Exception
-	if text:
-		if type(text) is str:
-			text = [text]
-	else:
-		text = file.readlines()
-	result = []
-	c = 0
-	for t in text:
-		t = t.strip()
-		j = find_ne_pos(getETRI(t))
-		if j is None:
-			print("Error: " + t)
-			continue
-		cs_form = {}
-		cs_form["text"] = j["original_text"]
-		cs_form["entities"] = []
-		cs_form["fileName"] = "%d" % c
-		for item in j["NE"]:
-			skip_flag = False
-			if "type" in item:
-				for prefix in ["QT", "DT"]:
-					if item["type"].startswith(prefix): skip_flag = True
-				if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
-			
-			if all(list(map(is_not_korean, item["text"]))): continue
-
-			cs_form["entities"].append({
-				"surface": item["text"],
-				"candidates": candidates_old(item["text"]),
-				"keyword": "NOT_IN_CANDIDATE",
-				"start": item["char_start"],
-				"end": item["char_end"],
-				"ne_type": item["type"] if "type" in item else "", 
-				"type": "ETRI"
-				})
-		result.append(cs_form)
-		c += 1
-		if c % 1000 == 0:
-			print("\r%d" % c, end = "", flush=True)
-	return result
 
 def add_candidates(j):
 	for entity in j["entities"]:
@@ -224,65 +183,6 @@ def morph_split(morph_pos, links):
 		result.append([morph, None])
 	return result
 
-def change_to_conll(j, filter_emptycand=False):
-	result = []
-	result.append("-DOCSTART- (%s" % j["fileName"] if "fileName" in j else "TEMPVAL")
-	print_flag = False
-	links = []
-	for entity in j["entities"]:
-		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		# if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
-		# 	continue
-		# if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
-		# 	continue
-		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"]))
-
-	filter_entity = set([])
-	for i1 in links:
-		if i1 in filter_entity: continue
-		for i2 in links:
-			if i1 == i2: continue
-			if i1[2] <= i2[2] < i1[3] or i1[2] < i2[3] <= i1[3]:
-				# overlaps
-				shorter = i1 if i1[3] - i1[2] <= i2[3] - i2[2] else i2
-				filter_entity.add(shorter)
-	links = list(filter(lambda x: x not in filter_entity, links))
-	# print(links)
-	sentence = j["text"]
-	for char in "   ":
-		sentence.replace(char, " ")
-	morphs = okt.morphs(sentence)
-	inds = []
-	last_char_ind = 0
-	for item in morphs:
-		ind = sentence.find(item, last_char_ind) 
-		inds.append(ind)
-		last_char_ind = ind+len(item)
-	assert(len(morphs) == len(inds))
-	last_link = None
-	for morph, pos in zip(morphs, inds):
-		# if "\n" in morph: continue
-		# print(morph, pos)
-		
-		added = False
-		for m, link in morph_split((morph, pos), links):
-			if link is None:
-				result.append(m)
-				last_link = None
-				continue
-			last_label = result[-1][1] if len(result) > 0 and type(result[-1]) is not str else "O"
-			bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
-			ne, en, sp, ep = link
-			last_link = link
-			assert m in ne
-			result.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
-
-	result = list(map(lambda x: x if type(x) is str else "\t".join(x), result))
-	if result[-1] in ["", "\n"]:
-		result = result[:-1]
-	return result
-
-
 def get_context_words(text, pos, direction, maximum_context=30):
 	result = []
 	ind = pos
@@ -305,55 +205,6 @@ def get_context_words(text, pos, direction, maximum_context=30):
 	# print(result)
 	return result
 
-
-def change_to_tsv(j, filter_emptycand=False):
-	# print(fname)
-	result = []
-	text = j["text"]
-	fname = j["fileName"]
-	entity_to_text = lambda x: ",".join(["0", "0", x["entity"]])# 0을 entity id로 바꿔야 함
-	entities = j["entities"]
-	filter_entity = set([])
-	for i1 in entities:
-		if i1 in filter_entity: continue
-		for i2 in entities:
-			if i1 == i2: continue
-			if overlap(i1, i2):
-				# overlaps
-				shorter = i1 if i1["end"] - i1["start"] <= i2["end"] - i2["start"] else i2
-				filter_entity.add(shorter)
-	entities = list(filter(lambda x: x not in filter_entity, entities))
-	for entity in entities:
-		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		# if redirected_entity not in ent_form and redirected_entity != "NOT_IN_CANDIDATE":
-		# 	continue
-		# if filter_emptycand and redirected_entity == "NOT_IN_CANDIDATE":
-		# 	continue
-		candidate_list = entity["candidates"]
-		sp = entity["start"]
-		ep = entity["end"]
-		f = [fname, fname, entity["surface"], get_context_words(text, sp, -1), get_context_words(text, ep-1, 1), "CANDIDATES"]
-		gold_ind = -1
-		gold_sent = ""
-		ind = 0
-		cand_list = []
-		for cand_name, cand_id, cand_score in sorted(candidate_list, key=lambda x: -x[-1]):
-			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_id, cand_score))
-		if redirected_entity in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY"]: redirected_entity = "#UNK#"
-		for cand_name, cand_id, cand_score in cand_list:
-			# print(cand_score)
-			f.append(",".join([str(cand_id), str(cand_score), cand_name])) # order: ID SCORE ENTITY
-			if cand_name == redirected_entity:
-				gold_ind = ind
-				gold_sent = f[-1]
-			ind += 1
-		if len(cand_list) == 0:
-			f.append("EMPTYCAND")
-		f.append("GE:")
-		f.append("%d,%s" %(gold_ind, gold_sent) if gold_ind != -1 else "-1")
-		result.append("\t".join(f))
-	return result
-
 def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	if form not in ["PLAIN_SENTENCE", "ETRI", "CROWDSOURCING"]: raise Exception("Form not match")
 	# print(sentence)
@@ -367,15 +218,22 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	# at this point, sentence should be in Crowdsourcing form
 	result = []
 	links = []
+	print_flag = False
 	# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 	for entity in sentence["entities"]:
-		ans = entity["keyword"] if "keyword" in entity else entity["entity"]
+		
 		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
-		if redirected_entity not in ent_form:
-			redirected_entity = "NOT_IN_ENTITY_LIST"
+		
+		# if redirected_entity not in ent_form:
+		# 	redirected_entity = "NOT_IN_ENTITY_LIST"
+		# if "dark_entity" in entity:
+		# 	print(entity["surface"])
+		# 	redirected_entity = "DARK_ENTITY"
+		entity["keyword"] = redirected_entity
 		# if redirected_entity not in ent_form and redirected_entity not in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "EMPTY_CANDIDATES"]:
 		# 	continue
-		links.append((entity["surface"], entity["keyword"], entity["start"], entity["end"], tuple(entity["candidates"])))
+		links.append((entity["surface"], redirected_entity, entity["start"], entity["end"], tuple(entity["candidates"])))
+		
 	filter_entity = set([])
 	for i1 in links:
 		if i1 in filter_entity: continue
@@ -396,8 +254,6 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	conlls = []
 	tsvs = []
 	fname = sentence["fileName"]
-	if fname == "1366301":
-		print(links)
 	conlls.append("-DOCSTART- (%s" % fname)
 	for item in morphs:
 		ind = sent.find(item, last_char_ind) 
@@ -408,8 +264,6 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	added = []
 	for morph, pos in zip(morphs, inds):
 		for m, link in morph_split((morph, pos), links):
-			if fname == "1366301":
-				print(m, link)
 			if link is None:
 				conlls.append(m)
 				last_link = None
@@ -422,9 +276,9 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 			conlls.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
 			if bi == "B":
 				added.append(link)
-	not_added = list(filter(lambda x: x not in added, links))
-	if len(not_added) > 0:
-		print(not_added)
+	# not_added = list(filter(lambda x: x not in added, links))
+	# if len(not_added) > 0:
+	# 	print(not_added)
 	for ne, en, sp, ep, cand in added:
 		f = [fname, fname, ne, get_context_words(sent, sp, -1), get_context_words(sent, ep-1, 1), "CANDIDATES"]
 		cand_list = []

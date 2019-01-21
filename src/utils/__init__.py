@@ -12,7 +12,7 @@ def jsondump(obj, fname):
 	with open(fname, "w", encoding="UTF8") as f:
 		json.dump(obj, f, ensure_ascii=False, indent="\t")
 
-def write(iterable, fname):
+def writefile(iterable, fname):
 	with open(fname, "w", encoding="UTF8") as f:
 		for item in iterable:
 			f.write(item+"\n")

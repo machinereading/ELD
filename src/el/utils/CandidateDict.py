@@ -8,7 +8,7 @@ class CandidateDict():
 		self.surface_dict = {}
 		self.entity_set = {}
 		self.buf = Buffer(1000)
-		self.link_modifier = 0.2
+		self.link_modifier = 0.3
 
 	def add_candidate(self, candidate_elem):
 		surface = candidate_elem.surface
@@ -33,7 +33,7 @@ class CandidateDict():
 			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
 		if len(elem) > 0:
 			elem = self.normalized_candidates(elem)
-		return [(ent, 0, score) for ent, score in filter(lambda x: x[0] != "", elem)]
+		return [(ent, 0, score) for ent, score in elem if ent != ""]
 		if len(elem) == 0:
 			if query in self.buf:
 				return self.buf[query]
@@ -128,7 +128,7 @@ class LinkElem():
 		# softmax is not applied here
 		s = sum(self.link_dict.values())
 
-		for item in  [(k, v / s) for k, v in self.link_dict.items()]:
+		for item in [(k, v / s) for k, v in self.link_dict.items()]:
 			yield item
 
 	def postprocess(self, entity_list, redirect_list, disambiguation_list):

@@ -6,7 +6,7 @@ from .mulrel_nel import dataset as D
 from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
-from ..utils import jsondump
+from ..utils import writefile, jsondump
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -58,20 +58,11 @@ class EL():
 
 		tj, tc, tt = data.prepare(*train_items, form="ETRI")
 		dj, dc, dt = data.prepare(*dev_items, form="ETRI")
-		with open("tc", "w", encoding="UTF8") as f:
-			for line in tc:
-				f.write(line+"\n")
-		with open("tt", "w", encoding="UTF8") as f:
-			for line in tt:
-				f.write(line+"\n")
-		with open("dc", "w", encoding="UTF8") as f:
-			for line in dc:
-				f.write(line+"\n")
-		with open("dt", "w", encoding="UTF8") as f:
-			for line in dt:
-				f.write(line+"\n")
-		# tj, tc, tt = data.prepare(*train_items, is_json=True)
-		# dj, dc, dt = data.prepare(*dev_items, is_json=True)
+		if self.debug:
+			writefile(tc, "debug/train.conll")
+			writefile(tt, "debug/train.tsv")
+			writefile(dc, "debug/dev.conll")
+			writefile(dt, "debug/dev.tsv")
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
@@ -81,28 +72,30 @@ class EL():
 		def prepare_data(sentences):
 			j, conll_str, tsv_str = data.prepare(*sentences, form=form)
 			if self.debug:
-				import json
-				with open("debug.json", "w", encoding="UTF8") as f:
-					json.dump(j, f, ensure_ascii=False, indent="\t")
-				with open("debug.conll", "w", encoding="UTF8") as f:
-					for item in conll_str:
-						f.write(item+"\n")
-				with open("debug.tsv", "w", encoding="UTF8") as f:
-					for item in tsv_str:
-						f.write(item+"\n")
+				jsondump(j, "debug/prepare.json")
+				writefile(conll_str, "debug/debug.conll")
+				writefile(tsv_str, "debug/debug.tsv")
+				# with open("debug/debug.json", "w", encoding="UTF8") as f:
+				# 	json.dump(j, f, ensure_ascii=False, indent="\t")
+				# with open("debug/debug.conll", "w", encoding="UTF8") as f:
+				# 	for item in conll_str:
+				# 		f.write(item+"\n")
+				# with open("debug/debug.tsv", "w", encoding="UTF8") as f:
+				# 	for item in tsv_str:
+				# 		f.write(item+"\n")
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
 			return j, dataset, self.ranker.get_data_items(dataset, predict=True)
-		
-		@TimeUtil.measure_time
-		def _predict(j, dataset, data):
 
+		def _predict(j, dataset, data):
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data)
-			jsondump(predictions, "debug_prediction_raw.json")
-			jsondump(dataset, "dataset.json")
-			jsondump(data, "data.json")
+			if self.debug:
+				jsondump(predictions, "debug/debug_prediction_raw.json")
+				jsondump(dataset, "debug/dataset.json")
+				jsondump(data, "debug/data.json")
 			e = D.eval_to_log(dataset, predictions)
-			jsondump(e, "debug_prediction.json")
+			if self.debug:
+				jsondump(e, "debug/debug_prediction.json")
 			return merge_item(j, e)
 
 		if type(sentences) is str:
