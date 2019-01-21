@@ -10,3 +10,4 @@ stat/
 debug/
 entity_fetcher.py
 *test.py
+dump/
