@@ -285,6 +285,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 		f = [fname, fname, ne, get_context_words(sent, sp, -1), get_context_words(sent, ep-1, 1), "CANDIDATES"]
 		cand_list = []
 		gold_ind = -1
+		ind = 0
 		for cand_name, cand_id, cand_score in sorted(cand, key=lambda x: -x[-1]):
 			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_id, cand_score))
 		if en in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY"]: en = "#UNK#"
