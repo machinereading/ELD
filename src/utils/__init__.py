@@ -8,9 +8,20 @@ def progress(curprog, total, size=10):
 def printfunc(s):
 	print("\r"+s, end="", flush=True)
 
+def jsonload(fname):
+	with open(fname, encoding="UTF8") as f:
+		return json.load(f)
+
 def jsondump(obj, fname):
 	with open(fname, "w", encoding="UTF8") as f:
 		json.dump(obj, f, ensure_ascii=False, indent="\t")
+
+def readfile(fname):
+	result = []
+	with open(fname, encoding="UTF8") as f:
+		for line in f.readlines():
+			result.append(line.strip())
+	return result
 
 def writefile(iterable, fname):
 	with open(fname, "w", encoding="UTF8") as f:

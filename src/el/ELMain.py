@@ -6,7 +6,7 @@ from .mulrel_nel import dataset as D
 from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
-from ..utils import writefile, jsondump
+from ..utils import readfile, writefile, jsonload, jsondump
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -47,7 +47,7 @@ class EL():
 			self.ranker = EDRanker(config=config)
 		
 
-	def train(self, train_items, dev_items):
+	def train(self, train_items, dev_items, load_from_debug=False):
 		"""
 		Train EL Module
 		Input:
@@ -55,14 +55,23 @@ class EL():
 			dev_items: List of dictionary
 		Output: None
 		"""
-
-		tj, tc, tt = data.prepare(*train_items, form="ETRI")
-		dj, dc, dt = data.prepare(*dev_items, form="ETRI")
-		if self.debug:
-			writefile(tc, "debug/train.conll")
-			writefile(tt, "debug/train.tsv")
-			writefile(dc, "debug/dev.conll")
-			writefile(dt, "debug/dev.tsv")
+		if load_from_debug:
+			tj = jsonload("debug/train.json")
+			tc = readfile("debug/train.conll")
+			tt = readfile("debug/train.tsv")
+			dj = jsonload("debug/dev.json")
+			dc = readfile("debug/dev.conll")
+			dt = readfile("debug/dev.tsv")
+		else:
+			tj, tc, tt = data.prepare(*train_items, form="ETRI")
+			dj, dc, dt = data.prepare(*dev_items, form="ETRI")
+			if self.debug:
+				jsondump(tj, "debug/train.json")
+				writefile(tc, "debug/train.conll")
+				writefile(tt, "debug/train.tsv")
+				jsondump(dj, "debug/dev.json")
+				writefile(dc, "debug/dev.conll")
+				writefile(dt, "debug/dev.tsv")
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})

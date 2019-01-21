@@ -26,7 +26,7 @@ def eval(module, corpus_dir):
 				error_count += 1
 				continue
 			predict_entity = entity["entity"]
-			answer = entity["keyword"]
+			answer = entity["answer"]
 
 			if answer == "DARK_ENTITY":
 				dark_entity_count += 1
@@ -39,7 +39,7 @@ def eval(module, corpus_dir):
 				dark_entity_correct_count += 1
 			else:
 				if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
-					if answer in entity["candidates"]:
+					if answer in [x[0] for x in entity["candidates"]]:
 						wrong_count[0] += 1
 						del entity["candidates"]
 						wrong_list[0].append(entity)

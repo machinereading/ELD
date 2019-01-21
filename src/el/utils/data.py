@@ -125,6 +125,8 @@ def make_json(ne_marked_dict, predict=False):
 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 		surface = item["text"] if "text" in item else item["surface"]
 		keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		# if keyword == "NOT_AN_ENTITY":
+		# 	keyword = "NOT_IN_CANDIDATE"
 		if "dark_entity" in item:
 			keyword = "DARK_ENTITY"
 		start = item["char_start"] if "char_start" in item else item["start"]
@@ -134,7 +136,7 @@ def make_json(ne_marked_dict, predict=False):
 		cs_form["entities"].append({
 			"surface": surface,
 			"candidates": candidates(surface),
-			"keyword": keyword,
+			"answer": keyword,
 			"start": start,
 			"end": end,
 			"ne_type": item["type"] if "type" in item else ""
@@ -222,14 +224,14 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 	for entity in sentence["entities"]:
 		
-		redirected_entity = redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]
+		redirected_entity = redirects[entity["answer"]] if entity["answer"] in redirects else entity["answer"]
 		
 		# if redirected_entity not in ent_form:
 		# 	redirected_entity = "NOT_IN_ENTITY_LIST"
 		# if "dark_entity" in entity:
 		# 	print(entity["surface"])
 		# 	redirected_entity = "DARK_ENTITY"
-		entity["keyword"] = redirected_entity
+		entity["answer"] = redirected_entity
 		# if redirected_entity not in ent_form and redirected_entity not in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "EMPTY_CANDIDATES"]:
 		# 	continue
 		links.append((entity["surface"], redirected_entity, entity["start"], entity["end"], tuple(entity["candidates"])))
