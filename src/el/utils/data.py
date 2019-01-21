@@ -298,7 +298,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 			ind += 1
 		if len(cand_list) == 0:
 			f.append("EMPTYCAND")
-		f.append("GE:")
+		f.append("GT:")
 		f.append("%d,%s" %(gold_ind, gold_sent) if gold_ind != -1 else "-1")
 		tsvs.append("\t".join(f))
 

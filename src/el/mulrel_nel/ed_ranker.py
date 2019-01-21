@@ -341,8 +341,11 @@ class EDRanker:
                     self.model.regularize(max_norm=100)
 
                     loss = loss.cpu().data.numpy()
+
                     total_loss += loss
                     print('epoch', e, "%0.2f%%" % (dc/len(train_dataset) * 100), loss, end='\r')
+                    if loss > 100000:
+                        print()
 
                 print('epoch', e, 'total loss', total_loss, total_loss / len(train_dataset))
 
@@ -353,7 +356,7 @@ class EDRanker:
                         f1 = D.eval(org_dev_datasets[di][1], predictions)
                         print(dname, utils.tokgreen('micro F1: ' + str(f1)))
 
-                        if dname == 'test':
+                        if dname == 'dev':
                             dev_f1 = f1
 
                     if config['lr'] == 1e-4 and dev_f1 >= self.args.dev_f1_change_lr:
@@ -384,9 +387,9 @@ class EDRanker:
 
                     self.model.print_weight_norm()
 
-        if not is_counting:
-            print('save not the best model to', self.args.model_path)
-            self.model.save(self.args.model_path)
+            if not is_counting:
+                print('save not the best model to', self.args.model_path)
+                self.model.save(self.args.model_path)
 
     def predict(self, data):
         predictions = {items[0]['doc_name']: [] for items in data}

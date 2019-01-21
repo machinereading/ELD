@@ -20,7 +20,7 @@ class TimeHierarchy():
 	def getroot(self):
 		if self.parent is None:
 			return self
-		return getroot(self.parent)
+		return self.parent.getroot()
 
 	def printiter(self):
 

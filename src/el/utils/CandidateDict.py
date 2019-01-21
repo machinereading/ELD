@@ -33,7 +33,7 @@ class CandidateDict():
 			elem += [(ent, score * self.link_modifier) for ent, score in self.surface_dict[query] if ent != e.exact_entity]
 		if len(elem) > 0:
 			elem = self.normalized_candidates(elem)
-		return [(ent, self.entity_set[ent], score) for ent, score in elem if ent != ""]
+		return [(ent, 0, score) for ent, score in elem if ent != ""]
 		if len(elem) == 0:
 			if query in self.buf:
 				return self.buf[query]

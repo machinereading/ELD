@@ -5,14 +5,15 @@ import os
 import random
 import json
 import sys
-train_data_dir = ["corpus/crowdsourcing_processed/", "corpus/mta2_postprocessed/"]
+# train_data_dir = ["corpus/crowdsourcing_processed/", "corpus/mta2_postprocessed/"]
+train_data_dir = ["corpus/crowdsourcing_processed/"]
 # train_data_dir = ["corpus/mta2_postprocessed/"]
 test_data_dir = "corpus/el_golden_postprocessed_marked/"
 
 
-# os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-module = EL("train", "new_candidates_corpus_added")
+module = EL("train", "new_candidates3")
 train_set = []
 dev_set = []
 test_set = []
