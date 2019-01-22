@@ -60,6 +60,7 @@ def read_tsv_from_str(texts):
 
         if comps[6] != 'EMPTYCAND':
             cands = [c.split(',') for c in comps[6:-2]]
+            # print(cands)
             cands = [(','.join(c[2:]).replace('"', '%22').replace(' ', '_'), float(c[1])) for c in cands]
         else:
             cands = []
