@@ -13,6 +13,7 @@ class EL():
 			self.arg = args.get_args()
 			self.arg.mode = mode
 			self.arg.model_path = "data/el/%s" % model_name
+			self.model_name = model_name
 			self.debug = True
 			arg = self.arg
 			voca_emb_dir = 'data/el/embeddings/'
