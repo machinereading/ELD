@@ -330,7 +330,7 @@ def eval(testset, system_pred):
 
 
 
-def eval_to_log(testset, system_pred):
+def make_result_dict(testset, system_pred):
     gold = []
     pred = []
     mention = []

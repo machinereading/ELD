@@ -100,12 +100,12 @@ class EL():
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data)
 			if self.debug:
-				jsondump(predictions, "debug/debug_prediction_raw.json")
+				# jsondump(predictions, "debug/debug_prediction_raw.json")
 				jsondump(dataset, "debug/dataset.json")
 				jsondump(data, "debug/data.json")
-			e = D.eval_to_log(dataset, predictions)
-			if self.debug:
-				jsondump(e, "debug/debug_prediction.json")
+			e = D.make_result_dict(dataset, predictions)
+			# if self.debug:
+			# 	jsondump(e, "debug/debug_prediction.json")
 			return merge_item(j, e)
 
 		if type(sentences) is str:

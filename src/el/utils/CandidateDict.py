@@ -86,7 +86,7 @@ class CandidateDict():
 	def load_entity_from_file(cls, f, d=None):
 		result = CandidateDict() if d is None else d
 		for line in f.readlines():
-			result.entity_set[line.strip()] = len(result.entity_set)
+			result.entity_set[line.strip().split("\t")[0].replace("ko.dbpedia.org/resource/", "")] = len(result.entity_set)
 		result.entity_set["#UNK#"] = len(result.entity_set)
 		return result
 

@@ -135,7 +135,7 @@ def make_json(ne_marked_dict, predict=False):
 		
 		cs_form["entities"].append({
 			"surface": surface,
-			"candidates": candidates(surface),
+			"candidates": candidates_old(surface),
 			"answer": keyword,
 			"start": start,
 			"end": end,
