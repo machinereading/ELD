@@ -59,7 +59,7 @@ def get_args():
 	                    default=100)
 	parser.add_argument("--dev_f1_change_lr", type=float,
 	                    help="dev f1 to change learning rate",
-	                    default=0.690)
+	                    default=0.725)
 	parser.add_argument("--n_not_inc", type=int,
 	                    help="number of evals after dev f1 not increase",
 	                    default=10)

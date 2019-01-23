@@ -286,17 +286,25 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 		cand_list = []
 		gold_ind = -1
 		ind = 0
+		cd = {}
 		for cand_name, cand_id, cand_score in sorted(cand, key=lambda x: -x[-1]):
-			cand_list.append((redirects[cand_name] if cand_name in redirects else cand_name, cand_id, cand_score))
-		if en in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY"]: en = "#UNK#"
-		for cand_name, cand_id, cand_score in cand_list:
+			cn = redirects[cand_name] if cand_name in redirects else cand_name
+			if cn in cd:
+				cd[cn][1] += cand_score
+			else:
+				cd[cn] = [cand_id, cand_score]
+			# cand_list.append((, cand_id, cand_score))
+		if en in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "DARK_ENTITY"]: en = "#UNK#"
+		
+		for cand_name, (cand_id, cand_score) in cd.items():
+			# print(cand_name, cand_id, cand_score)
 			# print(cand_score)
 			f.append(",".join([str(cand_id), str(cand_score), cand_name])) # order: ID SCORE ENTITY
 			if cand_name == en:
 				gold_ind = ind
 				gold_sent = f[-1]
 			ind += 1
-		if len(cand_list) == 0:
+		if len(cd) == 0:
 			f.append("EMPTYCAND")
 		f.append("GT:")
 		f.append("%d,%s" %(gold_ind, gold_sent) if gold_ind != -1 else "-1")
