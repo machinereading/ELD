@@ -11,9 +11,9 @@ train_data_dir = ["corpus/crowdsourcing_processed/"]
 test_data_dir = "corpus/el_golden_postprocessed_marked/"
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-module = EL("train", "new_candidates3")
+module = EL("train", "new_candidates_past_without_unk_data_modified")
 train_set = []
 dev_set = []
 test_set = []
