@@ -65,7 +65,7 @@ def eval(module, corpus_dir):
 		"Wrong Result": {"Type %d" % (i+1): wrong_list[i] for i in range(len(wrong_list))},
 		"Dark entity": "%d / %d" % (dark_entity_correct_count, dark_entity_count),
 	}
-	with open("debug/eval_result.json", "w", encoding="UTF8") as f:
+	with open("debug/eval_result_%s.json" % module.model_name, "w", encoding="UTF8") as f:
 		json.dump(result, f, ensure_ascii=False, indent="\t")
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):

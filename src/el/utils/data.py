@@ -135,7 +135,7 @@ def make_json(ne_marked_dict, predict=False):
 		
 		cs_form["entities"].append({
 			"surface": surface,
-			"candidates": candidates(surface),
+			"candidates": candidates_old(surface),
 			"answer": keyword,
 			"start": start,
 			"end": end,
@@ -266,7 +266,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	added = []
 	for morph, pos in zip(morphs, inds):
 		for m, link in morph_split((morph, pos), links):
-			if link is None or (not predict and len(link[-1]) == 0): # if train mode, skip if candidate set is empty
+			if link is None: # if train mode, skip if candidate set is empty
 				conlls.append(m)
 				last_link = None
 				continue
@@ -310,7 +310,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 
 
 
-def prepare_sentence(sentence, form, predict=False):
+def prepare_sentence(sentence, form, predict):
 	try:
 		return generate_input(sentence, predict, form)
 	# ne_marked = sentence if ne_marked else mark_ne(sentence)

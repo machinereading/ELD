@@ -97,7 +97,7 @@ class CandidateDict():
 	def normalized_candidates(self, candidates):
 		score_sum = sum(map(lambda x: math.exp(x[1]), candidates))
 		unk_prob = 1 / len(candidates) / 3
-		return [(x, math.exp(y) / score_sum * (1-unk_prob)) for x, y in candidates] #+ [("#UNK#", unk_prob)]
+		return [(x, math.exp(y) / score_sum * (1-unk_prob)) for x, y in candidates] + [("#UNK#", unk_prob)]
 
 
 
