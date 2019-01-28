@@ -128,13 +128,13 @@ class EDRanker:
 
                 if not predict:
                     if sm['true_pos'] == -1:
-                        continue
+                        # continue
                         # this insertion only makes the performance worse (why???)
-                        # sm['true_pos'] = 0
-                        # sm['cands'][0] = m['cands'][m['true_pos']]
-                        # sm['named_cands'][0] = m['named_cands'][m['true_pos']]
-                        # sm['p_e_m'][0] = m['p_e_m'][m['true_pos']]
-                        # sm['mask'][0] = m['mask'][m['true_pos']]
+                        sm['true_pos'] = 0
+                        sm['cands'][0] = m['cands'][m['true_pos']]
+                        sm['named_cands'][0] = m['named_cands'][m['true_pos']]
+                        sm['p_e_m'][0] = m['p_e_m'][m['true_pos']]
+                        sm['mask'][0] = m['mask'][m['true_pos']]
 
                 items.append(m)
                 if sm['true_pos'] >= 0:

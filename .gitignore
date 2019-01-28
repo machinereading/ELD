@@ -13,3 +13,5 @@ entity_fetcher.py
 dump/
 result_eval.py
 test.sh
+diff.*
+src_backup/
