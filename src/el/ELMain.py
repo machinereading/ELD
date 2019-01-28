@@ -80,36 +80,31 @@ class EL():
 
 
 	def predict(self, sentences, form):
-		def prepare_data(sentences):
-			j, conll_str, tsv_str = data.prepare(*sentences, form=form)
-			if self.debug:
-				jsondump(j, "debug/prepare.json")
-				writefile(conll_str, "debug/debug.conll")
-				writefile(tsv_str, "debug/debug.tsv")
-				# with open("debug/debug.json", "w", encoding="UTF8") as f:
-				# 	json.dump(j, f, ensure_ascii=False, indent="\t")
-				# with open("debug/debug.conll", "w", encoding="UTF8") as f:
-				# 	for item in conll_str:
-				# 		f.write(item+"\n")
-				# with open("debug/debug.tsv", "w", encoding="UTF8") as f:
-				# 	for item in tsv_str:
-				# 		f.write(item+"\n")
-			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
-			return j, dataset, self.ranker.get_data_items(dataset, predict=True)
-
-		def _predict(j, dataset, data):
-			self.ranker.model._coh_ctx_vecs = []
-			predictions = self.ranker.predict(data)
-			if self.debug:
-				# jsondump(predictions, "debug/debug_prediction_raw.json")
-				jsondump(dataset, "debug/dataset.json")
-				jsondump(data, "debug/data.json")
-			e = D.make_result_dict(dataset, predictions)
-			# if self.debug:
-			# 	jsondump(e, "debug/debug_prediction.json")
-			return merge_item(j, e)
-
 		if type(sentences) is str:
 			sentences = [sentences]
-		result = _predict(*prepare_data(sentences))
-		return result
+		j, conll_str, tsv_str = data.prepare(*sentences, form=form)
+		if self.debug:
+			jsondump(j, "debug/prepare.json")
+			writefile(conll_str, "debug/debug.conll")
+			writefile(tsv_str, "debug/debug.tsv")
+			# with open("debug/debug.json", "w", encoding="UTF8") as f:
+			# 	json.dump(j, f, ensure_ascii=False, indent="\t")
+			# with open("debug/debug.conll", "w", encoding="UTF8") as f:
+			# 	for item in conll_str:
+			# 		f.write(item+"\n")
+			# with open("debug/debug.tsv", "w", encoding="UTF8") as f:
+			# 	for item in tsv_str:
+			# 		f.write(item+"\n")
+		dataset = D.generate_dataset_from_str(conll_str, tsv_str)
+		data_items = self.ranker.get_data_items(dataset, predict=True)
+
+		self.ranker.model._coh_ctx_vecs = []
+		predictions = self.ranker.predict(data_items)
+		if self.debug:
+			jsondump(predictions, "debug/debug_prediction_raw.json")
+			jsondump(dataset, "debug/dataset.json")
+			jsondump(data_items, "debug/data.json")
+		e = D.make_result_dict(dataset, predictions)
+		# if self.debug:
+		# 	jsondump(e, "debug/debug_prediction.json")
+		return merge_item(j, e)

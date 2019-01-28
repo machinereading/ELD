@@ -33,7 +33,7 @@ def candidates_old(word):
 	for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
 		cand_name = redirects[cand_name] if cand_name in redirects else cand_name
 		if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
-			id, score = cand_score
+			score, id = cand_score
 			cand_list.append((cand_name, id, score))
 	return cand_list
 
