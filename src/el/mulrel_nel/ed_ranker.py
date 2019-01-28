@@ -335,12 +335,8 @@ class EDRanker:
                     scores = self.model.forward(token_ids, token_mask, entity_ids, entity_mask, p_e_m,
                                                 gold=true_pos.view(-1, 1))
                     loss = self.model.loss(scores, true_pos)
-                    if loss > 100000:
-                        import json
-                        print([m['selected_cands']['true_pos'] for m in batch])
-                        with open("debug/lossexplode.json", "w", encoding="UTF8") as f:
-                            json.dump(batch, f, ensure_ascii=False, indent="\t")
-                        continue
+
+                    if loss > 10000: continue
                     loss.backward()
                     optimizer.step()
                     self.model.regularize(max_norm=100)
@@ -349,7 +345,7 @@ class EDRanker:
 
                     total_loss += loss
                     print('epoch', e, "%0.2f%%" % (dc/len(train_dataset) * 100), loss, end='\r')
-                    
+
 
                 print('epoch', e, 'total loss', total_loss, total_loss / len(train_dataset))
 

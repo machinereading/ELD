@@ -11,6 +11,7 @@ class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
 			self.arg = args.get_args()
+			self.model_name = model_name
 			self.arg.mode = mode
 			self.arg.model_path = "data/el/%s" % model_name
 			self.model_name = model_name

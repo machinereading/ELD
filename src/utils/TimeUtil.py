@@ -30,14 +30,33 @@ class TimeHierarchy():
 		# parent_total_time = self.parent.total_time if self.parent is not None else self.total_time
 		longest_name = max([len(x) for x in time_checker.keys()])
 		if self.parent is None:
-			print(("{0:%d}{1:10}{2:10}" % (longest_name+5)).format("Name", "Time", "Global %"))
 			self.total_time = time_millis() - self.start_time
+			total_time_len = len(convert_millis(self.total_time))
+			print(("{0:%d}{1:%d}{2:10}" % (longest_name+5, total_time_len+5)).format("Name", "Time", "Global %"))
+		
 		global_total_time = self.getroot().total_time
-		print(("{0:%d}{1:10}{2:10}" % (longest_name+5)).format(self.name, "%.2fs" % (self.total_time / 1000), "%.2f%%" % (self.total_time / global_total_time * 100)))
+		global_total_time_str = convert_millis(global_total_time)
+		print(("{0:%d}{1:%d}{2:10}" % (longest_name+5, len(global_total_time_str)+5)).format(self.name, convert_millis(self.total_time), "%.2f%%" % (self.total_time / global_total_time * 100)))
 		for item in sorted(self.child, key=lambda x: x.total_time):
 			item.printiter()
 
 
+def convert_millis(val):
+	millis = val % 1000
+	result = ".%2ds" % millis
+	val /= 1000
+	sec = val % 60
+	result = ("%d" % sec) + result
+	val /= 60
+	minute = val % 60
+	if minute > 0 or val / 60 > 0:
+		result = ("%dm " % minute) + result
+	val /= 60
+	hour = val
+	if hour > 0:
+		result = ("%dh " % hour) + result
+	return result
+	
 
 
 root = TimeHierarchy("R", None)

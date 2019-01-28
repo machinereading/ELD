@@ -13,7 +13,7 @@ test_data_dir = "corpus/el_golden_postprocessed_marked/"
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
-module = EL("train", "modified_candidates_not_added")
+module = EL("train", "old_candidates_past")
 train_set = []
 dev_set = []
 test_set = []
