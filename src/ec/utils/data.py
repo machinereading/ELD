@@ -1,4 +1,4 @@
-def generate_clusters(d):
+def generate_clusters_from_dataset(d):
 	result = {}
 	for item in d:
 		pass

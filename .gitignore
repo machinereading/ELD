@@ -11,3 +11,5 @@ debug/
 entity_fetcher.py
 *test.py
 dump/
+result_eval.py
+test.sh
