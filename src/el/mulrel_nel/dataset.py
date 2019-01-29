@@ -255,8 +255,8 @@ def read_conll_from_str(data, texts):
         data[doc_name] = content
         if len(content) == 0:
             no_entity_docs.append(doc_name)
-    print("%d mentions removed" % removed_mentions)
-    print("%d docs removed" % len(no_entity_docs))
+    # print("%d mentions removed" % removed_mentions)
+    # print("%d docs removed" % len(no_entity_docs))
     data = {k: v for k, v in data.items() if k not in no_entity_docs}
     
     return data

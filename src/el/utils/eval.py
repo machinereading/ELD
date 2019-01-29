@@ -9,8 +9,10 @@ def eval(module, corpus_dir):
 			j["fileName"] = item.split(".")[0]
 			eval_target.append(j)
 
-	prediction = module.predict(eval_target, form="CROWDSOURCING")
-
+	prediction = []
+	for item in module.predict(eval_target, form="CROWDSOURCING"):
+		prediction += item
+	print(len(prediction), len(eval_target))
 	jsondump(prediction, "debug/debug_prediction.json")
 	correct_count = 0
 	dark_entity_correct_count = 0

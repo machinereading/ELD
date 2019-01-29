@@ -28,5 +28,22 @@ def writefile(iterable, fname):
 		for item in iterable:
 			f.write(item+"\n")
 
+def split_to_batch(l, batch_size=100):
+	return [l[x*100:x*100+100] for x in range(len(l) // 100 + 1)]
+	# result = []
+	# temp = []
+	# for item in l:
+	# 	temp.append(item)
+	# 	if len(temp) == batch_size:
+	# 		result.append(temp[:])
+	# 		temp = []
+	# result.append(temp)
+	# return result
+
+def split_to_equal_size(l, num):
+	k = l // num
+	return [l[x*k:(x+1)*k] for x in range(num+1)]
+
 #useful macros
 inv_dict = lambda x: {v: k for k, v in x.items()}
+

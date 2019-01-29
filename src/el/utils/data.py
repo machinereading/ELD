@@ -211,7 +211,7 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	if form not in ["PLAIN_SENTENCE", "ETRI", "CROWDSOURCING"]: raise Exception("Form not match")
 	# print(sentence)
 	if form == "PLAIN_SENTENCE":
-		sentence = mark_ne(sentence)
+		sentence = make_json(mark_ne(sentence), predict=predict)
 	else:
 		sentence = make_json(sentence, predict=predict)
 	# if form == "CROWDSOURCING":
