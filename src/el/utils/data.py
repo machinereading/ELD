@@ -124,7 +124,10 @@ def make_json(ne_marked_dict, predict=False):
 				if item["type"].startswith(prefix): skip_flag = True
 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 		surface = item["text"] if "text" in item else item["surface"]
-		keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		if "keyword" in item or "entity" in item:
+			keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+		else:
+			keyword = "NOT_IN_CANDIDATE"
 		# if keyword == "NOT_AN_ENTITY":
 		# 	keyword = "NOT_IN_CANDIDATE"
 		if "dark_entity" in item:

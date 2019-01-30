@@ -20,8 +20,7 @@ def readfile(fname):
 	result = []
 	with open(fname, encoding="UTF8") as f:
 		for line in f.readlines():
-			result.append(line.strip())
-	return result
+			yield line.strip()
 
 def writefile(iterable, fname):
 	with open(fname, "w", encoding="UTF8") as f:

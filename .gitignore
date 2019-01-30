@@ -3,10 +3,6 @@ word_embeddings/
 __pycache__/
 data/
 scripts/
-testdir/
-tests/
-naver1/
-stat/
 debug/
 entity_fetcher.py
 *test.py

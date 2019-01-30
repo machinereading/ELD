@@ -6,7 +6,7 @@ from .mulrel_nel import dataset as D
 from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
-from ..utils import readfile, writefile, jsonload, jsondump, split_to_batch
+from ..utils import *
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -83,7 +83,7 @@ class EL():
 		if type(sentences) is str:
 			sentences = [sentences]
 		batches = split_to_batch(sentences, 100)
-
+		it = 0
 		for batch in batches:
 			j, conll_str, tsv_str = data.prepare(*batch, form=form)
 			if self.debug:
@@ -111,3 +111,5 @@ class EL():
 			# if self.debug:
 			# 	jsondump(e, "debug/debug_prediction.json")
 			yield merge_item(j, e)
+			it += 1
+			printfunc("EL Progress: %d/%d" % (it, len(batches)))

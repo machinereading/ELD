@@ -5,6 +5,15 @@ from utils import print_args
 from datetime import datetime
 
 
+class EC_Args():
+    def __init__(self):
+        self.dataset = "NYT"
+        self.data_format = "set"
+        self.mode = "train"
+        self.modelName = "np_lrlr_sd_lrlrdl"
+        self.pretrained_embedding = "embed"
+        
+
 def read_options():
     parser = argparse.ArgumentParser(description='supervised clustering')
 
