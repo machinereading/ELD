@@ -113,3 +113,6 @@ class EL():
 			yield merge_item(j, e)
 			it += 1
 			printfunc("EL Progress: %d/%d" % (it, len(batches)))
+
+	def __call__(self, sentences):
+		return [x for x in self.predict(sentences, "plain_sentence")]

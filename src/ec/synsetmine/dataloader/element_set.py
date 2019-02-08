@@ -9,6 +9,7 @@ import math
 import numpy as np
 import random
 
+from ....utils import KoreanUtil, TimeUtil
 
 class ElementSet(object):
     """ Dataset Object
@@ -26,6 +27,7 @@ class ElementSet(object):
 
         :type raw_data_strings: list
     """
+    @TimeUtil.measure_time
     def __init__(self, name, data_format, options, raw_data_strings=None):
 
         self.name = name
@@ -87,14 +89,15 @@ class ElementSet(object):
         for line in raw_set_strings:
             line = line.strip()
             eid, cls = line.split(" ", 1)
-            cls = sorted(list(eval(cls)))  # sorting for reproducibility
+            cls = [x.strip("{}' ") for x in cls.split("',")]
+            # cls = sorted(list(eval(cls)))  # sorting for reproducibility
             self.max_set_size = max(self.max_set_size, len(cls))
             self.min_set_size = min(self.min_set_size, len(cls))
             set_size_sum += len(cls)
-
-            self.positive_sets.append(sorted([self.word2index[ele] for ele in cls]))  # sorting for reproducibility
-            self.vocab.extend([self.word2index[ele] for ele in cls])
-
+            cls = ["".join(KoreanUtil.stem_sentence(ele)) for ele in cls] # TEMPORARY CODE!!!!
+            self.positive_sets.append(sorted([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls]))  # sorting for reproducibility
+            self.vocab.extend([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls])
+            # need to handle out-of-vocabulary words
         self.avg_set_size = 1.0 * set_size_sum / len(self.positive_sets)
         self.vocab = sorted(list(set(self.vocab)))  # sorting for reproducibility
 

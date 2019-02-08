@@ -248,7 +248,7 @@ def check_model_consistency(args):
         return True, ""
 
 
-def my_logger(name='', log_path='./'):
+def my_logger(name='', log_path='./', print_on_console=False):
     """ Create a python logger
 
     :param name: logger name
@@ -279,14 +279,15 @@ def my_logger(name='', log_path='./'):
                         format='%(asctime)s %(filename)s[line:%(lineno)d][%(funcName)s] %(levelname)s-> %(message)s',
                         datefmt='%a %d %b %Y %H:%M:%S', filename=fn, filemode='w')
     # define a new Handler to log to console as well
-    console = logging.StreamHandler()
-    # set a format which is the same for console use
-    formatter = logging.Formatter('%(asctime)s %(filename)s[line:%(lineno)d][%(funcName)s] %(levelname)s-> %(message)s',
-                                  datefmt='%a %d %b %Y %H:%M:%S')
-    # tell the handler to use this format
-    console.setFormatter(formatter)
-    # add the handler to the root logger
-    logger.addHandler(console)
+    if print_on_console:
+        console = logging.StreamHandler()
+        # set a format which is the same for console use
+        formatter = logging.Formatter('%(asctime)s %(filename)s[line:%(lineno)d][%(funcName)s] %(levelname)s-> %(message)s',
+                                      datefmt='%a %d %b %Y %H:%M:%S')
+        # tell the handler to use this format
+        console.setFormatter(formatter)
+        # add the handler to the root logger
+        logger.addHandler(console)
 
     return logger
 
@@ -308,13 +309,7 @@ def load_embedding(fi, embed_name="word2vec"):
 
     :rtype: (gensim.KeyedVectors, list, dict, int, int)
     """
-    if embed_name == "word2vec":
-        embedding = KeyedVectors.load_word2vec_format(fi)
-    else:
-        # TODO: allow training embedding from scratch later
-        print("[ERROR] Please specify the pre-trained embedding")
-        exit(-1)
-
+    embedding = KeyedVectors.load(fi).wv
     vocab_size, embed_dim = embedding.vectors.shape
     index2word = ['PADDING_IDX'] + embedding.index2word
     word2index = {word: index for index, word in enumerate(index2word)}

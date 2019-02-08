@@ -56,16 +56,14 @@ def multiple_set_single_instance_prediction(model, sets, instance, size_optimize
             if inds[i] == cur_ind:
                 cur_set.append(sets[tmp[i][0]])
             else:
-                cur_setScores, cur_setInstSumScores, cur_positive_prob = _multiple_set_single_instance_prediction(
-                    model, cur_set, instance)
+                cur_setScores, cur_setInstSumScores, cur_positive_prob = _multiple_set_single_instance_prediction(model, cur_set, instance)
                 sorted_setScores += cur_setScores
                 sorted_setInstSumScores += cur_setInstSumScores
                 sorted_positive_prob += cur_positive_prob
                 cur_ind = inds[i]
                 cur_set = [sets[tmp[i][0]]]
         if len(cur_set) > 0:  # working on the last bin
-            cur_setScores, cur_setInstSumScores, cur_positive_prob = _multiple_set_single_instance_prediction(
-                model, cur_set, instance)
+            cur_setScores, cur_setInstSumScores, cur_positive_prob = _multiple_set_single_instance_prediction(model, cur_set, instance)
             sorted_setScores += cur_setScores
             sorted_setInstSumScores += cur_setInstSumScores
             sorted_positive_prob += cur_positive_prob

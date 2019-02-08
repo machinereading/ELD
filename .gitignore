@@ -2,7 +2,6 @@ corpus/
 word_embeddings/
 __pycache__/
 data/
-scripts/
 debug/
 entity_fetcher.py
 *test.py

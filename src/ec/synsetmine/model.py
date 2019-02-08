@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import zoo
+from . import zoo
 import math
 from sklearn.metrics import confusion_matrix
 
