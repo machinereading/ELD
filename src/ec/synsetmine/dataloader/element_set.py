@@ -59,7 +59,7 @@ class ElementSet(object):
 
         # for test set, generate sip triplets for evaluation of set-instance prediction, the negative sampling strategy,
         # negative sample size, and max set size are all prefixed
-        if "test" in self.name and self.data_format == "set":
+        if "dev" in self.name and self.data_format == "set":
             self.sip_triplets, self.pos_sip_cnt, self.neg_sip_cnt = self._convert_set_format_to_sip_format(
                 raw_sets=self.positive_sets, pos_strategy="vary_size_enumerate_with_full_set",
                 neg_strategy="complete-random", neg_sample_size=10, max_set_size=50)
@@ -76,7 +76,7 @@ class ElementSet(object):
             return len(self.positive_sets)
         elif self.data_format == "sip":
             return len(self.sip_triplets)
-
+    
     def _initialize_set_format(self, raw_set_strings):
         """Initialize  dataset from a collection of strings representing element sets
 
@@ -86,18 +86,22 @@ class ElementSet(object):
         :rtype: None
         """
         set_size_sum = 0  # used to calculate self.avg_set_size
+        c = 0
+
         for line in raw_set_strings:
-            line = line.strip()
-            eid, cls = line.split(" ", 1)
-            cls = [x.strip("{}' ") for x in cls.split("',")]
-            # cls = sorted(list(eval(cls)))  # sorting for reproducibility
-            self.max_set_size = max(self.max_set_size, len(cls))
-            self.min_set_size = min(self.min_set_size, len(cls))
-            set_size_sum += len(cls)
-            cls = ["".join(KoreanUtil.stem_sentence(ele)) for ele in cls] # TEMPORARY CODE!!!!
-            self.positive_sets.append(sorted([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls]))  # sorting for reproducibility
-            self.vocab.extend([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls])
-            # need to handle out-of-vocabulary words
+            c += 1
+            if c % 10 == 0:
+                line = line.strip()
+                eid, cls = line.split(" ", 1)
+                cls = [x.strip("{}' ") for x in cls.split("',")]
+                # cls = sorted(list(eval(cls)))  # sorting for reproducibility
+                self.max_set_size = max(self.max_set_size, len(cls))
+                self.min_set_size = min(self.min_set_size, len(cls))
+                set_size_sum += len(cls)
+                cls = ["".join(KoreanUtil.stem_sentence(ele)) for ele in cls] # TEMPORARY CODE!!!!
+                self.positive_sets.append(sorted([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls]))  # sorting for reproducibility
+                self.vocab.extend([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls])
+                # need to handle out-of-vocabulary words
         self.avg_set_size = 1.0 * set_size_sum / len(self.positive_sets)
         self.vocab = sorted(list(set(self.vocab)))  # sorting for reproducibility
 
@@ -214,11 +218,16 @@ class ElementSet(object):
         batch_inst = []
         labels = []
         for idx, batch in enumerate(self.sip_triplets):
+            # print(batch)
+            if batch[1] == 0: continue
+            if all([x == 0 for x in batch[0]]): continue
+            
             batch_set.append(batch[0])
             batch_inst.append(batch[1])
             labels.append(batch[2])
             # convert to tensor, yield a batch, clean buffer
-            if (idx+1) % batch_size == 0:
+            if len(labels) == batch_size:
+                # print(labels)
                 res = self._convert_sip_format_to_tensor(max_set_size, batch_set, batch_inst, labels)
                 yield res
                 batch_set = []
@@ -604,7 +613,7 @@ class ElementSet(object):
 
         return {'set': batch_set_tensor.to(self.device), 'inst': batch_inst_tensor.to(self.device),
                 'label': label_tensor.to(self.device)}
-
+    @TimeUtil.measure_time
     def _generate_negative_samples_within_pool(self, positive_sets, neg_sample_size, remove_pos=True):
         """ Generate negative samples from vocabulary
 

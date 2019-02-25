@@ -112,7 +112,10 @@ class EL():
 			# 	jsondump(e, "debug/debug_prediction.json")
 			yield merge_item(j, e)
 			it += 1
-			printfunc("EL Progress: %d/%d" % (it, len(batches)))
+			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
 
 	def __call__(self, sentences):
-		return [x for x in self.predict(sentences, "plain_sentence")]
+		result = []
+		for batch in self.predict(sentences, "PLAIN_SENTENCE"):
+			result += batch
+		return result

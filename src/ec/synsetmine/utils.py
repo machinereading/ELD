@@ -248,7 +248,7 @@ def check_model_consistency(args):
         return True, ""
 
 
-def my_logger(name='', log_path='./', print_on_console=False):
+def generate_logger(name='', log_path='./', print_on_console=False):
     """ Create a python logger
 
     :param name: logger name

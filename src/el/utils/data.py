@@ -6,14 +6,15 @@ import socket
 from functools import reduce
 from ...utils import TimeUtil, progress, printfunc
 from . import candidate_dict
-import os
+import re
 import random
 import string
 
+RE_EMOJI = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
 lock = False
-
+error_file = open("error.txt", "w", encoding="UTF8")
 with open("data/el/wiki_entity_calc.pickle", "rb") as f:
 	ent_dict = pickle.load(f)
 with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
@@ -211,6 +212,7 @@ def get_context_words(text, pos, direction, maximum_context=30):
 	return result
 
 def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
+	global error_file
 	if form not in ["PLAIN_SENTENCE", "ETRI", "CROWDSOURCING"]: raise Exception("Form not match")
 	# print(sentence)
 	if form == "PLAIN_SENTENCE":
@@ -253,6 +255,8 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 	sent = sentence["text"]
 	for char in "   ":
 		sent.replace(char, " ")
+	
+	sent = RE_EMOJI.sub(r'', sent)
 	morphs = okt.morphs(sent)
 	inds = []
 	last_char_ind = 0
@@ -277,7 +281,9 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 			bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
 			ne, en, sp, ep, cand = link
 			last_link = link
-			assert m in ne
+			if m not in ne:
+				error_file.write("%s, %s, %s" % (sentence, m, ne)+"\n")
+			assert m in ne, "%s, %s, %s" % (sentence, m, ne)
 			conlls.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
 			if bi == "B":
 				added.append(link)
@@ -371,8 +377,6 @@ def prepare(*sentences, form, predict=False, worker=5):
 			conlls += [""]
 			tsvs += t
 		except Exception as e:
-			
-			import traceback
-			traceback.print_exc()
+			pass
 	return cw_form, conlls, tsvs
 
