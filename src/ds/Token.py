@@ -15,7 +15,6 @@ class Sentence():
 
 	def __str__(self):
 		return " ".join([str(x) for x in self.tokens])
-
 	def __iter__(self):
 		for token in self.tokens:
 			yield token
@@ -82,4 +81,3 @@ class Vocabulary():
 	@property
 	def rctx(self):
 		return self.parent_sentence.tokens[self.token_ind+1:]
-	

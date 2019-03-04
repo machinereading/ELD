@@ -11,3 +11,5 @@ test.sh
 diff.*
 src_backup/
 lab_script/
+*results/
+stat/

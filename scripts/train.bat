@@ -1,0 +1,1 @@
+python Main.py --mode train --target_dir testdir
