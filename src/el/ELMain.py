@@ -7,6 +7,9 @@ from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
 from ..utils import *
+
+gl.entity_voca, gl.entity_embeddings = U.load_voca_embs('data/el/embeddings/dict.entity', 'data/el/embeddings/entity_embeddings.npy')
+gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict_no_pos.word', 'data/el/embeddings/word_embeddings.npy')
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -19,23 +22,20 @@ class EL():
 			arg = self.arg
 			voca_emb_dir = 'data/el/embeddings/'
 
-			word_voca, word_embeddings = U.load_voca_embs(voca_emb_dir + 'dict.word',
-														  voca_emb_dir + 'word_embeddings.npy')
-			snd_word_voca, snd_word_embeddings = U.load_voca_embs(voca_emb_dir + '/glove/dict.word',
+			
+			snd_word_voca, snd_word_embeddings = U.load_voca_embs(voca_emb_dir + '/glove/dict_no_pos.word',
 															  voca_emb_dir + '/glove/word_embeddings.npy')
-			entity_voca, entity_embeddings = U.load_voca_embs(voca_emb_dir + 'dict.entity',
-															  voca_emb_dir + 'entity_embeddings.npy')
 			
 			config={
 				'hid_dims': arg.hid_dims,
-				'emb_dims': entity_embeddings.shape[1],
+				'emb_dims': gl.entity_embeddings.shape[1],
 				'freeze_embs': True,
 				'tok_top_n': arg.tok_top_n,
 				'margin': arg.margin,
-				'word_voca': word_voca,
-				'entity_voca': entity_voca,
-				'word_embeddings': word_embeddings,
-				'entity_embeddings': entity_embeddings,
+				'word_voca': gl.word_voca,
+				'entity_voca': gl.entity_voca,
+				'word_embeddings': gl.word_embeddings,
+				'entity_embeddings': gl.entity_embeddings,
 				'snd_word_voca': snd_word_voca,
 				'snd_word_embeddings': snd_word_embeddings,
 				'dr': arg.dropout_rate,
@@ -112,7 +112,10 @@ class EL():
 			# 	jsondump(e, "debug/debug_prediction.json")
 			yield merge_item(j, e)
 			it += 1
-			printfunc("EL Progress: %d/%d" % (it, len(batches)))
+			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
 
 	def __call__(self, sentences):
-		return [x for x in self.predict(sentences, "plain_sentence")]
+		result = []
+		for batch in self.predict(sentences, "PLAIN_SENTENCE"):
+			result += batch
+		return result

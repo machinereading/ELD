@@ -4,12 +4,13 @@ from .synsetmine.model import SSPM
 from .synsetmine.dataloader import element_set
 from .synsetmine import cluster_predict
 from .synsetmine import evaluator
-from .synsetmine.utils import save_model, load_model, my_logger, load_embedding, load_raw_data, Results, Metrics
+from .synsetmine.utils import save_model, load_model, generate_logger, load_embedding, load_raw_data, Results, Metrics
 
 from ..utils import readfile, TimeUtil
 
 from tqdm import tqdm
 import torch
+from tensorboardX import SummaryWriter
 import random
 import numpy as np
 
@@ -17,7 +18,7 @@ class EC():
 	def __init__(self):
 		self.args = EC_Args()
 		self.options = vars(self.args)
-		self.debug = False
+		self.debug = True
 		random.seed(self.args.random_seed)
 		torch.manual_seed(self.args.random_seed)
 		np.random.seed(self.args.random_seed)
@@ -43,43 +44,47 @@ class EC():
 			f = []
 			for line in train_corpus.readlines():
 				f.append(line.strip())
+		
+		random.shuffle(f)
+		with TimeUtil.TimeChecker("Train set generation"):
+			train_set = element_set.ElementSet("train_set", self.options["data_format"], self.options, f)
 		if dev_corpus is not None:
 			if type(train_corpus) is str:
-				df = readfile(train_corpus)
+				df = [x for x in readfile(train_corpus)]
 			else:
 				df = []
 				for line in train_corpus.readlines():
 					df.append(line.strip())
-			dev_set = element_set.ElementSet("dev_set", self.options["data_format"], self.options, f)
+			dev_set = element_set.ElementSet("dev_set", self.options["data_format"], self.options, df)
 		else:
 			dev_set = None
-		random.shuffle(f)
-		train_set = element_set.ElementSet("train_set", self.options["data_format"], self.options, f)
 		train_results = Results("log/ec/log.txt") # does it need to write on something?
 		options = self.options
 		if self.debug:
 			# Add TensorBoard Writer
-			tb_writer = SummaryWriter(log_dir=None, comment=args.comment)
+			tb_writer = SummaryWriter(log_dir=None, comment=self.args.comment)
 
 			# Add Python Logger
-			my_logger = my_logger(name='exp', log_path=writer.file_writer.get_logdir())
+			my_logger = generate_logger(name='exp', log_path=tb_writer.file_writer.get_logdir())
+
 			my_logger.setLevel(0)
 		# synsetmine.main.run
-		model = SSPM(options)
-		model = model.to(options["device"])
-		optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=options["lr"], amsgrad=True)
+		with TimeUtil.TimeChecker("Model init"):
+			model = SSPM(options)
+			model = model.to(options["device"])
+			optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=options["lr"], amsgrad=True)
 		results = Metrics()
 		# Training phase
 		train_set._shuffle()
 		train_set_size = len(train_set)
 		print("train_set_size: {}".format(train_set_size))
-
-		model.train()
+		with TimeUtil.TimeChecker("Train"):
+			model.train()
 		early_stop_metric_name = "FMI"  # metric used for early stop
 		best_early_stop_metric = 0.0
 		last_step = 0
 		save_model(model, options["save_dir"], 'best', 0)  # save the initial first model
-
+		TimeUtil.time_analysis()
 		for epoch in tqdm(range(options["epochs"]), desc="Training ..."):
 			loss = 0
 			epoch_samples = 0
@@ -118,7 +123,7 @@ class EC():
 			tb_writer.add_scalar('train/accuracy', epoch_accuracy, epoch)
 			tb_writer.add_scalar('train/f1', epoch_f1, epoch)
 
-			if epoch % options["eval_epoch_step"] == 0 and epoch != 0:
+			if epoch % options["eval_epoch_step"] == 0 and epoch != 0 and dev_set is not None:
 				# set-instance pair prediction evaluation
 				metrics = evaluator.evaluate_set_instance_prediction(model, dev_set)
 				tb_writer.add_scalar('val-sip/sip-precision', metrics["precision"], epoch)
@@ -224,14 +229,17 @@ class EC():
 				f.append(line.strip())
 
 		test_set = element_set.ElementSet("test_set", "set", self.options, f)
-		
+		print(len(test_set.vocab))
 		model = SSPM(self.options)
 		model = model.to(self.options["device"])
-		model_path = "data/ec/wiki_train.pt"
+		model_path = "data/ec/Feb10_21-46-52/best_steps_55.pt"
 		model.load_state_dict(torch.load(model_path))
 		vocab = test_set.vocab
 		clusters = cluster_predict.set_generation(model, vocab, threshold=0.5, eid2ename=test_set.index2word)
-		return clusters
+		result = []
+		for cluster in clusters:
+			result.append([test_set.index2word[ele] for ele in cluster])
+		return result
 
 	def __call__(self, el_result):
 		input_data = generate_data_from_el_result(el_result)

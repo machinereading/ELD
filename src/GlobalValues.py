@@ -1,14 +1,13 @@
 # import endpoint.
 # stores only global values
 # set attributes by calling setattr in main module
-
+from .utils import readfile
 
 boolmap = {"True": True, "False": False}
 corpus_home = "corpus/"
-
-
-def one_hot(i, total):
-	i = int(i)
-	result = [0 for _ in range(total)]
-	result[i] = 1
-	return result
+entity_id_map = {}
+for i, k in enumerate(readfile("data/el/embeddings/dict.entity")):
+	entity_id_map[k.split("\t")[0].replace("ko.dbpedia.org/resource/", "")] = i
+print(len(entity_id_map))
+# entity_id_map = {k.split("\t")[0].replace("ko.dbpedia.org/resource/", ""): i for i, k in enumerate([x for x in readfile("data/el/embeddings/dict.entity")])}
+id_entity_map = {v: k for k, v in entity_id_map.items()}

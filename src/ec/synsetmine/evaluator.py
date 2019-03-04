@@ -161,9 +161,10 @@ def evaluate_set_instance_prediction(model, dataset):
     # the following max_set_size and batch_size number need to be set such that one test batch can fit GPU memory
     # TODO: make this value dynamtically changeable
     max_set_size = 100
-    batch_size = int(len(dataset.sip_triplets) / 2)
-    for test_batch in dataset.get_test_batch(max_set_size=max_set_size, batch_size=batch_size):
+    # batch_size = int(len(dataset.sip_triplets) / 20)
+    for test_batch in dataset.get_test_batch(max_set_size=50, batch_size=100):
         # log set size for set-size-wise error analysis
+        # print(test_batch)
         batch_set_size = torch.sum((test_batch['set'] != 0), dim=1)
         if model.device_id != -1:
             batch_set_size = batch_set_size.to(torch.device("cpu"))

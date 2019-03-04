@@ -44,8 +44,9 @@ def stem_sentence(sentence):
 	# print(sentence)
 	filter_words = r"[^ ㄱ-ㅎㅏ-ㅣ가-힣a-z-A-Z0-9]+"
 	result = []
-	for word in re.sub(filter_words, "", sentence).split():
+	for word in re.sub(filter_words, " ", sentence).split():
 		eomi_removed = False
+		if len(word) == 0: continue
 		for e in eomi:
 			if word.endswith(e):
 				word = word[:-len(e)]
@@ -60,3 +61,56 @@ def stem_sentence(sentence):
 		result.append(word)
 	# print(" ".join(result))
 	return result
+
+def tokenize(sentence):
+	result = []
+	for token in sentence.split():
+		buf = []
+		for char in token:
+			# korean, non-korean, number, special characters
+			if is_korean_character(char): buf.append(0)
+			elif is_digit(char): buf.append(1)
+			elif 'a' <= char <= 'z' and 'A' <= char <= 'Z': buf.append(2) 
+			elif re.sub(r"[^ ㄱ-ㅎㅏ-ㅣ가-힣a-z-A-Z0-9]", "", char) == "": buf.append(3)
+			else: buf.append(4)
+		tt = []
+		word = ""
+		last = buf[0]
+		buf.append(-1)
+		for ind, i in enumerate(buf):
+			if i != last or ind == len(buf)-1:
+				print(word)
+				if last == 0:
+
+					# tokenize eomi
+					eomi_removed = False
+					x = []
+					for e in eomi:
+						if word.endswith(e):
+							x.append(e)
+							word = word[:-len(e)]
+							eomi_removed = True
+							break
+					else:
+						x = [word]
+					if eomi_removed:
+						for e in eogan:
+							if word.endswith(e):
+								x = [word[:-len(e)], e] + x
+								break
+						else:
+							x = [word] + x
+					print("x", x)
+					tt += x[:]
+				else:
+					tt.append(word)
+				word = ""
+			if i == -1:
+				break
+			word += token[ind]
+			last = i
+		result += tt[:]	
+	return result
+
+if __name__ == '__main__':
+	print(tokenize("123abc우리(집) 우리집에 왜 왔는지 잘 모르겠다."))

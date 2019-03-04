@@ -5,6 +5,7 @@ class EC_Args():
 	def __init__(self):
 		self.data_format = "set"
 		self.modelName = "np_lrlr_sd_lrlrdl"
+		self.context_embedder = "rnn"
 		self.pretrained_embedding = "embed"
 		self.embed_fine_tune = 0
 		self.embedSize = 50
@@ -18,7 +19,7 @@ class EC_Args():
 		self.margin = 0.5
 		self.epochs = 200
 		self.neg_sample_size = 20
-		self.neg_sample_method = "complete_random"
+		self.neg_sample_method = "share_token" # one of ["complete_random", "share_token", "mixture"]
 
 		self.dropout = 0.3
 		self.early_stop = 100

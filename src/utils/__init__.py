@@ -43,6 +43,12 @@ def split_to_equal_size(l, num):
 	k = l // num
 	return [l[x*k:(x+1)*k] for x in range(num+1)]
 
+def one_hot(i, total):
+	i = int(i)
+	result = [0 for _ in range(total)]
+	result[i] = 1
+	return result
+
 #useful macros
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
