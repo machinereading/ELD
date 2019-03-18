@@ -1,17 +1,41 @@
 from ...ds.Corpus import Corpus
 from ...ds.Vocabulary import Vocabulary
-from ...utils import jsonload, jsondump, TimeUtil, split_to_batch
+from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch
 import random
 import numpy as np
 import os
 class DataGenerator():
-	def __init__(self, args, init=True):
-		if not init: return
+	def __init__(self, args):
+		
+		# load embedding dict
+		self.w2i = {w: i for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
+		self.e2i = {e: i for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
+
+		# check if we can load data from pre-defined cluster
+		if args.data_load_path is not None:
+			try:
+				path = "/".join(corpus_path.split("/")[:-1])+"/"
+				file_prefix = corpus_path.split("/")[-1]
+				sentence = []
+				cluster = []
+				for item in os.listdir(path):
+					if not item.startswith(file_prefix): continue
+					if "sentence" in item:
+						sentence += jsonload(path+item)
+					elif "cluster" in item:
+						cluster += jsonload(path+item)
+				self.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
+				self.change_into_tensor()
+				return
+			except:
+				pass
+
 		self.data_path = args.data_path
 		self.fake_er_rate = args.fake_er_rate
 		self.fake_el_rate = args.fake_el_rate
 		self.fake_ec_rate = args.fake_ec_rate
 		self.vocab_tensors = []
+		self.generate_data()
 
 	@TimeUtil.measure_time
 	def generate_data(self):
@@ -26,7 +50,6 @@ class DataGenerator():
 		self.fake_tokens = []	
 		for sentence in self.corpus:
 			self.extract_fake_tokens(sentence)
-		print(len(self.fake_tokens))
 		# distribute fake tokens into training cluster
 		free_token_slot = 0
 		for cluster in self.corpus.cluster.values():
@@ -36,7 +59,6 @@ class DataGenerator():
 			for i in range(len(cluster) // 2):
 				if len(self.fake_tokens) == 0: break
 				cluster.add_elem(self.fake_tokens.pop(0))
-		print(free_token_slot)
 
 	def extract_fake_tokens(self, sentence):
 		for token in sentence:
@@ -81,11 +103,11 @@ class DataGenerator():
 		return gen
 
 	@TimeUtil.measure_time
-	def change_into_tensor(self, w2i, e2i):
+	def change_into_tensor(self):
 		for k, cluster in self.corpus.clusters.items():
 			for vocab in cluster:
-				near_words = [w2i[x] if x in w2i else np.zeros([0]) for x in (vocab.lctx + vocab.rctx)]
-				near_entities = [e2i[x] for x in (vocab.lctx_ent + vocab.rctx_ent) if x in e2i]
+				near_words = [self.w2i[x] if x in self.w2i else np.zeros([0]) for x in (vocab.lctx + vocab.rctx)]
+				near_entities = [self.e2i[x] for x in (vocab.lctx_ent + vocab.rctx_ent) if x in self.e2i]
 				cluster.vocab_tensors.add((near_words, near_entities, cluster.id, vocab.error_type))
 
 

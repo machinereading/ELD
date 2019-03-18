@@ -2,6 +2,11 @@
 # stores only global values
 # set attributes by calling setattr in main module
 from .utils import readfile
+import logging
+from datetime import datetime
+
+logging.basicConfig(filename= "log/run_%s.log" % str(datetime.now())[:-7].replace(" ", "_"), format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+logging.log("[START]")
 
 boolmap = {"True": True, "False": False}
 corpus_home = "corpus/"

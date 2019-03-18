@@ -1,6 +1,6 @@
 import time
 import functools
-
+import logging
 time_checker = {}
 time_millis = lambda: int(round(time.time() * 1000))
 class TimeHierarchy():
