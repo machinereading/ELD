@@ -19,6 +19,8 @@ def eval(module, corpus_dir):
 	dark_entity_count = 0
 	dark_entity_wrong_list = {}
 	error_count = 0
+	r_target = 0
+	p_target = 0
 	wrong_count = [0, 0, 0, 0]
 	wrong_list = [[],[],[],[]]
 	for doc in prediction:
@@ -34,6 +36,11 @@ def eval(module, corpus_dir):
 				dark_entity_count += 1
 
 			entity["fileName"] = fname
+			if predict_entity not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
+				p_target += 1
+			if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
+				r_target += 1
+
 			if predict_entity == answer:
 				correct_count += 1
 			elif predict_entity == "NOT_IN_CANDIDATE" and answer == "DARK_ENTITY":
@@ -69,6 +76,10 @@ def eval(module, corpus_dir):
 	}
 	with open("debug/%s_eval_result.json" % module.model_name, "w", encoding="UTF8") as f:
 		json.dump(result, f, ensure_ascii=False, indent="\t")
+	p = correct_count / p_target
+	r = correct_count / r_target
+	f = 2 * p * r / (p + r)
+	print("P: %.2f, R: %.2f, F1: %.2f" % (p,r,f))
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):
 		print("Type %d Error: %d" % (i+1, len(wrong_list[i])))

@@ -8,6 +8,5 @@ corpus_home = "corpus/"
 entity_id_map = {}
 for i, k in enumerate(readfile("data/el/embeddings/dict.entity")):
 	entity_id_map[k.split("\t")[0].replace("ko.dbpedia.org/resource/", "")] = i
-print(len(entity_id_map))
 # entity_id_map = {k.split("\t")[0].replace("ko.dbpedia.org/resource/", ""): i for i, k in enumerate([x for x in readfile("data/el/embeddings/dict.entity")])}
 id_entity_map = {v: k for k, v in entity_id_map.items()}

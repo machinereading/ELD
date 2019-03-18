@@ -1,5 +1,5 @@
 from .utils import data as data
-from .utils import args
+from .utils.args import EL_Args
 from .utils.postprocess import merge_item
 from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
@@ -13,7 +13,7 @@ gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict_no_
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
-			self.arg = args.get_args()
+			self.arg = EL_Args()
 			self.model_name = model_name
 			self.arg.mode = mode
 			self.arg.model_path = "data/el/%s" % model_name
@@ -57,6 +57,7 @@ class EL():
 			dev_items: List of dictionary
 		Output: None
 		"""
+		print(len(train_items), len(dev_items))
 		if load_from_debug:
 			tj = jsonload("debug/train.json")
 			tc = readfile("debug/train.conll")
@@ -65,8 +66,8 @@ class EL():
 			dc = readfile("debug/dev.conll")
 			dt = readfile("debug/dev.tsv")
 		else:
-			tj, tc, tt = data.prepare(*train_items, form="ETRI")
-			dj, dc, dt = data.prepare(*dev_items, form="ETRI")
+			tj, tc, tt = data.prepare(*train_items, form="CROWDSOURCING", filter_rate=self.arg.train_filter_rate)
+			dj, dc, dt = data.prepare(*dev_items, form="CROWDSOURCING")
 			if self.debug:
 				jsondump(tj, "debug/train.json")
 				writefile(tc, "debug/train.conll")

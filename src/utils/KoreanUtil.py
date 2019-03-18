@@ -57,8 +57,8 @@ def stem_sentence(sentence):
 				if word.endswith(e):
 					word = word[:-len(e)]
 					break
-
-		result.append(word)
+		if len(word) > 0:
+			result.append(word)
 	# print(" ".join(result))
 	return result
 

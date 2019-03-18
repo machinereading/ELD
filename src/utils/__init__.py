@@ -12,7 +12,7 @@ def jsonload(fname):
 	with open(fname, encoding="UTF8") as f:
 		return json.load(f)
 
-def jsondump(obj, fname):
+def jsondump(obj, fname, split=0):
 	with open(fname, "w", encoding="UTF8") as f:
 		json.dump(obj, f, ensure_ascii=False, indent="\t")
 
@@ -22,13 +22,13 @@ def readfile(fname):
 		for line in f.readlines():
 			yield line.strip()
 
-def writefile(iterable, fname):
+def writefile(iterable, fname, processor=lambda x: x):
 	with open(fname, "w", encoding="UTF8") as f:
 		for item in iterable:
-			f.write(item+"\n")
+			f.write(processor(item)+"\n")
 
 def split_to_batch(l, batch_size=100):
-	return [l[x*100:x*100+100] for x in range(len(l) // 100 + 1)]
+	return [l[x*batch_size:x*batch_size+batch_size] for x in range(len(l) // batch_size + 1)]
 	# result = []
 	# temp = []
 	# for item in l:
@@ -40,7 +40,7 @@ def split_to_batch(l, batch_size=100):
 	# return result
 
 def split_to_equal_size(l, num):
-	k = l // num
+	k = len(l) // num
 	return [l[x*k:(x+1)*k] for x in range(num+1)]
 
 def one_hot(i, total):

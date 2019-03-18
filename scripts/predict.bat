@@ -1,1 +1,0 @@
-python Main.py --mode predict --target_dir testdir

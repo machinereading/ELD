@@ -1,9 +1,12 @@
 from ..utils.KoreanUtil import stem_sentence
 from .. import GlobalValues as gl
+from .Vocabulary import Vocabulary
 class Sentence():
-	def __init__(self, sentence, tokenize_method=stem_sentence):
+	def __init__(self, sentence, tokenize_method=stem_sentence, init=True):
+		if not init: return
 		self.original_sentence = sentence
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]
+		self.id = -1
 		lastind = 0
 
 		for i, token in enumerate(self.tokens):
@@ -15,11 +18,23 @@ class Sentence():
 
 	def __str__(self):
 		return " ".join([str(x) for x in self.tokens])
+
 	def __iter__(self):
 		for token in self.tokens:
 			yield token
 
-	def add_ne(self, sin, ein, entity=None):
+	@property
+	def entities(self):
+		return [x for x in self.tokens]
+
+	@property
+	def not_in_kb_entities(self):
+		return [x for x in self.tokens if x.is_entity and not x.entity_in_kb]
+	
+
+	def add_ne(self, sin, ein, surface, entity=None):
+		assert sin < ein
+		assert self.original_sentence[sin:ein] == surface
 		def split_token(new_token, token):
 			sin = new_token.char_ind
 			ein = new_token.char_ind + len(new_token.surface)
@@ -44,6 +59,7 @@ class Sentence():
 		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_ind=sin)
 		new_token.is_entity = True
 		new_token.entity = entity
+		new_token.entity_in_kb = entity in gl.entity_id_map
 		new_token_list = []
 		for token in self.tokens:
 			new_token_list += split_token(new_token, token)
@@ -52,32 +68,42 @@ class Sentence():
 			token.token_ind = i
 		self.tokens = new_token_list
 
+	def add_fake_entity(self, target_vocab):
+		assert target_vocab in self.tokens
 
 
+	@classmethod
+	def from_cw_form(cls, cw_form):
+		assert type(cw_form) is dict
 
-	
-class Vocabulary():
-	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
-		self.surface = surface
-		self.is_entity = False
-		self.entity = None
-		self.char_ind = char_ind
-		self.token_ind = token_ind
-		self.parent_sentence=parent_sentence
+		text = cw_form["text"]
+		entities = cw_form["entities"]
+		sentence = Sentence(text)
+		error_count = 0
+		for entity in entities:
+			if entity["entity"] == "": continue
+			try:
+				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"])
+			except:
+				error_count += 1
+		# if error_count > 0:
+			# print(error_count, len(entities))
 
-	def __str__(self):
-		return self.surface
+		return sentence
 
-	@property
-	def context_entities(self):
-		lctx = [x for x in self.lctx if x.is_entity]
-		rctx = [x for x in self.rctx if x.is_entity]
-		return lctx, rctx
 
-	@property
-	def lctx(self):
-		return self.parent_sentence.tokens[:self.token_ind]
-
-	@property
-	def rctx(self):
-		return self.parent_sentence.tokens[self.token_ind+1:]
+	def to_json(self):
+		return {
+			"original_sentence": self.original_sentence,
+			"id": self.id,
+			"tokens": [x.to_json() for x in self.tokens if x.is_entity]
+		}
+	@classmethod
+	def from_json(cls, json):
+		sentence = Sentence(json["original_sentence"])
+		sentence.id = json["id"]
+		sentence.tokens = [Vocabulary.from_json(x) for x in json["tokens"]]
+		assert all([vocab.parent_sentence == sentence.id for vocab in sentence.tokens])
+		for vocab in sentence.tokens:
+			vocab.parent_sentence_id = sentence.id
+			vocab.parent_sentence = sentence

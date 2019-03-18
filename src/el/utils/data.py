@@ -336,7 +336,7 @@ def prepare_sentence(sentence, form, predict):
 
 
 @TimeUtil.measure_time
-def prepare(*sentences, form, predict=False, worker=5):
+def prepare(*sentences, form, predict=False, filter_rate=0.0):
 	conlls = []
 	tsvs = []
 	cw_form = []
@@ -368,6 +368,10 @@ def prepare(*sentences, form, predict=False, worker=5):
 	# for t in threads:
 	# 	t.join()
 	for sentence in sentences:
+		s = random.random()
+		
+		if filter_rate > s: continue
+		
 		try:
 			j, c, t = prepare_sentence(sentence, form, predict)
 			# conll = change_to_conll(sentence)

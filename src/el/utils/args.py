@@ -23,6 +23,7 @@ class EL_Args():
 		self.margin = 0.01
 		self.df = 0.5
 		self.n_loops = 10
+		self.train_filter_rate = 0.9
 
 
 def get_args():
