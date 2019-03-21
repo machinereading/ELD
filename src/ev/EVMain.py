@@ -1,6 +1,7 @@
+from ... import GlobalValues as gl
 from . import model_dict
 from .models.Model import Model
-from .utils.args import EV_Args
+from .utils.args import EVModelArgs, EVDataArgs
 from .utils.data import DataGenerator
 
 import logging
@@ -13,7 +14,8 @@ from tqdm import tqdm
 class EV():
 	def __init__(self):
 		# initialize arguments
-		self.args = EV_Args()
+		self.model_args = EVModelArgs()
+		self.data_args = EVDataArgs()
 		
 		# load / initialize model
 		self.model = Model(self.args)

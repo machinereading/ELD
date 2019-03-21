@@ -4,7 +4,13 @@ class Cluster():
 		self.cluster = set([])
 		self.target_entity = None
 		self.id = -1
-		self.vocab_tensors = []
+		self.vocab_tensors = {
+			"lctx_words": [],
+			"rctx_words": [],
+			"lctx_entities": [],
+			"rctx_entities": [],
+			"error_type": []
+		}
 		# 가짜 entity marking은 어떻게? - vocab마다 체크함
 		
 

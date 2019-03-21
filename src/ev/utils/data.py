@@ -1,6 +1,6 @@
 from ...ds.Corpus import Corpus
 from ...ds.Vocabulary import Vocabulary
-from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch
+from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, Embedding
 import random
 import numpy as np
 import os
@@ -8,8 +8,10 @@ class DataGenerator():
 	def __init__(self, args):
 		
 		# load embedding dict
-		self.w2i = {w: i for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
-		self.e2i = {e: i for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
+		self.w2i, we = Embedding.load_embedding(args.word_embedding_path, args.word_embedding_type)
+		self.e2i, ee = Embedding.load_embedding(args.entity_embedding_path, args.entity_embedding_type)
+		# self.w2i = {w: i for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
+		# self.e2i = {e: i for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
 
 		# check if we can load data from pre-defined cluster
 		if args.data_load_path is not None:
@@ -25,7 +27,7 @@ class DataGenerator():
 					elif "cluster" in item:
 						cluster += jsonload(path+item)
 				self.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
-				self.change_into_tensor()
+				self.change_into_tensor() 
 				return
 			except:
 				pass
@@ -34,7 +36,6 @@ class DataGenerator():
 		self.fake_er_rate = args.fake_er_rate
 		self.fake_el_rate = args.fake_el_rate
 		self.fake_ec_rate = args.fake_ec_rate
-		self.vocab_tensors = []
 		self.generate_data()
 
 	@TimeUtil.measure_time
@@ -99,16 +100,26 @@ class DataGenerator():
 				cluster += jsonload(path+item)
 		gen.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
 		
-		gen.vocab_tensors = []
 		return gen
 
 	@TimeUtil.measure_time
 	def change_into_tensor(self):
 		for k, cluster in self.corpus.clusters.items():
 			for vocab in cluster:
-				near_words = [self.w2i[x] if x in self.w2i else np.zeros([0]) for x in (vocab.lctx + vocab.rctx)]
-				near_entities = [self.e2i[x] for x in (vocab.lctx_ent + vocab.rctx_ent) if x in self.e2i]
-				cluster.vocab_tensors.add((near_words, near_entities, cluster.id, vocab.error_type))
+				lctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.lctx]
+				rctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.rctx]
+
+				lctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.lctx_ent]
+				rctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.rctx_ent]
+				# near_words = [self.w2i[x] if x in self.w2i else 0 for x in (vocab.lctx + vocab.rctx)]
+				# near_entities = [self.e2i[x] for x in (vocab.lctx_ent + vocab.rctx_ent) if x in self.e2i]
+
+				cluster.vocab_tensors.append((near_words, near_entities, cluster.id, vocab.error_type))
+				cluster.vocab_tensors["lctx_words"].append(lctxw_ind)
+				cluster.vocab_tensors["rctx_words"].append(rctxw_ind)
+				cluster.vocab_tensors["lctx_entities"].append(lctxe_ind)
+				cluster.vocab_tensors["rctx_entities"].append(rctxe_ind)
+				cluster.vocab_tensors["error_type"].append(vocab.error_type)
 
 
 	def get_tensor_batch(self):
