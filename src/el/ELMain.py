@@ -116,6 +116,8 @@ class EL():
 			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
 
 	def __call__(self, sentences):
+		if type(sentences) is str:
+			sentences = [sentences]
 		result = []
 		for batch in self.predict(sentences, "PLAIN_SENTENCE"):
 			result += batch

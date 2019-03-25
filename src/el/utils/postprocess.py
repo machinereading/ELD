@@ -14,7 +14,7 @@ def merge_item(j, result_dict):
 			if item["fileName"] == doc_name:
 				target_json = item
 				for item in target_json["entities"]:
-					# del item["candidates"]
+					del item["candidates"]
 					# to get precise result, don't remove candidates
 					item["text"] = item["surface"]
 					del item["surface"]

@@ -7,16 +7,17 @@ import socket
 import struct
 import itertools
 from ..utils.datamodule.DataParser import WikiSilverCharacterParser as WikiParser
+import traceback
 def getETRI(text):
 	host = '143.248.135.146'
-	port = 33344
+	port = 33333
 	
 	ADDR = (host, port)
 	client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		client_socket.connect(ADDR)
 	except Exception as e:
-		return None
+		traceback.print_exc()
 	try:
 		client_socket.sendall(str.encode(text))
 		#clientSocket.sendall(text.encode('unicode-escape'))
@@ -30,10 +31,11 @@ def getETRI(text):
 		result = json.loads(buffer.decode(encoding='utf-8'))
 		return result
 	except Exception as e:
-		return None
+		traceback.print_exc()
 
 if __name__ == '__main__':
-	parser = WikiParser("corpus/wiki_silver/")
-	with open("corpus/wiki_etri_parsed.txt", "w", encoding="UTF8") as f:
-		for sent, _, _ in itertools.chain(parser.get_trainset(), parser.get_devset()):
-			print(getETRI(sent))
+	print(getETRI("지미 카터는 미국의 제 32대 대통령이다. 아님말고"))
+	# parser = WikiParser("corpus/wiki_silver/")
+	# with open("corpus/wiki_etri_parsed.txt", "w", encoding="UTF8") as f:
+	# 	for sent, _, _ in itertools.chain(parser.get_trainset(), parser.get_devset()):
+	# 		print(getETRI(sent))

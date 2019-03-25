@@ -1,6 +1,7 @@
 from ... import GlobalValues as gl
 from . import model_dict
-from .models.Model import Model
+from .models.IntraClusterModel import Model
+from .models.ValidationModel import ValidationModel
 from .utils.args import EVModelArgs, EVDataArgs
 from .utils.data import DataGenerator
 
@@ -14,13 +15,14 @@ from tqdm import tqdm
 class EV():
 	def __init__(self):
 		# initialize arguments
-		self.model_args = EVModelArgs()
-		self.data_args = EVDataArgs()
+		self.args = EVArgs()
 		
 		# load / initialize model
-		self.model = Model(self.args)
+		self.cluster_model = ThreeScoreModel(self.args)
+		self.validation_model = ValidationModel(self.args)
 		if torch.cuda.is_available():
-			self.model.cuda()
+			self.cluster_model.cuda()
+			self.validation_model.cuda()
 
 		
 		# load / generate data
@@ -36,13 +38,18 @@ class EV():
 		best_dev_recall = 0
 		best_epoch = 0
 		optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
-		self.model.train()
+		self.cluster_model.train()
 		for epoch in tqdm(range(self.args.epoch), desc="Training..."):
 			for batch in self.data.get_tensor_batch():
 				optimizer.zero_grad()
-				loss = self.model.loss(batch)
+				loss = self.cluster_model.loss(batch)
 				loss.backward()
 				optimizer.step()
+
+	def pretrain(self):
+		logging.info("EV Pretraining")
+
+
 
 	def validate(self, entity_set):
 		pass

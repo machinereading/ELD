@@ -41,7 +41,7 @@ def candidates_old(word):
 @TimeUtil.measure_time
 def getETRI(text):
 	host = '143.248.135.146'
-	port = 33344
+	port = 33333
 	
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
