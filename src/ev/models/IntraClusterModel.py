@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from ...utils import readfile
+from ...utils import readfile, TimeUtil
 from ... import GlobalValues as gl
 from . import ModelFactory
-
 from .modules.Scorer import ERScorer, ELScorer, ECScorer
+from tqdm import tqdm
+import logging
 
 class ThreeScoreModel(nn.Module):
 	def __init__(self, args):
@@ -16,27 +17,28 @@ class ThreeScoreModel(nn.Module):
 		ee_dim = self.entity_embedding.shape[1]
 		self.er_score_threshold = getattr(args, er_score_threshold, 0.5)
 		self.el_score_threshold = getattr(args, el_score_threshold, 0.5)
+		self.pretrain_er = True
+		self.pretrain_el = True
 
-
-		if args.er_model_path is not None:
-			pass
-		else:
-			self.er_scorer = ERScorer(args)
-		if args.el_model_path is not None:
-			pass
-		else:
-			self.el_scorer = ELScorer(args)
-		if args.ec_model_path is not None:
-			pass
-		else:
-			self.ec_scorer = ECScorer(args)
-
-		for param in self.er_scorer:
-			param.requires_grad = False
-		for param in self.el_scorer:
-			param.requires_grad = False
-
-
+		# initialize and load model
+		self.er_scorer = ERScorer(args)
+		try:
+			self.er_scorer.load_state_dict(torch.load(args.er_model_path))
+			self.pretrain_er = False
+		except:
+			logging.info("Failed to load ER scorer from %s" % args.er_model_path)
+		
+		self.el_scorer = ELScorer(args)
+		try:
+			self.el_scorer.load_state_dict(torch.load(args.el_model_path))
+			self.pretrain_el = False
+		except:
+			logging.info("Failed to load EL scorer from %s" % args.el_model_path)
+		self.ec_scorer = ECScorer(args)
+		try:
+			self.ec_scorer.load_state_dict(torch.load(args.ec_model_path))
+		except:
+			logging.info("Failed to load EC scorer from %s" % args.ec_model_path)
 		self.cluster_scorer = nn.Linear(3, 1)
 		
 
@@ -61,6 +63,34 @@ class ThreeScoreModel(nn.Module):
 
 		return final_score
 
-	def pretrain(self):
-		# pretrain er scorer, el scorer, ec transformer
+	def loss(self, prediction, label):
 		pass
+
+	@TimeUtil.measure_time
+	def pretrain(self, dataset):
+		# pretrain er scorer, el scorer, ec transformer
+		logging.info("Pretraining Entity Scorer")
+		if self.pretrain_er and self.pretrain_el:
+			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
+			el_optimizer = torch.optim.Adam(self.el_scorer.parameters())
+			for epoch in tqdm(range(20), desc="Pretraining ER & EL"):
+				for batch in dataset.get_token_batch():
+					er_optimizer.zero_grad()
+					el_optimizer.zero_grad()
+
+					loss = self.
+		elif self.pretrain_er:
+			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
+			for epoch in tqdm(range(20), desc="Pretraining ER"):
+				for batch in dataset.get_token_batch():
+
+		elif self.pretrain_el:
+			el_optimizer = torch.optim.Adam(self.el_scorer.parameters())
+			
+
+
+		# fix parameters
+		for param in self.er_scorer:
+			param.requires_grad = False
+		for param in self.el_scorer:
+			param.requires_grad = False

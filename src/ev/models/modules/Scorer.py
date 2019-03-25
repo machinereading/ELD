@@ -12,6 +12,9 @@ class ERScorer(nn.Module):
 	def forward(self, word_embeddings):
 		return F.relu(self.model(word_embeddings))
 
+	def loss(self, prediction, label):
+		return F.cross_entropy(prediction, label)
+
 class ELScorer(nn.Module):
 	def __init__(self, args, input_dim):
 		super(ELScorer, self).__init__()
@@ -19,13 +22,18 @@ class ELScorer(nn.Module):
 
 	def forward(self, entity_embeddings):
 		return F.relu(self.model(entity_embeddings))
+	
+	def loss(self, prediction, label):
+		return F.cross_entropy(prediction, label)
 
 class ECScorer(nn.Module):
 	def __init__(self, args):
 		super(ECScorer, self).__init__(args.ec_model)
 		self.wctx2emb = None
 		self.ectx2emb = None
-		
+	
+	def loss(self, prediction, label):
+		return F.cross_entropy(prediction, label)
 
 	def forward(self, er_score, el_score, er_emb, el_emb):
 		# [er_emb, el_emb] --> token embedding

@@ -13,9 +13,10 @@ import numpy as np
 from tqdm import tqdm
 
 class EV():
-	def __init__(self):
+	def __init__(self, model_name):
 		# initialize arguments
 		self.args = EVArgs()
+		self.args.model_name = model_name
 		
 		# load / initialize model
 		self.cluster_model = ThreeScoreModel(self.args)
@@ -24,11 +25,12 @@ class EV():
 			self.cluster_model.cuda()
 			self.validation_model.cuda()
 
+
 		
 		# load / generate data
 		self.data = DataGenerator(self.args)
 		
-
+		self.pretrain()
 		
 
 	def train(self):
@@ -47,8 +49,9 @@ class EV():
 				optimizer.step()
 
 	def pretrain(self):
-		logging.info("EV Pretraining")
-
+		logging.info("Start EV Pretraining")
+		self.cluster_model.pretrain(self.data)
+		self.validation_model.pretrain(self.data)
 
 
 	def validate(self, entity_set):

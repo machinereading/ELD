@@ -143,3 +143,15 @@ class DataGenerator():
 							"error_type": []
 						}
 					ind = 0
+
+	def get_token_batch(self):
+		buf = []
+		for sentence in self.corpus:
+			for token in sentence:
+				pass
+
+	def get_cluster_batch(self):
+		buf = []
+		for cluster in self.cluster.values():
+			for token in cluster:
+				pass

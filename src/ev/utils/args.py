@@ -17,8 +17,9 @@ class EVArgs():
 		self.fake_el_rate = 0.1
 		self.fake_ec_rate = 0.1
 		self.fake_cluster_rate = 0.4 # 40% of entity set will be fake entity cluster
-		self.ctx_window = 5
+		self.ctx_window = 5 # context window size of token
 
+		# training batch size
 		self.batch_size = 2
 
 		# Model load path
@@ -71,4 +72,32 @@ class EVArgs():
 
 	def to_json(self):
 		return self.__dict__
+
+	@property
+	def er_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"er_scorer.pt"
+		except:
+			return None
+
+	@property
+	def el_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"el_scorer.pt"
+		except:
+			return None
+
+	@property
+	def ec_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"ec_scorer.pt"
+		except:
+			return None
+
+	@property
+	def transformer_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"transformer.pt"
+		except:
+			return None
 
