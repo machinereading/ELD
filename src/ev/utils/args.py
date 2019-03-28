@@ -1,7 +1,7 @@
 class EVArgs():
 	def __init__(self):
 		# Embedding
-		self.word_embedding_path = "data/embedding/word"
+		self.word_embedding_path = "data/embedding/wiki_raw_word"
 		self.word_embedding_type = "glove"
 		self.entity_embedding_path = "data/embedding/entity"
 		self.entity_embedding_type = "glove"
@@ -12,7 +12,7 @@ class EVArgs():
 
 		# Data
 		# if data load path is defined, these things won't be evaluated
-		self.data_path = "corpus/el_wiki/wiki_cwform.json"
+		self.data_path = "corpus/el_wiki/wiki_cwform_10000.json"
 		self.fake_er_rate = 0.1
 		self.fake_el_rate = 0.1
 		self.fake_ec_rate = 0.1
@@ -22,11 +22,13 @@ class EVArgs():
 		# training batch size
 		self.batch_size = 2
 
+		self.pretrain_epoch = 20
 		# Model load path
 		# load is done before model initialization
-		self.er_model_path = None
-		self.el_model_path = None
-		self.ec_model_path = None
+		# changed to property
+		# self.er_model_path = None
+		# self.el_model_path = None
+		# self.ec_model_path = None
 
 		# Model specification
 		# if model path is defined, these things won't be evaluated

@@ -1,8 +1,7 @@
-from ... import GlobalValues as gl
-from . import model_dict
-from .models.IntraClusterModel import Model
+from .. import GlobalValues as gl
+from .models.IntraClusterModel import ThreeScorerModel
 from .models.ValidationModel import ValidationModel
-from .utils.args import EVModelArgs, EVDataArgs
+from .utils.args import EVArgs
 from .utils.data import DataGenerator
 
 import logging
@@ -19,17 +18,16 @@ class EV():
 		self.args.model_name = model_name
 		
 		# load / initialize model
-		self.cluster_model = ThreeScoreModel(self.args)
+		self.cluster_model = ThreeScorerModel(self.args)
 		self.validation_model = ValidationModel(self.args)
 		if torch.cuda.is_available():
 			self.cluster_model.cuda()
 			self.validation_model.cuda()
 
-
-		
 		# load / generate data
 		self.data = DataGenerator(self.args)
-		
+
+		# pretrain
 		self.pretrain()
 		
 

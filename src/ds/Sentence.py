@@ -8,6 +8,7 @@ class Sentence():
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]
 		self.id = -1
 		lastind = 0
+		self._vocab_tensors = None
 
 		for i, token in enumerate(self.tokens):
 			try:
@@ -107,3 +108,23 @@ class Sentence():
 		for vocab in sentence.tokens:
 			vocab.parent_sentence_id = sentence.id
 			vocab.parent_sentence = sentence
+
+	@property
+	def vocab_tensors(self):
+		if self._vocab_tensors is None:
+			self._vocab_tensors = {
+				"lctx_words": [],
+				"rctx_words": [],
+				"lctx_entities": [],
+				"rctx_entities": [],
+				"error_type": []
+			}
+			for vocab in self:
+				self._vocab_tensors["lctx_words"].append(vocab.lctxw_ind)
+				self._vocab_tensors["rctx_words"].append(vocab.rctxw_ind)
+				self._vocab_tensors["lctx_entities"].append(vocab.lctxe_ind)
+				self._vocab_tensors["rctx_entities"].append(vocab.rctxe_ind)
+				self._vocab_tensors["error_type"].append(vocab.error_type)
+		
+		return self._vocab_tensors
+			

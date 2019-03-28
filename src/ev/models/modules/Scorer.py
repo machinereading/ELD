@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import ModelFactory
+from .. import ModelFactory
 
 class ERScorer(nn.Module):
 	def __init__(self, args, input_dim):
@@ -28,7 +28,7 @@ class ELScorer(nn.Module):
 
 class ECScorer(nn.Module):
 	def __init__(self, args):
-		super(ECScorer, self).__init__(args.ec_model)
+		super(ECScorer, self).__init__()
 		self.wctx2emb = None
 		self.ectx2emb = None
 	

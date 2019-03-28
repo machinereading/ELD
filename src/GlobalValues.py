@@ -5,8 +5,15 @@ from .utils import readfile
 import logging
 from datetime import datetime
 
+# logging config
 logging.basicConfig(filename= "log/run_%s.log" % str(datetime.now())[:-7].replace(" ", "_"), format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+logging.getLogger().addHandler(console)
 logging.info("[START]")
+
+
+
 
 boolmap = {"True": True, "False": False}
 corpus_home = "corpus/"

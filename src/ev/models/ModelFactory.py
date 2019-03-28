@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-
+import logging
 
 def load_model(model_name, input_dim, output_dim, *, layers=1, dropout_rate=0.4, bidirectional=True):
 	if model_name == "CNN":
@@ -18,5 +18,7 @@ def load_model(model_name, input_dim, output_dim, *, layers=1, dropout_rate=0.4,
 		return nn.Sequential(
 			nn.Linear(input_dim, output_dim),
 			nn.ReLU(),
-			nn.Dropout(dropout)
+			nn.Dropout(dropout_rate)
 		)
+	else:
+		logging.warning("Model name %s not exists!" % model_name)

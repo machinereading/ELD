@@ -30,3 +30,6 @@ class Transformer(nn.Module):
 	def forward(self, er, el):
 		input_tensor = torch.cat([er, el], dim=0)
 		return self.transformer(torch.cat([er, el], dim=0))
+
+	def loss(self, pred, entity_embedding):
+		return 

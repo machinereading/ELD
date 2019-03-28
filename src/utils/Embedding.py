@@ -1,5 +1,5 @@
 import numpy as np
-from gensim.models import KeyedVector
+from gensim.models import KeyedVectors
 def load_embedding(embedding_path, embedding_type):
 	"""
 	Input:
@@ -11,7 +11,7 @@ def load_embedding(embedding_path, embedding_type):
 	"""
 	if embedding_type not in ["word2vec", "fasttext", "glove"]: raise ValueError("Must be one of word2vec, fasttext, or glove")
 	if embedding_type == "word2vec" or embedding_type == "fasttext":
-		vec = KeyedVector.load(embedding_path)
+		vec = KeyedVectors.load(embedding_path)
 		w2i = {w: i for i, w in enumerate(vec.index2word)}
 		arr = []
 		for word in vec.index2word:

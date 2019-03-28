@@ -12,6 +12,12 @@ class Vocabulary():
 		self.cluster = None
 		self.error_type = -1 # -1: normal, 0: ER, 1: EL, 2: EC
 
+		# some properties that will be initialized later
+		self.lctxw_ind = None
+		self.rctxw_ind = None
+		self.lctxe_ind = None
+		self.rctxe_ind = None
+
 	def __str__(self):
 		return self.surface
 
@@ -36,6 +42,7 @@ class Vocabulary():
 	@property
 	def rctx(self):
 		return self.parent_sentence.tokens[self.token_ind+1:]
+	
 
 	def to_json(self):
 		return {

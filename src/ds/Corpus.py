@@ -2,6 +2,7 @@ from .Sentence import Sentence
 from .Cluster import Cluster
 from ..utils import jsonload
 from tqdm import tqdm
+import logging
 class Corpus():
 	def __init__(self):
 		self.corpus = [] # list of sentence
@@ -20,8 +21,9 @@ class Corpus():
 		if type(path) is str:
 			path = jsonload(path)
 		assert type(path) is list
+		logging.info("Loading corpus")
 		corpus = Corpus()
-		for item in tqdm(path):
+		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
 			corpus.add_sentence(sentence)
@@ -45,8 +47,8 @@ class Corpus():
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = Corpus()
-		print(len(json["sentence"]), json["sentence"][0])
 		for sentence in json["sentence"]:
 			corpus.corpus.append(Sentence.from_json(sentence))
 		for cluster in json["cluster"]:
 			corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
+
