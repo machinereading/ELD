@@ -37,6 +37,7 @@ class Cluster():
 			assert v.cluster == c.id
 			c.cluster.add(v)
 			v.cluster = c
+		return c
 
 	@property
 	def vocab_tensors(self):

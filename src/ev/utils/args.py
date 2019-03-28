@@ -8,7 +8,7 @@ class EVArgs():
 
 		# Data load path
 		# load is done before data initialization
-		self.data_load_path = None
+		self.data_load_path = "data/ev/10000"
 
 		# Data
 		# if data load path is defined, these things won't be evaluated

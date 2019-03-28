@@ -15,6 +15,9 @@ class Corpus():
 	def __iter__(self):
 		for item in self.corpus:
 			yield item
+	def __len__(self):
+		return len(self.corpus)
+	
 	@classmethod
 	def load_corpus(cls, path):
 		# load from crowdsourcing form
@@ -52,3 +55,4 @@ class Corpus():
 		for cluster in json["cluster"]:
 			corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
 
+		return corpus

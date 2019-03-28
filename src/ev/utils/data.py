@@ -1,8 +1,11 @@
 from ...ds.Corpus import Corpus
 from ...ds.Vocabulary import Vocabulary
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, Embedding
-import random
+
 import numpy as np
+from tqdm import tqdm
+
+import random
 import os
 import logging
 class DataGenerator():
@@ -16,6 +19,7 @@ class DataGenerator():
 		self.batch_size = args.batch_size
 		# check if we can load data from pre-defined cluster
 		if args.data_load_path is not None:
+			corpus_path = args.data_load_path
 			try:
 				path = "/".join(corpus_path.split("/")[:-1])+"/"
 				file_prefix = corpus_path.split("/")[-1]
@@ -31,7 +35,8 @@ class DataGenerator():
 				self.generate_vocab_tensors()
 				return
 			except:
-				pass
+				import traceback
+				traceback.print_exc()
 
 		self.data_path = args.data_path
 		self.fake_er_rate = args.fake_er_rate
@@ -104,7 +109,7 @@ class DataGenerator():
 	@TimeUtil.measure_time
 	def generate_vocab_tensors(self):
 		logging.info("Generating Vocab tensors...")
-		for sentence in self.corpus:
+		for sentence in tqdm(self.corpus, desc="Generating vocabulary tensors", total = len(self.corpus)):
 			for vocab in sentence:
 				vocab.lctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.lctx]
 				vocab.rctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.rctx]

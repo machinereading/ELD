@@ -89,16 +89,16 @@ class ThreeScorerModel(nn.Module):
 						rw = [x.rctxw_ind for x in batch]
 						er_label = [1 if x.is_entity else 0 for x in batch]
 						er_optimizer.zero_grad()
-						er_pred = self.er_scorer(lw, rw)
+						er_pred = self.er_scorer(torch.cat([lw, rw], dim=0))
 						er_loss = self.er_scorer.loss(er_pred, er_label)
 						er_loss.backward()
 						er_optimizer.step()
 					if self.pretrain_el:
-						le = [x.lctxe_ind for x in batch]
-						re = [x.rctxe_ind for x in batch]
+						le = [x.lctxe_ind for x in batch if x.is_entity]
+						re = [x.rctxe_ind for x in batch if x.is_entity]
 						el_label = [1 if x.entity_in_kb else 0 for x in batch if x.is_entity]
 						el_optimizer.zero_grad()
-						el_pred = self.el_scorer(lw, rw)
+						el_pred = self.el_scorer(torch.cat([le, re], dim=0))
 						el_loss = self.el_scorer.loss(el_pred, el_label)
 						el_loss.backward()
 						el_optimizer.step()

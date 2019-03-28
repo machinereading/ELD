@@ -108,6 +108,7 @@ class Sentence():
 		for vocab in sentence.tokens:
 			vocab.parent_sentence_id = sentence.id
 			vocab.parent_sentence = sentence
+		return sentence
 
 	@property
 	def vocab_tensors(self):
