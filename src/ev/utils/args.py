@@ -8,8 +8,8 @@ class EVArgs():
 
 		# Data load path
 		# load is done before data initialization
-		self.data_load_path = "data/ev/10000"
-
+		# self.data_load_path = "data/ev/10000/10000"
+		self.data_load_path = None
 		# Data
 		# if data load path is defined, these things won't be evaluated
 		self.data_path = "corpus/el_wiki/wiki_cwform_10000.json"

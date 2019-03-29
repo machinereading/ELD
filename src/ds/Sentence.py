@@ -23,6 +23,9 @@ class Sentence():
 	def __iter__(self):
 		for token in self.tokens:
 			yield token
+			
+	def __len__(self):
+		return len(self.tokens)
 
 	@property
 	def entities(self):
@@ -103,6 +106,7 @@ class Sentence():
 	def from_json(cls, json):
 		sentence = Sentence(json["original_sentence"])
 		sentence.id = json["id"]
+		print(len(json["tokens"]))
 		sentence.tokens = [Vocabulary.from_json(x) for x in json["tokens"]]
 		assert all([vocab.parent_sentence == sentence.id for vocab in sentence.tokens])
 		for vocab in sentence.tokens:

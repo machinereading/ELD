@@ -12,9 +12,12 @@ import logging
 class ThreeScorerModel(nn.Module):
 	def __init__(self, args):
 		super(ThreeScorerModel, self).__init__()
-
-		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(np.load(args.word_embedding_path+".npy")))
-		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(np.load(args.entity_embedding_path+".npy")))
+		we = np.load(args.word_embedding_path+".npy")
+		we = np.vstack([np.zeros(we.shape[1]), we])
+		ee = np.load(args.entity_embedding_path+".npy")
+		ee = np.vstack([np.zeros(ee.shape[1]), ee])
+		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we))
+		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee))
 		we_dim = self.word_embedding.embedding_dim
 		ee_dim = self.entity_embedding.embedding_dim
 		self.pretrain_epoch = args.pretrain_epoch
