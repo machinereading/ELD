@@ -29,6 +29,7 @@ class Corpus():
 		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
+			if len(sentence.entities) == 0: continue
 			corpus.add_sentence(sentence)
 			for nt in sentence.not_in_kb_entities:
 				if nt.entity not in corpus.cluster:
@@ -51,7 +52,9 @@ class Corpus():
 			json = jsonload(json)
 		corpus = Corpus()
 		for sentence in json["sentence"]:
-			corpus.corpus.append(Sentence.from_json(sentence))
+			sentence = Sentence.from_json(sentence)
+			if len(sentence.entities) > 0:
+				corpus.corpus.append(sentence)
 		for cluster in json["cluster"]:
 			corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
 

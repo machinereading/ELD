@@ -34,6 +34,8 @@ class Sentence():
 	@property
 	def not_in_kb_entities(self):
 		return [x for x in self.tokens if x.is_entity and not x.entity_in_kb]
+
+
 	
 
 	def add_ne(self, sin, ein, surface, entity=None):
@@ -70,6 +72,7 @@ class Sentence():
 			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[:-1]
 		for i, token in enumerate(new_token_list):
 			token.token_ind = i
+
 		self.tokens = new_token_list
 
 	def add_fake_entity(self, target_vocab):
@@ -84,6 +87,8 @@ class Sentence():
 		entities = cw_form["entities"]
 		sentence = Sentence(text)
 		error_count = 0
+		if len(entities) > 1000:
+			print(cw_form["fileName"])
 		for entity in entities:
 			if entity["entity"] == "": continue
 			try:
@@ -92,7 +97,8 @@ class Sentence():
 				error_count += 1
 		# if error_count > 0:
 			# print(error_count, len(entities))
-
+		# postprocess
+		sentence.tokens = sorted(list(set(sentence.tokens)), key=lambda x: x.char_ind)
 		return sentence
 
 
@@ -106,7 +112,8 @@ class Sentence():
 	def from_json(cls, json):
 		sentence = Sentence(json["original_sentence"])
 		sentence.id = json["id"]
-		print(len(json["tokens"]))
+		if len(json["tokens"]) > 100000: print(json["original_sentence"], len(json["tokens"]))
+		# print(len(json["tokens"]))
 		sentence.tokens = [Vocabulary.from_json(x) for x in json["tokens"]]
 		assert all([vocab.parent_sentence == sentence.id for vocab in sentence.tokens])
 		for vocab in sentence.tokens:

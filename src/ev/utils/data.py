@@ -3,6 +3,7 @@ from ...ds.Vocabulary import Vocabulary
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, Embedding
 
 import numpy as np
+import torch
 from tqdm import tqdm
 
 import random
@@ -14,9 +15,11 @@ class DataGenerator():
 		# load embedding dict
 		# self.w2i, we = Embedding.load_embedding(args.word_embedding_path, args.word_embedding_type)
 		# self.e2i, ee = Embedding.load_embedding(args.entity_embedding_path, args.entity_embedding_type)
-		self.w2i = {w: i+1 for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
-		self.e2i = {e: i+1 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
+		# 0 for oov, 1 for out of range
+		self.w2i = {w: i+2 for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
+		self.e2i = {e: i+2 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
 		self.batch_size = args.batch_size
+		self.ctx_window_size = args.ctx_window_size
 		# check if we can load data from pre-defined cluster
 		if args.data_load_path is not None:
 			corpus_path = args.data_load_path
@@ -44,7 +47,7 @@ class DataGenerator():
 		self.fake_ec_rate = args.fake_ec_rate
 
 		self.generate_data()
-		self.generate_vocab_tensors()
+		# self.generate_vocab_tensors()
 
 	@TimeUtil.measure_time
 	def generate_data(self):
@@ -53,7 +56,7 @@ class DataGenerator():
 
 		# pre-train distribution
 		# generate clusters
-		
+
 		self.corpus = Corpus.load_corpus(self.data_path)
 		
 		# extract fake tokens
@@ -111,14 +114,22 @@ class DataGenerator():
 	@TimeUtil.measure_time
 	def generate_vocab_tensors(self):
 		logging.info("Generating Vocab tensors...")
-		for sentence in tqdm(self.corpus, desc="Generating vocabulary tensors", total = len(self.corpus)):
-			print(len(sentence))
-			for vocab in sentence:
-				vocab.lctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.lctx]
-				vocab.rctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.rctx]
+		print(len(self.w2i), len(self.e2i))
 
-				vocab.lctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.lctx_ent]
-				vocab.rctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.rctx_ent]
+		for sentence in tqdm(self.corpus, desc="Generating vocabulary tensors", total = len(self.corpus)):
+			# print(len(sentence))
+			for vocab in sentence:
+				lctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.lctx[-self.ctx_window_size:]]
+				vocab.lctxw_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind).cuda()
+
+				rctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.rctx[:self.ctx_window_size]]
+				vocab.rctxw_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]).cuda()
+
+				lctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.lctx_ent[-self.ctx_window_size:]]
+				vocab.lctxe_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind).cuda()
+				
+				rctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.rctx_ent[:self.ctx_window_size]]
+				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]).cuda()
 				
 
 	def get_tensor_batch(self):

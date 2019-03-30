@@ -27,6 +27,13 @@ class Vocabulary():
 	def __repr__(self):
 		return "%s: %s" % (self.surface, self.entity if self.entity is not None else "")
 
+	def __eq__(self, other):
+		if type(other) is not Vocabulary: return False
+		return self.parent_sentence == other.parent_sentence and self.char_ind == other.char_ind
+
+	def __hash__(self):
+		return hash((self.parent_sentence, self.char_ind))
+
 	@property
 	def lctx_ent(self):
 		return [x for x in self.lctx if x.is_entity]

@@ -1,15 +1,15 @@
 class EVArgs():
 	def __init__(self):
 		# Embedding
-		self.word_embedding_path = "data/embedding/wiki_raw_word"
+		self.word_embedding_path = "data/embedding/wiki_1903_stem"
 		self.word_embedding_type = "glove"
 		self.entity_embedding_path = "data/embedding/entity"
 		self.entity_embedding_type = "glove"
 
 		# Data load path
 		# load is done before data initialization
-		# self.data_load_path = "data/ev/10000/10000"
-		self.data_load_path = None
+		self.data_load_path = "data/ev/10000/10000"
+		# self.data_load_path = None
 		# Data
 		# if data load path is defined, these things won't be evaluated
 		self.data_path = "corpus/el_wiki/wiki_cwform_10000.json"
@@ -17,10 +17,10 @@ class EVArgs():
 		self.fake_el_rate = 0.1
 		self.fake_ec_rate = 0.1
 		self.fake_cluster_rate = 0.4 # 40% of entity set will be fake entity cluster
-		self.ctx_window = 5 # context window size of token
+		self.ctx_window_size = 5 # context window size of token
 
 		# training batch size
-		self.batch_size = 2
+		self.batch_size = 16
 
 		self.pretrain_epoch = 20
 		# Model load path
