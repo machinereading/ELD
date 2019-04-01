@@ -20,6 +20,7 @@ class DataGenerator():
 		self.e2i = {e: i+2 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
 		self.batch_size = args.batch_size
 		self.ctx_window_size = args.ctx_window_size
+		self.filter_data_tokens = args.filter_data_tokens
 		# check if we can load data from pre-defined cluster
 		if args.data_load_path is not None:
 			corpus_path = args.data_load_path
@@ -37,15 +38,20 @@ class DataGenerator():
 				self.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
 				self.generate_vocab_tensors()
 				return
+			except FileNotFoundError:
+				import traceback
+				traceback.print_exc()
 			except:
 				import traceback
 				traceback.print_exc()
+				import sys
+				sys.exit(1)
+
 
 		self.data_path = args.data_path
 		self.fake_er_rate = args.fake_er_rate
 		self.fake_el_rate = args.fake_el_rate
 		self.fake_ec_rate = args.fake_ec_rate
-
 		self.generate_data()
 		# self.generate_vocab_tensors()
 
@@ -114,22 +120,39 @@ class DataGenerator():
 	@TimeUtil.measure_time
 	def generate_vocab_tensors(self):
 		logging.info("Generating Vocab tensors...")
-		print(len(self.w2i), len(self.e2i))
-
+		# print(len(self.w2i), len(self.e2i))
 		for sentence in tqdm(self.corpus, desc="Generating vocabulary tensors", total = len(self.corpus)):
 			# print(len(sentence))
+			er_error_tokens = 0
+			el_error_tokens = 0
+			dark_entity_tokens = 0
 			for vocab in sentence:
-				lctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.lctx[-self.ctx_window_size:]]
-				vocab.lctxw_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind).cuda()
+				if self.filter_data_tokens:
+					if er_error_tokens >= 10 and not vocab.is_entity:
+						continue 
+					if el_error_tokens >= 10 and vocab.is_entity and vocab.entity_in_kb:
+						continue
+					if dark_entity_tokens >= 10:
+						continue
+				lctxw_ind = [self.w2i[x.surface] if x.surface in self.w2i else 0 for x in vocab.lctx[-self.ctx_window_size:]]
+				vocab.lctxw_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind)
 
-				rctxw_ind = [self.w2i[x] if x in self.w2i else 0 for x in vocab.rctx[:self.ctx_window_size]]
-				vocab.rctxw_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]).cuda()
+				rctxw_ind = [self.w2i[x.surface] if x.surface in self.w2i else 0 for x in vocab.rctx[:self.ctx_window_size]]
+				vocab.rctxw_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1])
 
-				lctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.lctx_ent[-self.ctx_window_size:]]
-				vocab.lctxe_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind).cuda()
+				lctxe_ind = [self.e2i[x.entity] if x.entity in self.e2i else 0 for x in vocab.lctx_ent[-self.ctx_window_size:]]
+				vocab.lctxe_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind)
 				
-				rctxe_ind = [self.e2i[x] if x in self.e2i else 0 for x in vocab.rctx_ent[:self.ctx_window_size]]
-				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]).cuda()
+				rctxe_ind = [self.e2i[x.entity] if x.entity in self.e2i else 0 for x in vocab.rctx_ent[:self.ctx_window_size]]
+				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
+				# print(vocab.entity, lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind) # why everything is zero?
+				if self.filter_data_tokens:
+					if not vocab.is_entity:
+						er_error_tokens += 1
+					elif vocab.is_entity and vocab.entity_in_kb:
+						el_error_tokens += 1
+					else:
+						dark_entity_tokens += 1
 				
 
 	def get_tensor_batch(self):
@@ -159,7 +182,9 @@ class DataGenerator():
 		buf = []
 		for sentence in self.corpus:
 			for token in sentence:
-				buf.append(token)
+				if token.lctxe_ind is not None:
+					# print(token.surface, token.is_entity, token.entity_in_kb)
+					buf.append(token)
 				if len(buf) == self.batch_size:
 					yield buf
 					buf = []

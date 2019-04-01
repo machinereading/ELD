@@ -15,19 +15,21 @@ class EV():
 	def __init__(self, model_name):
 		# initialize arguments
 		self.args = EVArgs()
+		if torch.cuda.is_available():
+			self.args.device = torch.device("cuda")
+		else:
+			self.args.device = torch.device("cpu")
 		self.args.model_name = model_name
 		
 		# load / initialize model
-		self.cluster_model = ThreeScorerModel(self.args)
-		self.validation_model = ValidationModel(self.args)
-		if torch.cuda.is_available():
-			self.cluster_model.cuda()
-			self.validation_model.cuda()
-
+		self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
+		self.validation_model = ValidationModel(self.args).to(self.args.device)
+		
 		# load / generate data
 		self.data = DataGenerator(self.args)
 
 		# pretrain
+		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
 		self.pretrain()
 		
 

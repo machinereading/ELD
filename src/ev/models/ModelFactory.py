@@ -9,11 +9,11 @@ def load_model(model_name, input_dim, output_dim, *, layers=1, dropout_rate=0.4,
 		# return nn.Conv1d()
 		return None
 	elif model_name == "RNN":
-		return nn.RNN(input_size=input_dim, hidden_size=output_dim, num_layers=layers, dropout=dropout_rate, bidirectional=bidirectional)
+		return nn.RNN(input_size=input_dim, hidden_size=output_dim, num_layers=layers, dropout=dropout_rate, batch_first=True, bidirectional=bidirectional)
 	elif model_name == "LSTM":
-		return nn.LSTM(input_size=input_dim, hidden_size=output_dim, bidirectional=bidirectional)
+		return nn.LSTM(input_size=input_dim, hidden_size=output_dim, batch_first=True, bidirectional=bidirectional)
 	elif model_name == "GRU":
-		return nn.GRU(input_size=input_dim, hidden_size=output_dim, num_layers=layers, dropout=dropout_rate, bidirectional=bidirectional)
+		return nn.GRU(input_size=input_dim, hidden_size=output_dim, num_layers=layers, dropout=dropout_rate, batch_first=True, bidirectional=bidirectional)
 	elif model_name == "FFNN":
 		return nn.Sequential(
 			nn.Linear(input_dim, output_dim),

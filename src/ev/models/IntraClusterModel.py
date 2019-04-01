@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import sklearn.metrics as metrics
-from ...utils import readfile, TimeUtil
+from ...utils import readfile, jsondump, TimeUtil
 from ... import GlobalValues as gl
 from . import ModelFactory
 from .modules.Scorer import *
@@ -13,12 +13,13 @@ import logging
 class ThreeScorerModel(nn.Module):
 	def __init__(self, args):
 		super(ThreeScorerModel, self).__init__()
+		self.target_device = args.device
 		we = np.load(args.word_embedding_path+".npy")
 		we = np.vstack([np.zeros([2, we.shape[1]]), we])
 		ee = np.load(args.entity_embedding_path+".npy")
 		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
-		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we))
-		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee))
+		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
+		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
 		we_dim = self.word_embedding.embedding_dim
 		ee_dim = self.entity_embedding.embedding_dim
 		self.er_path = args.er_model_path
@@ -31,26 +32,29 @@ class ThreeScorerModel(nn.Module):
 		self.pretrain_el = True
 
 		# initialize and load model
-		self.er_scorer = ERScorer(args, we_dim)
+		self.er_scorer = ERScorer(args, we_dim).to(self.target_device)
 		try:
 			self.er_scorer.load_state_dict(torch.load(self.er_path))
 			self.pretrain_er = False
 		except:
 			logging.info("Failed to load ER scorer from %s" % args.er_model_path)
 		
-		self.el_scorer = ELScorer(args, ee_dim)
+		self.el_scorer = ELScorer(args, ee_dim).to(self.target_device)
 		try:
 			self.el_scorer.load_state_dict(torch.load(self.el_path))
 			self.pretrain_el = False
 		except:
 			logging.info("Failed to load EL scorer from %s" % args.el_model_path)
-		self.ec_scorer = ECScorer(args)
+		self.ec_scorer = ECScorer(args).to(self.target_device)
 		try:
 			self.ec_scorer.load_state_dict(torch.load(self.ec_path))
 		except:
 			logging.info("Failed to load EC scorer from %s" % args.ec_model_path)
-		self.cluster_scorer = nn.Linear(3, 1)
-		
+		self.cluster_scorer = nn.Linear(3, 1).to(self.target_device)
+
+		if args.force_pretrain:
+			self.pretrain_er = True
+			self.pretrain_el = True
 
 	def forward(self, batch):
 		# change word index to word embedding
@@ -85,68 +89,89 @@ class ThreeScorerModel(nn.Module):
 			best_el_f1 = 0
 			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
 			el_optimizer = torch.optim.Adam(self.el_scorer.parameters())
-			for epoch in tqdm(range(self.pretrain_epoch), desc="Pretraining"):
+			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				dev_batch = []
 				c = 1
 				for batch in dataset.get_token_batch():
-					if c % 10 == 0: 
+					if epoch % 5 == 0 and c % 10 == 0: 
 						dev_batch.append(batch)
 						continue
 					if c * len(batch) > 10000: break # TODO 10000 may change: limit pretraining size
+
 					if self.pretrain_er:
 						self.er_scorer.train()
-						lw = self.word_embedding(torch.stack([x.lctxw_ind for x in batch], 0))
-						rw = self.word_embedding(torch.stack([x.rctxw_ind for x in batch], 0))
-						print(lw.size(), rw.size())
-						er_label = [1 if x.is_entity else 0 for x in batch]
+						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+						rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
+						# print([x.is_entity for x in batch])
+						er_label = torch.unsqueeze(torch.Tensor([1 if x.is_entity else 0 for x in batch]), 1).to(self.target_device)
 						er_optimizer.zero_grad()
-						er_pred = self.er_scorer(lw, rw)
+						er_pred = self.er_scorer(lw, rw) # batch * 1 ???
 						er_loss = self.er_scorer.loss(er_pred, er_label)
 						er_loss.backward()
 						er_optimizer.step()
+
 					if self.pretrain_el:
 						self.el_scorer.train()
-						le = self.word_embedding(torch.stack([x.lctxe_ind for x in batch if x.is_entity], 0))
-						re = self.word_embedding(torch.stack([x.rctxe_ind for x in batch if x.is_entity], 0))
-						el_label = [1 if x.entity_in_kb else 0 for x in batch if x.is_entity]
+						le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+						re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+						# print([x.entity_in_kb for x in batch if x.is_entity])
+						el_label = torch.unsqueeze(torch.Tensor([0 if x.entity_in_kb or not x.is_entity else 1 for x in batch]), 1).to(self.target_device)
 						el_optimizer.zero_grad()
-						el_pred = self.el_scorer(torch.FloatTensor(le), torch.FloatTensor(re))
+						el_pred = self.el_scorer(le, re)
 						el_loss = self.el_scorer.loss(el_pred, el_label)
 						el_loss.backward()
 						el_optimizer.step()
 					c += 1
 				if epoch % 5 == 0:
+					er_label = []
+					er_pred = []
+					el_label = []
+					el_pred = []
+					toks = []
 					for batch in dev_batch:
+						toks += batch
 						if self.pretrain_er:
 							self.er_scorer.eval()
-							lw = self.word_embedding(torch.stack([x.lctxw_ind for x in batch], 0))
-							rw = self.word_embedding(torch.stack([x.rctxw_ind for x in batch], 0))
-							er_label = [1 if x.is_entity else 0 for x in batch]
-							prediction = [1 if x > 0.5 else 0 for x in self.er_scorer(lw, rw)]
-							f1 = metrics.f1_score(er_label, prediction)
-							print("Epoch %d: ER F1 %.2f" % (epoch, f1))
-							if f1 > best_er_f1:
-								best_er_f1 = f1
-								torch.save(self.er_scorer.save_state_dict(), self.er_path)
+							lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+							rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
+							er_label += [1 if x.is_entity else 0 for x in batch]
+							er_pred += [1 if x > 0.5 else 0 for x in self.er_scorer(lw, rw)]
+
 						if self.pretrain_el:
 							self.el_scorer.eval()
-							le = self.word_embedding(torch.stack([x.lctxe_ind for x in batch if x.is_entity], 0))
-							re = self.word_embedding(torch.stack([x.rctxe_ind for x in batch if x.is_entity], 0))
-							el_label = [1 if x.entity_in_kb else 0 for x in batch if x.is_entity]
-							prediction = [1 if x > 0.5 else 0 for x in self.el_scorer(le, re)]
-							f1 = metrics.f1_score(el_label, prediction)
-							print("Epoch %d: EL F1 %.2f" % (epoch, f1))
-							if f1 > best_el_f1:
-								best_el_f1 = f1
-								torch.save(self.el_scorer.save_state_dict(), self.el_path)
+							le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+							re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+							el_label += [0 if x.entity_in_kb or not x.is_entity else 1 for x in batch]
+							el_pred += [1 if x > 0.5 else 0 for x in self.el_scorer(le, re)]
+							
+					if self.pretrain_er:
+						# print("----------------------")
+						# for l, p in zip(er_label[:100], er_pred[:100]):
+						# 	print(l,p)
+						f1 = metrics.f1_score(er_label, er_pred)
+						print("Epoch %d: ER F1 %f" % (epoch, f1))
+						if f1 > best_er_f1:
+							best_er_f1 = f1
+							torch.save(self.er_scorer.state_dict(), self.er_path)
+					if self.pretrain_el:
+						# print("----------------------")
+						# for l, p in zip(el_label[:100], el_pred[:100]):
+						# 	print(l,p)
+						f1 = metrics.f1_score(el_label, el_pred)
+						print("Epoch %d: EL F1 %f" % (epoch, f1))
+						if f1 > best_el_f1:
+							best_el_f1 = f1
+							torch.save(self.el_scorer.state_dict(), self.el_path)
+							wrong_inst = []
 
-			
-			if self.pretrain_el:
-				torch.save(self.el_scorer.save_state_dict(), self.el_path)
+							for p, l, t in zip(el_pred, el_label, toks):
+								if p != l:
+									wrong_inst.append(t.to_json())
+							jsondump(wrong_inst, "runs/ev/el_wrong.json")
 		logging.info("Pretraining done")
 
 		# fix parameters
-		for param in self.er_scorer:
+		for param in self.er_scorer.parameters():
 			param.requires_grad = False
-		for param in self.el_scorer:
+		for param in self.el_scorer.parameters():
 			param.requires_grad = False

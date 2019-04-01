@@ -106,7 +106,7 @@ class Sentence():
 		return {
 			"original_sentence": self.original_sentence,
 			"id": self.id,
-			"tokens": [x.to_json() for x in self.tokens if x.is_entity]
+			"tokens": [x.to_json() for x in self.tokens]
 		}
 	@classmethod
 	def from_json(cls, json):

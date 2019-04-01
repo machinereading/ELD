@@ -9,7 +9,7 @@ from ..utils import TimeUtil
 from ..utils import *
 
 gl.entity_voca, gl.entity_embeddings = U.load_voca_embs('data/el/embeddings/dict.entity', 'data/el/embeddings/entity_embeddings.npy')
-gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict_no_pos.word', 'data/el/embeddings/word_embeddings.npy')
+gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict.word', 'data/el/embeddings/word_embeddings.npy')
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -85,8 +85,14 @@ class EL():
 			sentences = [sentences]
 		batches = split_to_batch(sentences, 100)
 		it = 0
+		cands = {}
+		ents = 0
 		for batch in batches:
 			j, conll_str, tsv_str = data.prepare(*batch, form=form)
+			x = D.read_tsv_from_str(tsv_str)
+			for k, v in x.items():
+				ents += len(v)
+				cands += sum([len(x["candidates"]) for x in v])
 			if self.debug:
 				jsondump(j, "debug/prepare.json")
 				writefile(conll_str, "debug/debug.conll")
@@ -114,6 +120,7 @@ class EL():
 			yield merge_item(j, e)
 			it += 1
 			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
+		print(ents, cands, cands / ents)
 
 	def __call__(self, sentences):
 		if type(sentences) is str:
