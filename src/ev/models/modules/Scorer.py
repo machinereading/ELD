@@ -3,8 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .. import ModelFactory
 
+
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
 rnns = [k for k in module.keys()]
+
+
 
 class BiContextEREmbedder(nn.Module):
 	def __init__(self, args, input_dim):
@@ -80,10 +83,10 @@ class ELScorer(nn.Module):
 		return F.binary_cross_entropy(prediction, label)
 
 class ECScorer(nn.Module):
-	def __init__(self, args):
+	def __init__(self, args, er_scorer, el_scorer):
 		super(ECScorer, self).__init__()
-		self.wctx2emb = None
-		self.ectx2emb = None
+		self.wctx2emb = er_scorer.embedder
+		self.ectx2emb = el_scorer.embedder
 	
 	def loss(self, prediction, label):
 		return F.nll_loss(prediction, label)
@@ -99,3 +102,25 @@ class ECScorer(nn.Module):
 		# avg embedding shape = [batch size * (word embedding size + entity embedding size)]
 		# make average embedding to [batch size * token size * (word embedding size + entity embedding size)]
 		return F.relu(er_score * ec_score * torch.exp(F.cosine_similarity(cat, cluster_avg_emb)))
+
+class JointScorer(nn.Module):
+	def __init__(self, args, er_input_dim, el_input_dim):
+		super(JointScorer, self).__init__()
+		self.er_embedder = BiContextEREmbedder(args, er_input_dim)
+		self.el_embedder = BiContextELEmbedder(args, el_input_dim)
+		self.scorer = nn.Sequential(
+			nn.Dropout(),
+			nn.Linear((er_input_dim+el_input_dim) * 2, 100),
+			nn.ReLU(),
+			nn.Dropout(),
+			nn.Linear(100, 3),
+			nn.Sigmoid()
+		)
+
+	def forward(self, er_lctx, er_rctx, el_lctx, el_rctx):
+		er_emb = self.er_embedder(er_lctx, er_rctx)
+		el_emb = self.el_embedder(el_lctx, el_rctx)
+		return self.scorer(torch.cat([er_emb, el_emb], -1))
+
+	def loss(self, pred, label):
+		return F.cross_entropy(pred, label)

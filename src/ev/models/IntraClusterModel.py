@@ -10,6 +10,7 @@ from .modules.Scorer import *
 from tqdm import tqdm
 import logging
 
+
 class ThreeScorerModel(nn.Module):
 	def __init__(self, args):
 		super(ThreeScorerModel, self).__init__()
@@ -45,7 +46,7 @@ class ThreeScorerModel(nn.Module):
 			self.pretrain_el = False
 		except:
 			logging.info("Failed to load EL scorer from %s" % args.el_model_path)
-		self.ec_scorer = ECScorer(args).to(self.target_device)
+		self.ec_scorer = ECScorer(args, self.er_scorer, self.el_scorer).to(self.target_device)
 		try:
 			self.ec_scorer.load_state_dict(torch.load(self.ec_path))
 		except:
@@ -175,3 +176,82 @@ class ThreeScorerModel(nn.Module):
 			param.requires_grad = False
 		for param in self.el_scorer.parameters():
 			param.requires_grad = False
+
+
+class JointScorerModel(nn.Module):
+	def __init__(self, args):
+		super(JointScorerModel, self).__init__()
+		self.target_device = args.device
+		we = np.load(args.word_embedding_path+".npy")
+		we = np.vstack([np.zeros([2, we.shape[1]]), we])
+		ee = np.load(args.entity_embedding_path+".npy")
+		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
+		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
+		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
+		we_dim = self.word_embedding.embedding_dim
+		ee_dim = self.entity_embedding.embedding_dim
+		self.model_path = args.joint_model_path
+		self.pretrain_epoch = args.pretrain_epoch
+		self.er_score_threshold = getattr(args, "er_score_threshold", 0.5)
+		self.el_score_threshold = getattr(args, "el_score_threshold", 0.5)
+		self.pretrain_model = True
+		self.scorer = JointScorer(args, we_dim, ee_dim).to(self.target_device)
+		try:
+			self.scorer.load_state_dict(torch.load(self.model_path))
+			self.pretrain_model = False
+		except:
+			logging.info("Failed to load Joint scorer from %s" % args.joint_model_path)
+
+		if args.force_pretrain:
+			self.pretrain_model = True
+
+	def forward(self, batch):
+		pass
+
+	@TimeUtil.measure_time
+	def pretrain(self, dataset):
+		if self.pretrain_model:
+			best_f1 = 0
+			optimizer = torch.optim.Adam(self.scorer.parameters())
+			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
+				dev_batch = []
+				c = 1
+				for batch in dataset.get_token_batch():
+					if epoch % 5 == 0 and c % 10 == 0: 
+						dev_batch.append(batch)
+						continue
+					if c * len(batch) > 10000: break # TODO 10000 may change: limit pretraining size
+
+					self.scorer.train()
+					lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+					rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
+					le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+					re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+
+					label = torch.LongTensor([x.error_type+1 for x in batch]).to(self.target_device)
+
+					optimizer.zero_grad()
+					pred = self.scorer(lw, rw, le, re) # batch * 1 ???
+					print(label[0, 0], pred[0, 0])
+					loss = self.scorer.loss(pred, label)
+					loss.backward()
+					optimizer.step()
+				if epoch % 5 == 0:
+					label = []
+					pred = []
+					toks = []
+					for batch in dev_batch:
+						toks += batch
+						self.scorer.eval()
+						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+						rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
+						le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+						re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+						label += [x.error_type+1 for x in batch]
+						pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]]
+
+					f1 = metrics.f1_score(label, pred)
+					print("Epoch %d: F1 %f" % (epoch, f1))
+					if f1 > best_f1:
+						best_f1 = f1
+						torch.save(self.scorer.state_dict(), self.path)

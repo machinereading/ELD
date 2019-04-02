@@ -73,4 +73,8 @@ class Vocabulary():
 		voca = Vocabulary(json["surface"], None, json["token_ind"], json["char_ind"])
 		for k, v in json.items():
 			setattr(voca, k, v)
+		if not voca.is_entity:
+			voca.error_type = 0
+		if voca.is_entity and voca.entity_in_kb:
+			voca.error_type = 1
 		return voca

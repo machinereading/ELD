@@ -15,6 +15,7 @@ class ValidationModel(nn.Module):
 		super(ValidationModel, self).__init__()
 		self.cluster_transformer = None
 		self.pretrain_epoch = args.pretrain_epoch
+		self.pretrain_transformer = True
 		try:
 			self.cluster_transformer.load_state_dict(torch.load(args.transformer_model_path))
 			self.pretrain_transformer = False

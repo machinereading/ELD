@@ -1,3 +1,4 @@
+
 class EVArgs():
 	def __init__(self):
 		# Embedding
@@ -59,11 +60,15 @@ class EVArgs():
 	@classmethod
 	def from_config(cls, ini_file):
 		import configparser
+		from ... import GlobalValues as gl
 		c = configparser.ConfigParser()
 		c.read(ini_file)
-		args = EV_Args(verify=False)
-		for attr, value in c.items():
-			setattr(args, attr, value)
+		args = EVArgs()
+		for attr, section in c.items():
+			for k, v in section.items():
+				if v in ["True", "False"]:
+					v = gl.boolmap(v)
+				setattr(args, k, v)
 		return args
 
 
@@ -90,6 +95,14 @@ class EVArgs():
 			return "data/ev/"+self.model_name+"ec_scorer.pt"
 		except:
 			return None
+
+	@property
+	def joint_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"joint_scorer.pt"
+		except:
+			return None
+	
 
 	@property
 	def transformer_model_path(self):

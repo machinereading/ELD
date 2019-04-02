@@ -1,5 +1,5 @@
 from .. import GlobalValues as gl
-from .models.IntraClusterModel import ThreeScorerModel
+from .models.IntraClusterModel import ThreeScorerModel, JointScorerModel
 from .models.ValidationModel import ValidationModel
 from .utils.args import EVArgs
 from .utils.data import DataGenerator
@@ -12,9 +12,9 @@ import numpy as np
 from tqdm import tqdm
 
 class EV():
-	def __init__(self, model_name):
+	def __init__(self, model_name, config_file=None):
 		# initialize arguments
-		self.args = EVArgs()
+		self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		if torch.cuda.is_available():
 			self.args.device = torch.device("cuda")
 		else:
@@ -22,7 +22,7 @@ class EV():
 		self.args.model_name = model_name
 		
 		# load / initialize model
-		self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
+		self.cluster_model = JointScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
 		# load / generate data
@@ -52,7 +52,6 @@ class EV():
 		logging.info("Start EV Pretraining")
 		self.cluster_model.pretrain(self.data)
 		self.validation_model.pretrain(self.data)
-
 
 	def validate(self, entity_set):
 		pass

@@ -121,7 +121,7 @@ class DataGenerator():
 	def generate_vocab_tensors(self):
 		logging.info("Generating Vocab tensors...")
 		# print(len(self.w2i), len(self.e2i))
-		for sentence in tqdm(self.corpus, desc="Generating vocabulary tensors", total = len(self.corpus)):
+		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus)):
 			# print(len(sentence))
 			er_error_tokens = 0
 			el_error_tokens = 0
