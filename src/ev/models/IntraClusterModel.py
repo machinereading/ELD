@@ -90,7 +90,7 @@ class ThreeScorerModel(nn.Module):
 		# pretrain er scorer, el scorer, ec transformer
 		logging.info("Pretraining Entity Scorer")
 		if self.pretrain_er or self.pretrain_el:
-			dataloader = DataLoader(dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
+			# dataloader = DataLoader(dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
 			best_er_f1 = 0
 			best_el_f1 = 0
 			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
@@ -98,7 +98,7 @@ class ThreeScorerModel(nn.Module):
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				dev_batch = []
 				c = 1
-				for batch in dataloader:
+				for batch in dataset.get_token_batch():
 					if epoch % 5 == 0 and c % 10 == 0: 
 						dev_batch.append(batch)
 						continue
@@ -106,8 +106,9 @@ class ThreeScorerModel(nn.Module):
 
 					if self.pretrain_er:
 						self.er_scorer.train()
-						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0)) # 16, 5, 100
 						rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
+						print(lw.size())
 						# print([x.is_entity for x in batch])
 						er_label = torch.unsqueeze(torch.Tensor([1 if x.is_entity else 0 for x in batch]), 1).to(self.target_device)
 						er_optimizer.zero_grad()
@@ -151,18 +152,12 @@ class ThreeScorerModel(nn.Module):
 							el_pred += [1 if x > 0.5 else 0 for x in self.el_scorer(le, re)]
 							
 					if self.pretrain_er:
-						# print("----------------------")
-						# for l, p in zip(er_label[:100], er_pred[:100]):
-						# 	print(l,p)
 						f1 = metrics.f1_score(er_label, er_pred)
 						print("Epoch %d: ER F1 %f" % (epoch, f1))
 						if f1 > best_er_f1:
 							best_er_f1 = f1
 							torch.save(self.er_scorer.state_dict(), self.er_path)
 					if self.pretrain_el:
-						# print("----------------------")
-						# for l, p in zip(el_label[:100], el_pred[:100]):
-						# 	print(l,p)
 						f1 = metrics.f1_score(el_label, el_pred)
 						print("Epoch %d: EL F1 %f" % (epoch, f1))
 						if f1 > best_el_f1:
@@ -193,6 +188,7 @@ class JointScorerModel(nn.Module):
 		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
 		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
 		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
+		# print(self.word_embedding)
 		we_dim = self.word_embedding.embedding_dim
 		ee_dim = self.entity_embedding.embedding_dim
 		self.model_path = args.joint_model_path
@@ -217,29 +213,22 @@ class JointScorerModel(nn.Module):
 	@TimeUtil.measure_time
 	def pretrain(self, train_dataset, dev_dataset):
 		if self.pretrain_model:
-			dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
-			dev_dataloader = DataLoader(dev_dataset, batch_size=self.pretrain_batch_size, shuffle=False, num_workers=4)
+			dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True)
+			dev_dataloader = DataLoader(dev_dataset, batch_size=self.pretrain_batch_size, shuffle=False)
 			best_f1 = 0
 			optimizer = torch.optim.Adam(self.scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dataloader:
-					print(lctxw_ind, lctxe_ind)
+					lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
 					self.scorer.train()
-					lw = self.word_embedding(lctxw_ind.to(self.target_device))
-					rw = self.word_embedding(rctxw_ind.to(self.target_device))
-					le = self.entity_embedding(lctxe_ind.to(self.target_device))
-					re = self.entity_embedding(rctxe_ind.to(self.target_device))
-
-					# rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
-					# le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-					# re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+					lw = self.word_embedding(lctxw_ind)
+					rw = self.word_embedding(rctxw_ind)
+					le = self.entity_embedding(lctxe_ind)
+					re = self.entity_embedding(rctxe_ind)
 
 					label = error_type
-					print(lw.size(), rw.size(), le.size(), re.size(), label.size())
-					print(lw)
 					optimizer.zero_grad()
 					pred = self.scorer(lw, rw, le, re)
-					print(label[0], pred[0])
 					loss = self.scorer.loss(pred, label)
 					loss.backward()
 					optimizer.step()
@@ -248,19 +237,15 @@ class JointScorerModel(nn.Module):
 					pred = []
 					toks = []
 					with torch.no_grad():
-						for batch in dev_dataloader:
-							toks += batch
+						for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dev_dataloader:
+							lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
 							self.scorer.eval()
-							# lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
-							# rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
-							# le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-							# re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
-							lw = self.word_embedding(lctxw_ind.to(self.target_device))
-							rw = self.word_embedding(rctxw_ind.to(self.target_device))
-							le = self.entity_embedding(lctxe_ind.to(self.target_device))
-							we = self.entity_embedding(rctxe_ind.to(self.target_device))
-							label += [x.error_type+1 for x in batch]
-							pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]]
+							lw = self.word_embedding(lctxw_ind)
+							rw = self.word_embedding(rctxw_ind)
+							le = self.entity_embedding(lctxe_ind)
+							we = self.entity_embedding(rctxe_ind)
+							label += [x for x in error_type]
+							pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]] # error
 
 						f1 = metrics.f1_score(label, pred)
 						print("Epoch %d: F1 %f" % (epoch, f1))

@@ -23,12 +23,13 @@ class EV():
 		
 		# load / initialize model
 		self.cluster_model = JointScorerModel(self.args).to(self.args.device)
+		# self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
 		# load / generate data
-		dataset = DataGenerator(self.args)
-		self.sentence_train, self.sentence_dev = dataset.corpus.split_sentence_to_dev()
-		self.cluster_generator = ClusterGenerator(dataset.corpus)
+		self.dataset = DataGenerator(self.args)
+		self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
+		self.cluster_generator = ClusterGenerator(self.dataset.corpus)
 
 		# pretrain
 		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
@@ -54,6 +55,7 @@ class EV():
 		logging.info("Start EV Pretraining")
 
 		self.cluster_model.pretrain(SentenceGenerator(self.sentence_train), SentenceGenerator(self.sentence_dev))
+		# self.cluster_model.pretrain(self.dataset)
 		self.validation_model.pretrain(self.cluster_generator)
 
 	def validate(self, entity_set):

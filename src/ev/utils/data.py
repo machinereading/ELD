@@ -19,7 +19,7 @@ class SentenceGenerator(torch.utils.data.Dataset):
 
 	def __getitem__(self, ind):
 		voca = self.corpus[ind]
-		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxw_ind, voca.error_type+1
+		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type+1
 
 class ClusterGenerator(torch.utils.data.Dataset):
 	def __init__(self, corpus):
