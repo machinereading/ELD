@@ -2,7 +2,7 @@ from .. import GlobalValues as gl
 from .models.IntraClusterModel import ThreeScorerModel, JointScorerModel
 from .models.ValidationModel import ValidationModel
 from .utils.args import EVArgs
-from .utils.data import DataGenerator
+from .utils.data import DataGenerator, SentenceGenerator, ClusterGenerator
 
 import logging
 
@@ -26,7 +26,9 @@ class EV():
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
 		# load / generate data
-		self.data = DataGenerator(self.args)
+		dataset = DataGenerator(self.args)
+		self.sentence_train, self.sentence_dev = dataset.corpus.split_sentence_to_dev()
+		self.cluster_generator = ClusterGenerator(dataset.corpus)
 
 		# pretrain
 		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
@@ -50,8 +52,9 @@ class EV():
 
 	def pretrain(self):
 		logging.info("Start EV Pretraining")
-		self.cluster_model.pretrain(self.data)
-		self.validation_model.pretrain(self.data)
+
+		self.cluster_model.pretrain(SentenceGenerator(self.sentence_train), SentenceGenerator(self.sentence_dev))
+		self.validation_model.pretrain(self.cluster_generator)
 
 	def validate(self, entity_set):
 		pass

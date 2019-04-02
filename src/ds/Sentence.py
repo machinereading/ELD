@@ -6,6 +6,7 @@ class Sentence():
 		if not init: return
 		self.original_sentence = sentence
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]
+		self.tagged_tokens = []
 		self.id = -1
 		lastind = 0
 		self._vocab_tensors = None
@@ -26,6 +27,9 @@ class Sentence():
 			
 	def __len__(self):
 		return len(self.tokens)
+
+	def __getitem__(self, ind):
+		return self.tagged_tokens[ind]
 
 	@property
 	def entities(self):

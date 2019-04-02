@@ -6,6 +6,7 @@ import logging
 class Corpus():
 	def __init__(self):
 		self.corpus = [] # list of sentence
+		self.tagged_voca_lens = []
 		self.cluster = {} # dict of str(entity form): Cluster
 
 	def add_sentence(self, sentence):
@@ -15,9 +16,22 @@ class Corpus():
 	def __iter__(self):
 		for item in self.corpus:
 			yield item
+
 	def __len__(self):
 		return len(self.corpus)
-	
+
+	def __getitem__(self, ind):
+		acclen = 0
+		accbuf = 0
+		senind = 0
+		for l in self.tagged_voca_lens:
+			acclen += l
+			if acclen > ind:
+				return self.corpus[senind][ind - acclen]
+			senind += 1
+			accbuf += l
+		raise IndexOutOfRangeException
+
 	@classmethod
 	def load_corpus(cls, path):
 		# load from crowdsourcing form
@@ -38,6 +52,7 @@ class Corpus():
 					corpus.cluster[nt.entity] = c
 
 				corpus.cluster[nt.entity].add_elem(nt)
+
 		return corpus
 
 
@@ -59,3 +74,15 @@ class Corpus():
 			corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
 
 		return corpus
+
+	def split_sentence_to_dev(self):
+		train = Corpus()
+		dev = Corpus()
+		for i, (sent, tlen) in enumerate(zip(self.corpus, self.tagged_voca_lens)):
+			if i % 10 == 0:
+				dev.corpus.append(sent)
+				dev.tagged_voca_lens.append(tlen)
+			else:
+				train.corpus.append(sent)
+				train.tagged_voca_lens.append(tlen)
+		return train, dev

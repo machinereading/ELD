@@ -1,13 +1,16 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
 import numpy as np
 import sklearn.metrics as metrics
+from tqdm import tqdm
+
 from ...utils import readfile, jsondump, TimeUtil
 from ... import GlobalValues as gl
 from . import ModelFactory
 from .modules.Scorer import *
-from tqdm import tqdm
+
 import logging
 
 
@@ -27,6 +30,7 @@ class ThreeScorerModel(nn.Module):
 		self.el_path = args.el_model_path
 		self.ec_path = args.ec_model_path
 		self.pretrain_epoch = args.pretrain_epoch
+		self.pretrain_batch_size = args.batch_size
 		self.er_score_threshold = getattr(args, "er_score_threshold", 0.5)
 		self.el_score_threshold = getattr(args, "el_score_threshold", 0.5)
 		self.pretrain_er = True
@@ -86,6 +90,7 @@ class ThreeScorerModel(nn.Module):
 		# pretrain er scorer, el scorer, ec transformer
 		logging.info("Pretraining Entity Scorer")
 		if self.pretrain_er or self.pretrain_el:
+			dataloader = DataLoader(dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
 			best_er_f1 = 0
 			best_el_f1 = 0
 			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
@@ -93,7 +98,7 @@ class ThreeScorerModel(nn.Module):
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				dev_batch = []
 				c = 1
-				for batch in dataset.get_token_batch():
+				for batch in dataloader:
 					if epoch % 5 == 0 and c % 10 == 0: 
 						dev_batch.append(batch)
 						continue
@@ -192,6 +197,7 @@ class JointScorerModel(nn.Module):
 		ee_dim = self.entity_embedding.embedding_dim
 		self.model_path = args.joint_model_path
 		self.pretrain_epoch = args.pretrain_epoch
+		self.pretrain_batch_size = args.batch_size
 		self.er_score_threshold = getattr(args, "er_score_threshold", 0.5)
 		self.el_score_threshold = getattr(args, "el_score_threshold", 0.5)
 		self.pretrain_model = True
@@ -209,30 +215,31 @@ class JointScorerModel(nn.Module):
 		pass
 
 	@TimeUtil.measure_time
-	def pretrain(self, dataset):
+	def pretrain(self, train_dataset, dev_dataset):
 		if self.pretrain_model:
+			dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
+			dev_dataloader = DataLoader(dev_dataset, batch_size=self.pretrain_batch_size, shuffle=False, num_workers=4)
 			best_f1 = 0
 			optimizer = torch.optim.Adam(self.scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
-				dev_batch = []
-				c = 1
-				for batch in dataset.get_token_batch():
-					if epoch % 5 == 0 and c % 10 == 0: 
-						dev_batch.append(batch)
-						continue
-					if c * len(batch) > 10000: break # TODO 10000 may change: limit pretraining size
-
+				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dataloader:
+					print(lctxw_ind, lctxe_ind)
 					self.scorer.train()
-					lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
-					rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
-					le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-					re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+					lw = self.word_embedding(lctxw_ind.to(self.target_device))
+					rw = self.word_embedding(rctxw_ind.to(self.target_device))
+					le = self.entity_embedding(lctxe_ind.to(self.target_device))
+					re = self.entity_embedding(rctxe_ind.to(self.target_device))
 
-					label = torch.LongTensor([x.error_type+1 for x in batch]).to(self.target_device)
+					# rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
+					# le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+					# re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
 
+					label = error_type
+					print(lw.size(), rw.size(), le.size(), re.size(), label.size())
+					print(lw)
 					optimizer.zero_grad()
-					pred = self.scorer(lw, rw, le, re) # batch * 1 ???
-					print(label[0, 0], pred[0, 0])
+					pred = self.scorer(lw, rw, le, re)
+					print(label[0], pred[0])
 					loss = self.scorer.loss(pred, label)
 					loss.backward()
 					optimizer.step()
@@ -240,18 +247,23 @@ class JointScorerModel(nn.Module):
 					label = []
 					pred = []
 					toks = []
-					for batch in dev_batch:
-						toks += batch
-						self.scorer.eval()
-						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
-						rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
-						le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-						re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
-						label += [x.error_type+1 for x in batch]
-						pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]]
+					with torch.no_grad():
+						for batch in dev_dataloader:
+							toks += batch
+							self.scorer.eval()
+							# lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
+							# rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
+							# le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
+							# re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
+							lw = self.word_embedding(lctxw_ind.to(self.target_device))
+							rw = self.word_embedding(rctxw_ind.to(self.target_device))
+							le = self.entity_embedding(lctxe_ind.to(self.target_device))
+							we = self.entity_embedding(rctxe_ind.to(self.target_device))
+							label += [x.error_type+1 for x in batch]
+							pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]]
 
-					f1 = metrics.f1_score(label, pred)
-					print("Epoch %d: F1 %f" % (epoch, f1))
-					if f1 > best_f1:
-						best_f1 = f1
-						torch.save(self.scorer.state_dict(), self.path)
+						f1 = metrics.f1_score(label, pred)
+						print("Epoch %d: F1 %f" % (epoch, f1))
+						if f1 > best_f1:
+							best_f1 = f1
+							torch.save(self.scorer.state_dict(), self.path)

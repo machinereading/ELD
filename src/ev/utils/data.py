@@ -9,10 +9,33 @@ from tqdm import tqdm
 import random
 import os
 import logging
+
+class SentenceGenerator(torch.utils.data.Dataset):
+	def __init__(self, corpus):
+		self.corpus = corpus
+
+	def __len__(self):
+		return sum(self.corpus.tagged_voca_lens)
+
+	def __getitem__(self, ind):
+		voca = self.corpus[ind]
+		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxw_ind, voca.error_type+1
+
+class ClusterGenerator(torch.utils.data.Dataset):
+	def __init__(self, corpus):
+		self.corpus = corpus
+
+	def __len__(self):
+		return len(self.corpus.cluster)
+
+	def __getitem__(self, ind):
+		return self.corpus[ind] # TODO
+
+
 class DataGenerator():
 	def __init__(self, args):
 		logging.info("Initializing DataGenerator")
-		# load embedding dict
+		# load embedding dict - need to change
 		# self.w2i, we = Embedding.load_embedding(args.word_embedding_path, args.word_embedding_type)
 		# self.e2i, ee = Embedding.load_embedding(args.entity_embedding_path, args.entity_embedding_type)
 		# 0 for oov, 1 for out of range
@@ -119,10 +142,12 @@ class DataGenerator():
 
 	@TimeUtil.measure_time
 	def generate_vocab_tensors(self):
+		# corpus postprocessing
 		logging.info("Generating Vocab tensors...")
 		# print(len(self.w2i), len(self.e2i))
-		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus)):
+		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus.corpus)):
 			# print(len(sentence))
+			sentence.tagged_voca_len = 0
 			er_error_tokens = 0
 			el_error_tokens = 0
 			dark_entity_tokens = 0
@@ -146,6 +171,8 @@ class DataGenerator():
 				rctxe_ind = [self.e2i[x.entity] if x.entity in self.e2i else 0 for x in vocab.rctx_ent[:self.ctx_window_size]]
 				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
 				# print(vocab.entity, lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind) # why everything is zero?
+				sentence.tagged_voca_len += 1
+				sentence.tagged_tokens.append(vocab)
 				if self.filter_data_tokens:
 					if not vocab.is_entity:
 						er_error_tokens += 1
@@ -153,6 +180,7 @@ class DataGenerator():
 						el_error_tokens += 1
 					else:
 						dark_entity_tokens += 1
+		self.corpus.tagged_voca_lens = [x.tagged_voca_len for x in self.corpus.corpus]
 				
 
 	def get_tensor_batch(self):
@@ -197,3 +225,4 @@ class DataGenerator():
 				if len(buf) == self.batch_size:
 					yield buf
 					buf = []
+
