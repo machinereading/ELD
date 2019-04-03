@@ -218,9 +218,10 @@ class JointScorerModel(nn.Module):
 			best_f1 = 0
 			optimizer = torch.optim.Adam(self.scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
+				self.scorer.train()
 				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dataloader:
 					lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
-					self.scorer.train()
+					
 					lw = self.word_embedding(lctxw_ind)
 					rw = self.word_embedding(rctxw_ind)
 					le = self.entity_embedding(lctxe_ind)
@@ -236,19 +237,25 @@ class JointScorerModel(nn.Module):
 					label = []
 					pred = []
 					toks = []
+					self.scorer.eval()
 					with torch.no_grad():
 						for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dev_dataloader:
 							lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
-							self.scorer.eval()
 							lw = self.word_embedding(lctxw_ind)
 							rw = self.word_embedding(rctxw_ind)
 							le = self.entity_embedding(lctxe_ind)
-							we = self.entity_embedding(rctxe_ind)
-							label += [x for x in error_type]
-							pred += [ind for ind in self.scorer(lw, rw, le, re).max(1)[1]] # error
+							re = self.entity_embedding(rctxe_ind)
+							# print(lw.size(), rw.size(), le.size(), re.size())
+							l_batch = [x.item() for x in error_type] 
+							p_batch = [ind.item() for ind in self.scorer(lw, rw, le, re).max(1)[1]]
+							label += l_batch
+							pred += p_batch
+							# for l, p in zip(l_batch, p_batch):
+							# 	print(l, p)
 
-						f1 = metrics.f1_score(label, pred)
-						print("Epoch %d: F1 %f" % (epoch, f1))
-						if f1 > best_f1:
-							best_f1 = f1
-							torch.save(self.scorer.state_dict(), self.path)
+						micro_f1 = metrics.f1_score(label, pred, average="micro")
+						macro_f1 = metrics.f1_score(label, pred, average="macro")
+						print("Epoch %d: Micro F1 %f, Macro F1 %f" % (epoch, micro_f1, macro_f1))
+						if micro_f1 > best_f1:
+							best_f1 = micro_f1
+							torch.save(self.scorer.state_dict(), self.model_path)
