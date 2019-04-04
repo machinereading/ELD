@@ -2,7 +2,7 @@ from ..utils.KoreanUtil import stem_sentence
 from .. import GlobalValues as gl
 from .Vocabulary import Vocabulary
 class Sentence():
-	def __init__(self, sentence, tokenize_method=stem_sentence, init=True):
+	def __init__(self, sentence, tokenize_method=lambda x: x.split(" "), init=True):
 		if not init: return
 		self.original_sentence = sentence
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]

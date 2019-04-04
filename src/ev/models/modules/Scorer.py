@@ -113,7 +113,8 @@ class JointScorer(nn.Module):
 			nn.Linear((er_input_dim+el_input_dim) * 2, 100),
 			nn.ReLU(),
 			nn.Dropout(),
-			nn.Linear(100, 3)
+			nn.Linear(100, 3),
+			nn.Sigmoid()
 		)
 
 	def forward(self, er_lctx, er_rctx, el_lctx, el_rctx):

@@ -11,7 +11,7 @@ import os
 import logging
 
 class SentenceGenerator(torch.utils.data.Dataset):
-	def __init__(self, corpus):
+	def __init__(self, corpus, args):
 		self.corpus = corpus
 
 	def __len__(self):
@@ -19,6 +19,7 @@ class SentenceGenerator(torch.utils.data.Dataset):
 
 	def __getitem__(self, ind):
 		voca = self.corpus[ind]
+
 		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type+1
 
 class ClusterGenerator(torch.utils.data.Dataset):
@@ -59,7 +60,7 @@ class DataGenerator():
 					elif "cluster" in item:
 						cluster += jsonload(path+item)
 				self.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
-				self.generate_vocab_tensors()
+				# self.generate_vocab_tensors()
 				return
 			except FileNotFoundError:
 				import traceback
@@ -142,6 +143,7 @@ class DataGenerator():
 
 	@TimeUtil.measure_time
 	def generate_vocab_tensors(self):
+		# Deprecated: BERT need original tokenizer
 		# corpus postprocessing
 		logging.info("Generating Vocab tensors...")
 		# print(len(self.w2i), len(self.e2i))

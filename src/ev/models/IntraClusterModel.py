@@ -10,6 +10,7 @@ from ...utils import readfile, jsondump, TimeUtil
 from ... import GlobalValues as gl
 from . import ModelFactory
 from .modules.Scorer import *
+from .modules.Embedding import Embedding
 
 import logging
 
@@ -18,10 +19,10 @@ class ThreeScorerModel(nn.Module):
 	def __init__(self, args):
 		super(ThreeScorerModel, self).__init__()
 		self.target_device = args.device
-		we = np.load(args.word_embedding_path+".npy")
-		we = np.vstack([np.zeros([2, we.shape[1]]), we])
-		ee = np.load(args.entity_embedding_path+".npy")
-		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
+		# we = np.load(args.word_embedding_path+".npy")
+		# we = np.vstack([np.zeros([2, we.shape[1]]), we])
+		# ee = np.load(args.entity_embedding_path+".npy")
+		# ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
 		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
 		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
 		we_dim = self.word_embedding.embedding_dim
@@ -213,13 +214,15 @@ class JointScorerModel(nn.Module):
 	@TimeUtil.measure_time
 	def pretrain(self, train_dataset, dev_dataset):
 		if self.pretrain_model:
-			dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True)
+			train_dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True)
 			dev_dataloader = DataLoader(dev_dataset, batch_size=self.pretrain_batch_size, shuffle=False)
-			best_f1 = 0
+			best_micro_f1 = 0
+			best_macro_f1 = 0
+			best_epoch = 0
 			optimizer = torch.optim.Adam(self.scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				self.scorer.train()
-				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dataloader:
+				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in train_dataloader:
 					lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
 					
 					lw = self.word_embedding(lctxw_ind)
@@ -228,9 +231,9 @@ class JointScorerModel(nn.Module):
 					re = self.entity_embedding(rctxe_ind)
 
 					label = error_type
-					optimizer.zero_grad()
 					pred = self.scorer(lw, rw, le, re)
 					loss = self.scorer.loss(pred, label)
+					optimizer.zero_grad()
 					loss.backward()
 					optimizer.step()
 				if epoch % 5 == 0:
@@ -256,6 +259,10 @@ class JointScorerModel(nn.Module):
 						micro_f1 = metrics.f1_score(label, pred, average="micro")
 						macro_f1 = metrics.f1_score(label, pred, average="macro")
 						print("Epoch %d: Micro F1 %f, Macro F1 %f" % (epoch, micro_f1, macro_f1))
-						if micro_f1 > best_f1:
-							best_f1 = micro_f1
+						print("Best Epoch: Micro F1 %f, Macro F1 %f @ Epoch %d" % (best_micro_f1, best_macro_f1, best_epoch))
+
+						if micro_f1 > best_micro_f1:
+							best_micro_f1 = micro_f1
+							best_macro_f1 = macro_f1
+							best_epoch = epoch
 							torch.save(self.scorer.state_dict(), self.model_path)
