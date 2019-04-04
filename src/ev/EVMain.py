@@ -22,8 +22,8 @@ class EV():
 		self.args.model_name = model_name
 		
 		# load / initialize model
-		self.cluster_model = JointScorerModel(self.args).to(self.args.device)
-		# self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
+		# self.cluster_model = JointScorerModel(self.args).to(self.args.device)
+		self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
 		# load / generate data

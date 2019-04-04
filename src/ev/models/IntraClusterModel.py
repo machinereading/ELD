@@ -19,10 +19,10 @@ class ThreeScorerModel(nn.Module):
 	def __init__(self, args):
 		super(ThreeScorerModel, self).__init__()
 		self.target_device = args.device
-		# we = np.load(args.word_embedding_path+".npy")
-		# we = np.vstack([np.zeros([2, we.shape[1]]), we])
-		# ee = np.load(args.entity_embedding_path+".npy")
-		# ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
+		we = np.load(args.word_embedding_path+".npy")
+		we = np.vstack([np.zeros([2, we.shape[1]]), we])
+		ee = np.load(args.entity_embedding_path+".npy")
+		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
 		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
 		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
 		we_dim = self.word_embedding.embedding_dim
@@ -87,69 +87,63 @@ class ThreeScorerModel(nn.Module):
 		return F.binary_cross_entropy_with_logits(prediction, label)
 
 	@TimeUtil.measure_time
-	def pretrain(self, dataset):
+	def pretrain(self, train_dataset, dev_dataset):
 		# pretrain er scorer, el scorer, ec transformer
 		logging.info("Pretraining Entity Scorer")
 		if self.pretrain_er or self.pretrain_el:
-			# dataloader = DataLoader(dataset, batch_size=self.pretrain_batch_size, shuffle=True, num_workers=4)
+			train_dataloader = DataLoader(train_dataset, batch_size=self.pretrain_batch_size, shuffle=True)
+			dev_dataloader = DataLoader(dev_dataset, batch_size=self.pretrain_batch_size, shuffle=False)
 			best_er_f1 = 0
 			best_el_f1 = 0
 			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
 			el_optimizer = torch.optim.Adam(self.el_scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch+1), desc="Pretraining"):
 				dev_batch = []
-				c = 1
-				for batch in dataset.get_token_batch():
-					if epoch % 5 == 0 and c % 10 == 0: 
-						dev_batch.append(batch)
-						continue
-					if c * len(batch) > 10000: break # TODO 10000 may change: limit pretraining size
-
+				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in train_dataloader:
+					lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
+					
+					
 					if self.pretrain_er:
 						self.er_scorer.train()
-						lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0)) # 16, 5, 100
-						rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0)) # batch * window size * embedding size
-						print(lw.size())
-						# print([x.is_entity for x in batch])
-						er_label = torch.unsqueeze(torch.Tensor([1 if x.is_entity else 0 for x in batch]), 1).to(self.target_device)
+						lw = self.word_embedding(lctxw_ind)
+						rw = self.word_embedding(rctxw_ind)
+						er_label = torch.unsqueeze(torch.Tensor([1 if x != 1 else 0 for x in error_type]), 1).to(self.target_device)
 						er_optimizer.zero_grad()
 						er_pred = self.er_scorer(lw, rw) # batch * 1 ???
 						er_loss = self.er_scorer.loss(er_pred, er_label)
 						er_loss.backward()
 						er_optimizer.step()
-
 					if self.pretrain_el:
 						self.el_scorer.train()
-						le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-						re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
-						# print([x.entity_in_kb for x in batch if x.is_entity])
-						el_label = torch.unsqueeze(torch.Tensor([0 if x.entity_in_kb or not x.is_entity else 1 for x in batch]), 1).to(self.target_device)
+						le = self.entity_embedding(lctxe_ind)
+						re = self.entity_embedding(rctxe_ind)
+						el_label = torch.unsqueeze(torch.Tensor([0 if x != 0 else 1 for x in error_type]), 1).to(self.target_device)
 						el_optimizer.zero_grad()
 						el_pred = self.el_scorer(le, re)
 						el_loss = self.el_scorer.loss(el_pred, el_label)
 						el_loss.backward()
 						el_optimizer.step()
-					c += 1
+
 				if epoch % 5 == 0:
 					er_label = []
 					er_pred = []
 					el_label = []
 					el_pred = []
 					toks = []
-					for batch in dev_batch:
-						toks += batch
+					for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dev_dataloader:
+						lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(self.target_device), rctxe_ind.to(self.target_device), error_type.to(self.target_device)
 						if self.pretrain_er:
 							self.er_scorer.eval()
-							lw = self.word_embedding(torch.stack([x.lctxw_ind.to(self.target_device) for x in batch], 0))
-							rw = self.word_embedding(torch.stack([x.rctxw_ind.to(self.target_device) for x in batch], 0))
-							er_label += [1 if x.is_entity else 0 for x in batch]
+							lw = self.word_embedding(lctxw_ind)
+							rw = self.word_embedding(rctxw_ind)
+							er_label += [1 if x != 1 else 0 for x in error_type]
 							er_pred += [1 if x > 0.5 else 0 for x in self.er_scorer(lw, rw)]
 
 						if self.pretrain_el:
 							self.el_scorer.eval()
-							le = self.entity_embedding(torch.stack([x.lctxe_ind.to(self.target_device) for x in batch], 0))
-							re = self.entity_embedding(torch.stack([x.rctxe_ind.to(self.target_device) for x in batch], 0))
-							el_label += [0 if x.entity_in_kb or not x.is_entity else 1 for x in batch]
+							le = self.entity_embedding(lctxe_ind)
+							re = self.entity_embedding(rctxe_ind)
+							el_label += [0 if x != 0 else 1 for x in error_type]
 							el_pred += [1 if x > 0.5 else 0 for x in self.el_scorer(le, re)]
 							
 					if self.pretrain_er:
@@ -160,6 +154,8 @@ class ThreeScorerModel(nn.Module):
 							torch.save(self.er_scorer.state_dict(), self.er_path)
 					if self.pretrain_el:
 						f1 = metrics.f1_score(el_label, el_pred)
+						for l, p in zip(el_label[:100], el_pred[:100]):
+							print(l, p)
 						print("Epoch %d: EL F1 %f" % (epoch, f1))
 						if f1 > best_el_f1:
 							best_el_f1 = f1
@@ -169,7 +165,7 @@ class ThreeScorerModel(nn.Module):
 							for p, l, t in zip(el_pred, el_label, toks):
 								if p != l:
 									wrong_inst.append(t.to_json())
-							jsondump(wrong_inst, "runs/ev/el_wrong.json")
+							jsondump(wrong_inst, "runs/ev/el_wrong_%d.json" % epoch)
 		logging.info("Pretraining done")
 
 		# fix parameters

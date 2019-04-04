@@ -11,7 +11,7 @@ import os
 import logging
 
 class SentenceGenerator(torch.utils.data.Dataset):
-	def __init__(self, corpus, args):
+	def __init__(self, corpus):
 		self.corpus = corpus
 
 	def __len__(self):
@@ -60,7 +60,7 @@ class DataGenerator():
 					elif "cluster" in item:
 						cluster += jsonload(path+item)
 				self.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
-				# self.generate_vocab_tensors()
+				self.generate_vocab_tensors()
 				return
 			except FileNotFoundError:
 				import traceback

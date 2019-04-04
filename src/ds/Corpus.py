@@ -1,6 +1,7 @@
 from .Sentence import Sentence
 from .Cluster import Cluster
-from ..utils import jsonload
+from ..utils import jsonload, TimeUtil
+
 from tqdm import tqdm
 import logging
 class Corpus():
@@ -20,6 +21,7 @@ class Corpus():
 	def __len__(self):
 		return len(self.corpus)
 
+	@TimeUtil.measure_time
 	def __getitem__(self, ind):
 		acclen = 0
 		accbuf = 0

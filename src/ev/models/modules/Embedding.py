@@ -6,7 +6,7 @@ if sys.version_info >= (3, 6):
 	from allennlp.modules.elmo import Elmo, batch_to_ids
 
 from pytorch_pretrained_bert.modeling import *
-from ...utils import readfile
+from ....utils import readfile
 class Embedding(nn.Module):
 	def __init__(self, embedding_type, embedding_path, device):
 		super(Embedding, self).__init__()
