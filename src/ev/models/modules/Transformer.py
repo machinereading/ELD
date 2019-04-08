@@ -19,17 +19,25 @@ class Transformer(nn.Module):
 		hid_dim = 200
 		output_dim = args.transformer_output_dim
 
-		self.transformer = nn.Sequential(
-			nn.Conv1d(cluster_size, 1, kernel_size=1),
-			nn.MaxPool1d()
-			nn.Linear(er_input_dim+el_input_dim, hid_dim),
+		self.er_transformer = nn.Sequential(
+			nn.Conv1d(cluster_size, 3, kernel_size=1), # n=batch, input_channel = cluster_size, l = embedding dimension
+			nn.MaxPool1d(2),
+			nn.Linear(er_input_dim // 2, hid_dim),
 			nn.ReLU(),
 			nn.Linear(hid_dim, output_dim),
-			nn.ReLU())
+			nn.ReLU()
+		)
+		self.el_transformer = nn.Sequential(
+			nn.Conv1d(cluster_size, 3, kernel_size=1),
+			nn.MaxPool1d(2),
+			nn.Linear(el_input_dim // 2, hid_dim),
+			nn.ReLU(),
+			nn.Linear(hid_dim, output_dim),
+			nn.ReLU()
+		)
 
 	def forward(self, er, el):
-		input_tensor = torch.cat([er, el], dim=0)
-		return self.transformer(torch.cat([er, el], dim=0))
+		return self.er_transformer(er), self.el_transformer(el)
 
 	def loss(self, pred, entity_embedding):
 		return 

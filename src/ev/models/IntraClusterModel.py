@@ -23,8 +23,10 @@ class ThreeScorerModel(nn.Module):
 		we = np.vstack([np.zeros([2, we.shape[1]]), we])
 		ee = np.load(args.entity_embedding_path+".npy")
 		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
-		self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
-		self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
+		self.word_embedding = Embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
+		self.entity_embedding = Embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
+		# self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
+		# self.entity_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(ee)).to(self.target_device)
 		we_dim = self.word_embedding.embedding_dim
 		ee_dim = self.entity_embedding.embedding_dim
 		self.er_path = args.er_model_path
@@ -105,8 +107,10 @@ class ThreeScorerModel(nn.Module):
 					
 					if self.pretrain_er:
 						self.er_scorer.train()
+						# print(lctxw_ind.size())
 						lw = self.word_embedding(lctxw_ind)
 						rw = self.word_embedding(rctxw_ind)
+						# print(lw.size())
 						er_label = torch.unsqueeze(torch.Tensor([1 if x != 1 else 0 for x in error_type]), 1).to(self.target_device)
 						er_optimizer.zero_grad()
 						er_pred = self.er_scorer(lw, rw) # batch * 1 ???
@@ -154,8 +158,6 @@ class ThreeScorerModel(nn.Module):
 							torch.save(self.er_scorer.state_dict(), self.er_path)
 					if self.pretrain_el:
 						f1 = metrics.f1_score(el_label, el_pred)
-						for l, p in zip(el_label[:100], el_pred[:100]):
-							print(l, p)
 						print("Epoch %d: EL F1 %f" % (epoch, f1))
 						if f1 > best_el_f1:
 							best_el_f1 = f1
@@ -173,6 +175,8 @@ class ThreeScorerModel(nn.Module):
 			param.requires_grad = False
 		for param in self.el_scorer.parameters():
 			param.requires_grad = False
+
+
 
 
 class JointScorerModel(nn.Module):

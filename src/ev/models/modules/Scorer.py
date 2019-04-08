@@ -99,6 +99,7 @@ class ECScorer(nn.Module):
 		cat = torch.cat([we, ee])
 		cluster_avg_emb = cat.mean(1) # how to ignore zero padding??
 		
+		
 		# avg embedding shape = [batch size * (word embedding size + entity embedding size)]
 		# make average embedding to [batch size * token size * (word embedding size + entity embedding size)]
 		return F.relu(er_score * ec_score * torch.exp(F.cosine_similarity(cat, cluster_avg_emb)))

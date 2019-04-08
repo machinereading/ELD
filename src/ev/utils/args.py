@@ -3,7 +3,7 @@ class EVArgs():
 	def __init__(self):
 		# Embedding
 		self.word_embedding_path = "data/embedding/wiki_stem"
-		self.word_embedding_type = "glove"
+		self.word_embedding_type = "bert"
 		self.entity_embedding_path = "data/embedding/ent_1903"
 		self.entity_embedding_type = "glove"
 
@@ -22,13 +22,12 @@ class EVArgs():
 		self.filter_data_tokens = True
 
 		# training batch size
-		self.batch_size = 16
+		self.batch_size = 32
 
 		self.force_pretrain = True
 		self.pretrain_epoch = 20
 
 		# Model specification
-		
 		# ER
 		self.er_model = "LSTM"
 		self.er_output_dim = 100
@@ -78,14 +77,14 @@ class EVArgs():
 	@property
 	def er_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"er_scorer_%s_%d.pt" % (self.er_model, self.er_output_dim)
+			return "data/ev/"+self.model_name+"er_scorer_%s_%s_%d.pt" % (self.er_model, self.word_embedding_type, self.er_output_dim)
 		except:
 			return None
 
 	@property
 	def el_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"el_scorer_%s_%d.pt" % (self.el_model, self.el_output_dim)
+			return "data/ev/"+self.model_name+"el_scorer_%s_%s_%d.pt" % (self.el_model, self.entity_embedding_type, self.el_output_dim)
 		except:
 			return None
 

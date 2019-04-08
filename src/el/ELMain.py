@@ -90,9 +90,9 @@ class EL():
 		for batch in batches:
 			j, conll_str, tsv_str = data.prepare(*batch, form=form)
 			x = D.read_tsv_from_str(tsv_str)
-			for k, v in x.items():
-				ents += len(v)
-				cands += sum([len(x["candidates"]) for x in v])
+			# for k, v in x.items():
+			# 	ents += len(v)
+			# 	cands += sum([len(x["candidates"]) for x in v])
 			if self.debug:
 				jsondump(j, "debug/prepare.json")
 				writefile(conll_str, "debug/debug.conll")
@@ -120,7 +120,7 @@ class EL():
 			yield merge_item(j, e)
 			it += 1
 			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
-		print(ents, cands, cands / ents)
+		# print(ents, cands, cands / ents)
 
 	def __call__(self, sentences):
 		if type(sentences) is str:

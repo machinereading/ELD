@@ -1,3 +1,4 @@
+from .Tokenizer import Tokenizer
 from ...ds.Corpus import Corpus
 from ...ds.Vocabulary import Vocabulary
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, Embedding
@@ -40,8 +41,15 @@ class DataGenerator():
 		# self.w2i, we = Embedding.load_embedding(args.word_embedding_path, args.word_embedding_type)
 		# self.e2i, ee = Embedding.load_embedding(args.entity_embedding_path, args.entity_embedding_type)
 		# 0 for oov, 1 for out of range
-		self.w2i = {w: i+2 for i, w in enumerate(readfile(args.word_embedding_path+".word"))}
-		self.e2i = {e: i+2 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))}
+		self.make_word_tensor = args.word_embedding_type == "glove"
+		self.make_entity_tensor = args.entity_embedding_type == "glove"
+
+		w2i = {w: i+1 for i, w in enumerate(readfile(args.word_embedding_path+".word"))} if self.make_word_tensor else None
+		self.wt = Tokenizer(args.word_embedding_type, w2i)
+
+		e2i = {e: i+1 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))} if self.make_entity_tensor else None
+		self.et = Tokenizer(args.entity_embedding_type, e2i)
+
 		self.batch_size = args.batch_size
 		self.ctx_window_size = args.ctx_window_size
 		self.filter_data_tokens = args.filter_data_tokens
@@ -146,7 +154,7 @@ class DataGenerator():
 		# Deprecated: BERT need original tokenizer
 		# corpus postprocessing
 		logging.info("Generating Vocab tensors...")
-		# print(len(self.w2i), len(self.e2i))
+		filter_size = 10
 		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus.corpus)):
 			# print(len(sentence))
 			sentence.tagged_voca_len = 0
@@ -155,22 +163,22 @@ class DataGenerator():
 			dark_entity_tokens = 0
 			for vocab in sentence:
 				if self.filter_data_tokens:
-					if er_error_tokens >= 10 and not vocab.is_entity:
+					if er_error_tokens >= filter_size and not vocab.is_entity:
 						continue 
-					if el_error_tokens >= 10 and vocab.is_entity and vocab.entity_in_kb:
+					if el_error_tokens >= filter_size and vocab.is_entity and vocab.entity_in_kb:
 						continue
-					if dark_entity_tokens >= 10:
+					if dark_entity_tokens >= filter_size:
 						continue
-				lctxw_ind = [self.w2i[x.surface] if x.surface in self.w2i else 0 for x in vocab.lctx[-self.ctx_window_size:]]
+				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
 				vocab.lctxw_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind)
 
-				rctxw_ind = [self.w2i[x.surface] if x.surface in self.w2i else 0 for x in vocab.rctx[:self.ctx_window_size]]
+				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
 				vocab.rctxw_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1])
 
-				lctxe_ind = [self.e2i[x.entity] if x.entity in self.e2i else 0 for x in vocab.lctx_ent[-self.ctx_window_size:]]
+				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
 				vocab.lctxe_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind)
 				
-				rctxe_ind = [self.e2i[x.entity] if x.entity in self.e2i else 0 for x in vocab.rctx_ent[:self.ctx_window_size]]
+				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
 				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
 				# print(vocab.entity, lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind) # why everything is zero?
 				sentence.tagged_voca_len += 1
@@ -183,48 +191,3 @@ class DataGenerator():
 					else:
 						dark_entity_tokens += 1
 		self.corpus.tagged_voca_lens = [x.tagged_voca_len for x in self.corpus.corpus]
-				
-
-	def get_tensor_batch(self):
-		buf = {"lctx_words": [],
-			"rctx_words": [],
-			"lctx_entities": [],
-			"rctx_entities": [],
-			"error_type": []}
-		ind = 0
-		for _, cluster in self.corpus.clusters.items():
-			for k, v in cluster.vocab_tensors.items():
-				buf[k].append(v)
-				ind += 1
-				if ind == self.batch_size:
-					yield buf
-					buf = \
-						{
-							"lctx_words": [],
-							"rctx_words": [],
-							"lctx_entities": [],
-							"rctx_entities": [],
-							"error_type": []
-						}
-					ind = 0
-
-	def get_token_batch(self):
-		buf = []
-		for sentence in self.corpus:
-			for token in sentence:
-				if token.lctxe_ind is not None:
-					# print(token.surface, token.is_entity, token.entity_in_kb)
-					buf.append(token)
-				if len(buf) == self.batch_size:
-					yield buf
-					buf = []
-
-	def get_cluster_batch(self):
-		buf = []
-		for cluster in self.cluster.values():
-			for token in cluster:
-				buf.append(token)
-				if len(buf) == self.batch_size:
-					yield buf
-					buf = []
-

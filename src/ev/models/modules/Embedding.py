@@ -8,16 +8,24 @@ if sys.version_info >= (3, 6):
 from pytorch_pretrained_bert.modeling import *
 from ....utils import readfile
 class Embedding(nn.Module):
-	def __init__(self, embedding_type, embedding_path, device):
+	def __init__(self, embedding_type, embedding_path):
 		super(Embedding, self).__init__()
 		self.embedding_type = None
 		self.w2i = None
 		self.embedding = None
 		self.load_embedding(embedding_type, embedding_path)
-		self.embedding.to(device)
+
 	
-	def forward(self, word_batch):
-		return self.embedding(word_batch)
+	def forward(self, word_batch, **kwargs):
+		
+		emb = self.embedding(word_batch, **kwargs)
+		# return emb
+		if self.embedding_type == "bert":
+			# print(type(emb), emb.size())
+			# print(type(emb[0]), len(emb), emb[-1].size())
+			return emb[0][-1]
+		else:
+			return emb
 
 	def load_embedding(self, embedding_type, embedding_path):
 		embedding_type = embedding_type.lower()
@@ -30,19 +38,21 @@ class Embedding(nn.Module):
 
 		self.embedding_type = embedding_type
 		if embedding_type == "glove":
-			w2i = {w: i+2 for i, w in enumerate(readfile(embedding_path+".word"))}
 			e = np.load(embedding_path+".npy")
-			e = np.vstack([np.zeros([2, e.shape[1]]), e])
+			e = np.vstack([np.zeros([1, e.shape[1]]), e])
 			glove_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(e))
 			self.embedding = glove_embedding
+			self.embedding_dim = e.shape[1]
 		elif embedding_type == "elmo":
 			pass
 		elif embedding_type == "bert":
-			self.embedding = Bert.from_pretrained('bert-base-multilingual-cased')
+			self.embedding = BertModel.from_pretrained('bert-base-multilingual-cased')
+			self.embedding_dim = 768
+
 
 class Bert(BertPreTrainedModel):
 	def __init__(self, config):
-		super(BertPretrained, self).__init__(config)
+		super(Bert, self).__init__(config)
 		self.bert = BertModel(config)
 
 	def forward(self, input):

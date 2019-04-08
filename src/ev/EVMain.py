@@ -62,4 +62,4 @@ class EV():
 		pass
 
 	def __call__(self, entity_set):
-		return self.validate(entity_set)
+		return self.validate(entity_set) 
