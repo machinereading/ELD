@@ -6,7 +6,7 @@ from tqdm import tqdm
 from ...utils import readfile
 from ... import GlobalValues as gl
 from . import ModelFactory
-from .modules import Scorer
+from .modules import ContextEmbedder
 
 
 import logging
@@ -16,8 +16,8 @@ class ValidationModel(nn.Module):
 		super(ValidationModel, self).__init__()
 		self.cluster_transformer = None
 		self.pretrain_epoch = args.pretrain_epoch
-		# self.cw_embedder = Scorer.BiContextEREmbedder()
-		# self.ce_embedder = Scorer.BiContextELEmbedder()
+		self.cw_embedder = ContextEmbedder.BiContextEREmbedder()
+		self.ce_embedder = ContextEmbedder.BiContextELEmbedder()
 		self.pretrain_transformer = True
 		self.kb = None
 		try:
