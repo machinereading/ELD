@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from ...utils import readfile, jsondump, TimeUtil
 from ... import GlobalValues as gl
-from . import ModelFactory
 from .modules.Scorer import *
 from .modules.Embedding import Embedding
 

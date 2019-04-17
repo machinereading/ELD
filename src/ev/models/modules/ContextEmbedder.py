@@ -1,4 +1,4 @@
-
+import torch.nn as nn
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
 rnns = [k for k in module.keys()]
 
@@ -15,6 +15,7 @@ class BiContextEREmbedder(nn.Module):
 	def forward(self, lctx, rctx):
 		lctx_emb, _ = self.lctx_model(lctx)
 		rctx_emb, _ = self.rctx_model(rctx)
+		# return F.relu(lctx_emb), F.relu(rctx_emb)
 		return F.relu(torch.cat([lctx_emb[:, -1, :], rctx_emb[:, -1, :]], -1))
 
 class BiContextELEmbedder(nn.Module):
@@ -26,5 +27,6 @@ class BiContextELEmbedder(nn.Module):
 	def forward(self, lctx, rctx):
 		lctx_emb, _ = self.lctx_model(lctx)
 		rctx_emb, _ = self.rctx_model(rctx)
+		# return F.relu(lctx_emb), F.relu(rctx_emb)
 		return F.relu(torch.cat([lctx_emb[:, -1, :], rctx_emb[:, -1, :]], -1))
 	

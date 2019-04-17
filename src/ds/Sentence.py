@@ -33,7 +33,7 @@ class Sentence():
 
 	@property
 	def entities(self):
-		return [x for x in self.tokens]
+		return [x for x in self.tokens if x.is_entity]
 
 	@property
 	def not_in_kb_entities(self):
@@ -91,8 +91,8 @@ class Sentence():
 		entities = cw_form["entities"]
 		sentence = Sentence(text)
 		error_count = 0
-		if len(entities) > 1000:
-			print(cw_form["fileName"])
+		# if len(entities) > 1000:
+		# 	print(cw_form["fileName"])
 		for entity in entities:
 			if entity["entity"] == "": continue
 			try:

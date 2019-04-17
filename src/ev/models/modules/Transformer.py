@@ -2,6 +2,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def nonzero_avg_stack(tensor):
+	# input: 3 dimension tensor - max voca * max jamo * embedding size
+	# output: 2 dimension tensor - max voca * embedding size
+	avg = []
+	for t in tensor:
+		# max jamo * dim -> 1 * dim
+		nonzero = nonzero_item_count(t)
+		t = t.sum(1) / nonzero if nonzero > 0 else t
+		avg.append(t)
+	return torch.stack(avg, 0)
+
+
+def nonzero_item_count(tensor):
+	# input: 2 dimension tensor
+	# output: single tensor
+	result = 0
+	for vec in tensor:
+		if torch.sum(vec) == 0:
+			continue
+		result += 1
+	return result
+
+def get_transformer(args):
+	if args.transformer == "nn":
+		return NNTransformer(args)
+	elif args.transformer == "avg":
+		return AvgTransformer(args)
+
 class NNTransformer(nn.Module):
 	"""
 	Transforms ER / EL encoding result into single cluster representation
@@ -48,9 +76,22 @@ class NNTransformer(nn.Module):
 class AvgTransformer(nn.Module):
 	def __init__(self, args):
 		super(AvgTransformer, self).__init__()
+		er_input_dim = args.er_output_dim
+		el_input_dim = args.el_output_dim
+		jamo_dim = args.char_embedding_dim
+		self.transformer = nn.Linear(jamo_dim+er_input_dim+el_input_dim, args.transform_dim)
 
-	def forward(self, er, el):
-		return er.mean(1), el.mean(1)
+	def forward(self, jamo, word, entity):
+		# input: batch size * max voca * max jamo / window * embedding size
+		j = nonzero_avg_stack([nonzero_avg_stack(j) for j in jamo])
+		w = nonzero_avg_stack([nonzero_avg_stack(w) for w in word])
+		e = nonzero_avg_stack([nonzero_avg_stack(e) for e in entity])
+		return F.ReLU(self.transformer(torch.cat([j, w, e], -1)))
+		
+
+
+
+	
 
 
 class Identity(nn.Module):

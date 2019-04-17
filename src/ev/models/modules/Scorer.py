@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .. import ModelFactory
 from .ContextEmbedder import *
 
 class ERScorer(nn.Module):

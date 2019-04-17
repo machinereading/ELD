@@ -6,6 +6,7 @@ class EVArgs():
 		self.word_embedding_type = "bert"
 		self.entity_embedding_path = "data/embedding/ent_1903"
 		self.entity_embedding_type = "glove"
+		self.char_embedding_dim = 50
 
 		# Data load path
 		# load is done before data initialization
@@ -13,7 +14,7 @@ class EVArgs():
 		# self.data_load_path = None
 		# Data
 		# if data load path is defined, these things won't be evaluated
-		self.data_path = "corpus/el_wiki/wiki_cwform_10000.json"
+		self.data_path = "corpus/wiki_cwform_10000.json"
 		self.fake_er_rate = 0.1
 		self.fake_el_rate = 0.1
 		self.fake_ec_rate = 0.1
@@ -41,10 +42,16 @@ class EVArgs():
 		self.er_score_threshold = 0.5
 		self.el_score_threshold = 0.5
 
+		# transformer
+		self.transformer = "avg"
+		self.encode_sequence = True
+		self.transform_dim = 200
+
 		# Train config
 		self.epoch = 10
 		self.lr = 1e-4
 		self.momentum = 0.9
+		self.eval_per_epoch = 2
 
 	@classmethod
 	def from_json(cls, json_file):
@@ -110,3 +117,9 @@ class EVArgs():
 		except:
 			return None
 
+	@property
+	def validation_model_path(self):
+		try:
+			return "data/ev/"+self.model_name+"validation.pt"
+		except:
+			return None

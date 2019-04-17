@@ -1,6 +1,8 @@
 import json
 import functools
 import logging
+
+# not used anymore - use tqdm instead
 def progress(curprog, total, size=10):
 	if curprog < 0 or total < 0 or size < 0:
 		return ""
@@ -10,6 +12,8 @@ def progress(curprog, total, size=10):
 def printfunc(s):
 	print("\r"+s, end="", flush=True)
 
+
+# useful macros
 def jsonload(fname):
 	with open(fname, encoding="UTF8") as f:
 		return json.load(f)
@@ -28,6 +32,7 @@ def writefile(iterable, fname, processor=lambda x: x):
 	with open(fname, "w", encoding="UTF8") as f:
 		for item in iterable:
 			f.write(processor(item)+"\n")
+
 
 def split_to_batch(l, batch_size=100):
 	return [l[x*batch_size:x*batch_size+batch_size] for x in range(len(l) // batch_size + 1)]

@@ -9,6 +9,7 @@ class Corpus():
 		self.corpus = [] # list of sentence
 		self.tagged_voca_lens = []
 		self.cluster = {} # dict of str(entity form): Cluster
+		self.cluster_list = [x for x in self.cluster.values()]
 
 	def add_sentence(self, sentence):
 		self.corpus.append(sentence)
@@ -34,6 +35,9 @@ class Corpus():
 			accbuf += l
 		raise IndexOutOfRangeException
 
+	def get_cluster_by_index(self, ind):
+		return self.cluster_list[ind]
+
 	@classmethod
 	def load_corpus(cls, path):
 		# load from crowdsourcing form
@@ -49,7 +53,7 @@ class Corpus():
 			corpus.add_sentence(sentence)
 			for nt in sentence.not_in_kb_entities:
 				if nt.entity not in corpus.cluster:
-					c = Cluster()
+					c = Cluster(nt.entity)
 					c.id = len(corpus.cluster)
 					corpus.cluster[nt.entity] = c
 
@@ -59,21 +63,27 @@ class Corpus():
 
 
 	def to_json(self):
-		return {
-			"sentence": [sent.to_json() for sent in self.corpus],
-			"cluster": [cluster.to_json() for cluster in self.cluster.values()]
-		}
+		return [sent.to_json() for sent in self.corpus]
+		
 	@classmethod
 	def from_json(cls, json):
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = Corpus()
-		for sentence in json["sentence"]:
+		for sentence in tqdm(json):
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.corpus.append(sentence)
-		for cluster in json["cluster"]:
-			corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
+			for token in sentence.entities:
+				if token.entity not in corpus.cluster:
+					corpus.cluster[token.entity] = Cluster(token.entity)
+				corpus.cluster[token.entity].add_elem(token)
+		# for cluster in json["cluster"]:
+		# 	corpus.cluster[cluster["target_entity"]] = Cluster.from_json(cluster)
+		# 	for token in cluster:
+		# 		parent_sentence_id = token.parent_sentence
+		# 		token.parent_sentence = corpus.corpus[parent_sentence_id]
+		# 		assert token.parent_sentence.id == parent_sentence_id
 
 		return corpus
 
@@ -87,4 +97,15 @@ class Corpus():
 			else:
 				train.corpus.append(sent)
 				train.tagged_voca_lens.append(tlen)
+		return train, dev
+
+	def split_cluster_to_dev(self):
+		train = Corpus()
+		dev = Corpus()
+		for i, (k, v) in enumerate(self.cluster.items()):
+			if i % 10 == 0:
+				dev.cluster[k] = v
+			else:
+				train.cluster[k] = v
+
 		return train, dev

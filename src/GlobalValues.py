@@ -3,10 +3,11 @@
 # set attributes by calling setattr in main module
 from .utils import readfile
 import logging
+import re
 from datetime import datetime
 
 # logging config
-logging.basicConfig(filename= "log/run_%s.log" % str(datetime.now())[:-7].replace(" ", "_"), format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S')
+logging.basicConfig(filename= "log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]), format='%(asctime)s %(message)s', datefmt='%I:%M:%S')
 console = logging.StreamHandler()
 console.setLevel(logging.INFO)
 logging.getLogger().addHandler(console)

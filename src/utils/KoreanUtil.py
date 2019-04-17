@@ -2,6 +2,7 @@ import re
 cho = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
 jung = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ']
 jong = ['e','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
+alpha = [chr(x) for x in range(ord('a'), ord('z')+1)] + [chr(x) for x in range(ord('A'), ord('Z')+1)] + [".", ",", ":"]
 decomposer = {"ㄳ": ["ㄱ","ㅅ"], "ㄵ": ["ㄴ","ㅈ"], "ㄶ": ["ㄴ", "ㅎ"], "ㄺ": ["ㄹ", "ㄱ"], "ㄻ": ["ㄹ", "ㅁ"], "ㄼ": ["ㄹ", "ㅂ"], "ㅀ": ["ㄹ","ㅎ"], "ㅄ": ["ㅂ","ㅅ"]}
 
 eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '다', '의', '에', '에서', '으로', '로', '까지', '와', '과']
@@ -24,9 +25,12 @@ def decompose_sent(sentence, decompose=False):
 			result += i
 	return "".join(result)
 
-def char_to_elem(character, to_num=False, decompose=False):
+
+
+def char_to_elem(character, to_num=False, decompose=False, pad=True):
 	x = ord(character)
-	if not is_korean_character(character): return character
+	if not is_korean_character(character):
+		return character
 	x -= 0xAC00
 	result = []
 	result.append(x%len(jong) if to_num else jong[x % len(jong)])
@@ -39,6 +43,21 @@ def char_to_elem(character, to_num=False, decompose=False):
 		if result[-1] in decomposer:
 			result = result[:-1]+decomposer[result[-1]]
 	return result
+
+def char_to_elem_ind(character):
+	# Not valid char: -1
+	# 한글 자모
+	# 영어 알파벳(대소문자 구분)
+	# 일부 특수문자? (.,:)
+	elems = char_to_elem(character, to_num=True)
+	if type(elems) is str:
+		# 한국어가 아님
+		return [alpha.index(elems)+len(cho)+len(jung)+len(jong)+1 if elems in alpha else 0]
+	else:
+		cho_ind = elems[0] + 1
+		jung_ind = elems[1] + len(cho) + 1
+		jong_ind = elems[2] + len(cho) + len(jung) + 1
+		return [cho_ind, jung_ind, jong_ind]
 
 def stem_sentence(sentence):
 	# print(sentence)

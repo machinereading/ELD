@@ -19,6 +19,8 @@ class Vocabulary():
 		self.rctxw_ind = None
 		self.lctxe_ind = None
 		self.rctxe_ind = None
+		self.jamo_ind = None
+		self.tagged = False
 
 	def __str__(self):
 		return self.surface
@@ -53,7 +55,6 @@ class Vocabulary():
 		return [x for x in self.rctx if x.is_entity]
 
 
-	
 
 	def to_json(self):
 		return {
