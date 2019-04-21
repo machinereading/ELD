@@ -44,7 +44,7 @@ class Cluster():
 
 	@classmethod
 	def from_json(cls, json):
-		c = Cluster()
+		c = cls()
 		c.id = json["id"]
 		c.target_entity = json["target_entity"]
 		for item in json["cluster"]:

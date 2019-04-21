@@ -4,8 +4,6 @@ from .models.ValidationModel import ValidationModel
 from .utils.args import EVArgs
 from .utils.data import DataGenerator, SentenceGenerator, ClusterGenerator
 
-import logging
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -23,17 +21,19 @@ class EV():
 			self.args.device = torch.device("cpu")
 		self.args.model_name = model_name
 		self.batch_size = self.args.batch_size
-		
+
+		# load / generate data
+		self.dataset = DataGenerator(self.args)
+		self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
+		self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
+		self.args.max_jamo = self.dataset.corpus.max_jamo
 		# load / initialize model
 		# self.cluster_model = JointScorerModel(self.args).to(self.args.device)
 		# self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
-		# load / generate data
-		self.dataset = DataGenerator(self.args)
-		self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
-		self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
-		self.cluster_generator = ClusterGenerator(self.dataset.corpus)
+
+		# self.cluster_generator = ClusterGenerator(self.dataset.corpus)
 
 		# pretrain
 		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
@@ -41,7 +41,7 @@ class EV():
 		
 
 	def train(self):
-		logging.info("Start EV Training")
+		gl.logger.info("Start EV Training")
 		best_dev_f1 = 0
 		best_dev_precision = 0
 		best_dev_recall = 0
@@ -71,12 +71,12 @@ class EV():
 					best_dev_f1 = f1
 					torch.save(self.validation_model.state_dict, self.args.validation_model_path)
 	def pretrain(self):
-		logging.info("Start EV Pretraining")
+		gl.logger.info("Start EV Pretraining")
 
 		# self.cluster_model.pretrain(SentenceGenerator(self.sentence_train), SentenceGenerator(self.sentence_dev))
 		# self.cluster_model.pretrain(self.dataset)
 		# self.validation_model.pretrain(self.cluster_generator)
-		logging.info("Pretraining Done")
+		gl.logger.info("Pretraining Done")
 
 	def validate(self, entity_set):
 		pass

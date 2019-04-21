@@ -51,7 +51,7 @@ class EVArgs():
 		self.epoch = 10
 		self.lr = 1e-4
 		self.momentum = 0.9
-		self.eval_per_epoch = 2
+		self.eval_per_epoch = 1
 
 	@classmethod
 	def from_json(cls, json_file):

@@ -89,7 +89,7 @@ class Sentence():
 
 		text = cw_form["text"]
 		entities = cw_form["entities"]
-		sentence = Sentence(text)
+		sentence = cls(text)
 		error_count = 0
 		# if len(entities) > 1000:
 		# 	print(cw_form["fileName"])
@@ -114,7 +114,7 @@ class Sentence():
 		}
 	@classmethod
 	def from_json(cls, json):
-		sentence = Sentence(json["original_sentence"])
+		sentence = cls(json["original_sentence"])
 		sentence.id = json["id"]
 		if len(json["tokens"]) > 100000: print(json["original_sentence"], len(json["tokens"]))
 		# print(len(json["tokens"]))

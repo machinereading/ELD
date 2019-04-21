@@ -9,7 +9,6 @@ class Corpus():
 		self.corpus = [] # list of sentence
 		self.tagged_voca_lens = []
 		self.cluster = {} # dict of str(entity form): Cluster
-		self.cluster_list = [x for x in self.cluster.values()]
 
 	def add_sentence(self, sentence):
 		self.corpus.append(sentence)
@@ -21,6 +20,15 @@ class Corpus():
 
 	def __len__(self):
 		return len(self.corpus)
+
+	@property
+	def cluster_list(self):
+		return [x for x in self.cluster.values()]
+
+	@property
+	def max_jamo(self):
+		return max([x.max_jamo for x in self.cluster_list])
+	
 
 	@TimeUtil.measure_time
 	def __getitem__(self, ind):
@@ -45,7 +53,7 @@ class Corpus():
 			path = jsonload(path)
 		assert type(path) is list
 		logging.info("Loading corpus")
-		corpus = Corpus()
+		corpus = cls()
 		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
@@ -69,8 +77,8 @@ class Corpus():
 	def from_json(cls, json):
 		if type(json) is str:
 			json = jsonload(json)
-		corpus = Corpus()
-		for sentence in tqdm(json):
+		corpus = cls()
+		for sentence in tqdm(json[:100], desc="Loading EV corpus"): # limit data for runnablity
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.corpus.append(sentence)

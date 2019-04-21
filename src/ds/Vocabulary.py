@@ -71,7 +71,7 @@ class Vocabulary():
 
 	@classmethod
 	def from_json(cls, json):
-		voca = Vocabulary(json["surface"], None, json["token_ind"], json["char_ind"])
+		voca = cls(json["surface"], None, json["token_ind"], json["char_ind"])
 		for k, v in json.items():
 			setattr(voca, k, v)
 		if not voca.is_entity:
