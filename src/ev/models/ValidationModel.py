@@ -22,7 +22,7 @@ class ValidationModel(nn.Module):
 
 		self.we = Embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
 		self.ee = Embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
-		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha), args.char_embedding_dim)
+		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha), args.char_embedding_dim).to(self.target_device)
 		self.we_dim = self.we.embedding_dim
 		self.ee_dim = self.ee.embedding_dim
 		self.ce_dim = args.char_embedding_dim
@@ -57,7 +57,7 @@ class ValidationModel(nn.Module):
 			Confidence score?
 		"""
 		# cluster -> representation
-		print(jamo_index.size(), cluster_word_lctx.size(), cluster_entity_lctx.size())
+		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_entity_lctx.size())
 		jamo_size = jamo_index.size()[-1]
 		c_embedding = self.ce(jamo_index).view(-1, jamo_size, self.ce_dim) # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
 		voca_size = jamo_index.size()[1]
@@ -66,15 +66,15 @@ class ValidationModel(nn.Module):
 		wrctx = self.we(cluster_word_rctx.view(-1, self.window_size)).view(-1, self.window_size, self.we_dim)
 		elctx = self.ee(cluster_entity_lctx).view(-1, self.window_size, self.ee_dim)
 		erctx = self.ee(cluster_entity_rctx).view(-1, self.window_size, self.ee_dim)
-		print(c_embedding.size(), wlctx.size(), elctx.size())
+		# print(c_embedding.size(), wlctx.size(), elctx.size())
 		
 		if self.encode_sequence:
 			c_embedding = self.jamo_embedder(c_embedding)
 			c_embedding = c_embedding.view(-1, voca_size, c_embedding.size()[-1])
 			w_embedding = self.cw_embedder(wlctx, wrctx) # (batch_size * max_vocab_size) * embedding size
-			print(w_embedding.size())
+			# print(w_embedding.size())
 			w_embedding = w_embedding.view(-1, voca_size, w_embedding.size()[-1]) # batch_size * max_vocab_size * embedding size - 각각의 token마다 embedding dimension의 context embedding 하나씩 들고있음
-			print(w_embedding.size())
+			# print(w_embedding.size())
 			e_embedding = self.ce_embedder(elctx, erctx)
 			e_embedding = e_embedding.view(-1, voca_size, e_embedding.size()[-1])
 		else:
@@ -88,7 +88,7 @@ class ValidationModel(nn.Module):
 		return self.predict(cluster_representation)
 
 	def loss(self, prediction, label):
-		return F.binart_cross_entropy(prediction, label)
+		return F.binary_cross_entropy(prediction, label)
 
 	def pretrain(self, dataset):
 		# pretrain transformer

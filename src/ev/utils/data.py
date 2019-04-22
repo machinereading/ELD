@@ -1,5 +1,6 @@
 from .Tokenizer import Tokenizer
 from ...ds.Corpus import Corpus
+from ...ds.Cluster import Cluster
 from ...ds.Vocabulary import Vocabulary
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, KoreanUtil
 
@@ -48,7 +49,7 @@ class ClusterContextSetGenerator(Dataset):
 
 
 class DataGenerator():
-	def __init__(self, args):
+	def __init__(self, mode, args):
 		logging.info("Initializing DataGenerator")
 		# 0 for oov, 1 for out of range
 		self.make_word_tensor = args.word_embedding_type == "glove"
@@ -60,46 +61,45 @@ class DataGenerator():
 		e2i = {e: i+1 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))} if self.make_entity_tensor else None
 		self.et = Tokenizer(args.entity_embedding_type, e2i)
 
-
-		self.batch_size = args.batch_size
-		self.ctx_window_size = args.ctx_window_size
-		self.filter_data_tokens = args.filter_data_tokens
-
 		# check if we can load data from pre-defined cluster
-		if args.data_load_path is not None:
-			self.data_load_path = args.data_load_path
-			corpus_path = args.data_load_path
-			try:
-				path = "/".join(corpus_path.split("/")[:-1])+"/"
-				file_prefix = corpus_path.split("/")[-1]
-				sentence = []
-				cluster = []
-				if len(os.listdir(path)) == 0:
-					raise FileNotFoundError("No save file in dir %s" % corpus_path)
-				for item in os.listdir(path):
-					if not item.startswith(file_prefix): continue
-					if "sentence" in item:
-						sentence += jsonload(path+item)
-					
-				self.corpus = Corpus.from_json(sentence)
-				# self.generate_vocab_tensors()
-				self.generate_cluster_vocab_tensors()
-				return
-			except FileNotFoundError:
-				traceback.print_exc()
-			except:
-				traceback.print_exc()
-				import sys
-				sys.exit(1)
+		if mode == "train":
+			self.batch_size = args.batch_size
+			self.ctx_window_size = args.ctx_window_size
+			self.filter_data_tokens = args.filter_data_tokens
+			if args.data_load_path is not None:
+				self.data_load_path = args.data_load_path
+				corpus_path = args.data_load_path
+				try:
+					path = "/".join(corpus_path.split("/")[:-1])+"/"
+					file_prefix = corpus_path.split("/")[-1]
+					sentence = []
+					cluster = []
+					if len(os.listdir(path)) == 0:
+						raise FileNotFoundError("No save file in dir %s" % corpus_path)
+					for item in os.listdir(path):
+						if not item.startswith(file_prefix): continue
+						if "sentence" in item:
+							sentence += jsonload(path+item)
+						
+					self.corpus = Corpus.from_json(sentence)
+					# self.generate_vocab_tensors()
+					self.generate_cluster_vocab_tensors()
+					return
+				except FileNotFoundError:
+					traceback.print_exc()
+				except:
+					traceback.print_exc()
+					import sys
+					sys.exit(1)
 
 
-		self.data_path = args.data_path
-		self.fake_er_rate = args.fake_er_rate
-		self.fake_el_rate = args.fake_el_rate
-		self.fake_ec_rate = args.fake_ec_rate
-		self.generate_data()
-		# self.generate_vocab_tensors()
-		self.generate_cluster_vocab_tensors()
+			self.data_path = args.data_path
+			self.fake_er_rate = args.fake_er_rate
+			self.fake_el_rate = args.fake_el_rate
+			self.fake_ec_rate = args.fake_ec_rate
+			self.generate_data()
+			# self.generate_vocab_tensors()
+			self.generate_cluster_vocab_tensors()
 
 	@TimeUtil.measure_time
 	def generate_data(self):
@@ -258,3 +258,7 @@ class DataGenerator():
 			erctx += [[0] * self.ctx_window_size] * pad
 			cluster.update_tensor(torch.tensor(jamo), torch.tensor(wlctx), torch.tensor(wrctx), torch.tensor(elctx), torch.tensor(erctx))
 		logging.info("Done")
+
+	def convert_cluster_to_tensor(self, j):
+		cluster = Cluster.from_json(j)
+		

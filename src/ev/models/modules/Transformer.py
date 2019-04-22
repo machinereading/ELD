@@ -1,19 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ....utils import TimeUtil
 
+@TimeUtil.measure_time
 def nonzero_avg_stack(tensor):
 	# input: 3 dimension tensor - max voca * max jamo * embedding size
 	# output: 2 dimension tensor - max voca * embedding size
 	# 지금 이거 원하는대로 동작 안함. 지금 임베딩이 빠지는 중이니까 확인 필요
 	avg = []
-	for t in tensor:
-		# max jamo * dim -> 1 * dim
-		print(t.size())
-		nonzero = nonzero_item_count(t)
-		t = t.sum(1) / nonzero if nonzero > 0 else t
-		avg.append(t)
-	return torch.stack(avg, 0)
+	nz = nonzero_item_count(tensor)
+	tensor = tensor.sum(1) / nz if nz > 0 else tensor
+	return tensor
 
 
 def nonzero_item_count(tensor):
@@ -81,15 +79,15 @@ class AvgTransformer(nn.Module):
 		er_input_dim = args.er_output_dim
 		el_input_dim = args.el_output_dim
 		jamo_dim = args.char_embedding_dim
-		self.transformer = nn.Linear(jamo_dim+er_input_dim+el_input_dim, args.transform_dim)
+		self.transformer = nn.Linear(48+er_input_dim*2+el_input_dim*2, args.transform_dim)
 
 	def forward(self, jamo, word, entity):
 		# input: batch size * max voca * embedding size
-		print(jamo.size(), word.size(), entity.size())
+		# print(jamo.size(), word.size(), entity.size())
 		j = nonzero_avg_stack(jamo)
 		w = nonzero_avg_stack(word)
 		e = nonzero_avg_stack(entity)
-		print(j.size(), w.size(), e.size())
+		# print(j.size(), w.size(), e.size())
 		return F.relu(self.transformer(torch.cat([j, w, e], -1)))
 		
 

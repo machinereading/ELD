@@ -12,18 +12,20 @@ from tqdm import tqdm
 import sklearn.metrics as metrics
 
 class EV():
-	def __init__(self, model_name, config_file=None):
+	def __init__(self, mode, model_name, config_file=None):
 		# initialize arguments
+		self.mode = mode
 		self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		if torch.cuda.is_available():
 			self.args.device = torch.device("cuda")
 		else:
 			self.args.device = torch.device("cpu")
+		print(self.args.device)
 		self.args.model_name = model_name
 		self.batch_size = self.args.batch_size
 
 		# load / generate data
-		self.dataset = DataGenerator(self.args)
+		self.dataset = DataGenerator(mode, self.args)
 		self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 		self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 		self.args.max_jamo = self.dataset.corpus.max_jamo
@@ -31,8 +33,9 @@ class EV():
 		# self.cluster_model = JointScorerModel(self.args).to(self.args.device)
 		# self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
-		
-
+		# print(sum(p.numel() for p in self.validation_model.parameters() if p.requires_grad))
+		# import sys
+		# sys.exit(0)
 		# self.cluster_generator = ClusterGenerator(self.dataset.corpus)
 
 		# pretrain
@@ -54,19 +57,21 @@ class EV():
 		for epoch in tqdm(range(1, self.args.epoch+1), desc="Training..."):
 			self.validation_model.train()
 			for jamo, wl, wr, el, er, label in train_dataloader:
+				jamo, wl, wr, el, er, label = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device), label.to(self.args.device)
 				optimizer.zero_grad()
 				pred = self.validation_model(jamo, wl, wr, el, er)
-				loss = self.cluster_model.loss(pred, label)
+				loss = self.validation_model.loss(pred, label.float())
 				loss.backward()
 				optimizer.step()
 			if epoch % self.args.eval_per_epoch == 0:
 				self.validation_model.eval()
 				pred = []
-				label = []
-				for jamo, wl, wr, el, er, l in train_dataloader:
+				labels = []
+				for jamo, wl, wr, el, er, label in train_dataloader:
+					jamo, wl, wr, el, er, label = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device), label.to(self.args.device)
 					pred += [1 if x > 0.5 else 0 for x in self.validation_model(jamo, wl, wr, el, er)]
-					label += l
-				f1 = metrics.f1_score(label, pred)
+					labels += label
+				f1 = metrics.f1_score(labels, pred)
 				if f1 > best_dev_f1:
 					best_dev_f1 = f1
 					torch.save(self.validation_model.state_dict, self.args.validation_model_path)
@@ -79,6 +84,11 @@ class EV():
 		gl.logger.info("Pretraining Done")
 
 	def validate(self, entity_set):
+		# entity set to tensor
+		
+		# validate tensor
+		# mark
+
 		pass
 
 	def __call__(self, entity_set):
