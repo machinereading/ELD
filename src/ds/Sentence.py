@@ -116,7 +116,7 @@ class Sentence():
 	def from_json(cls, json):
 		sentence = cls(json["original_sentence"])
 		sentence.id = json["id"]
-		if len(json["tokens"]) > 100000: print(json["original_sentence"], len(json["tokens"]))
+		# if len(json["tokens"]) > 100000: print(json["original_sentence"], len(json["tokens"]))
 		# print(len(json["tokens"]))
 		sentence.tokens = [Vocabulary.from_json(x) for x in json["tokens"]]
 		assert all([vocab.parent_sentence == sentence.id for vocab in sentence.tokens])

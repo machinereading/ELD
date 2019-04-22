@@ -83,7 +83,7 @@ class DataGenerator():
 						
 					self.corpus = Corpus.from_json(sentence)
 					# self.generate_vocab_tensors()
-					self.generate_cluster_vocab_tensors()
+					self.generate_cluster_vocab_tensors(self.corpus)
 					return
 				except FileNotFoundError:
 					traceback.print_exc()
@@ -207,9 +207,9 @@ class DataGenerator():
 		self.corpus.tagged_voca_lens = [x.tagged_voca_len for x in self.corpus.corpus]
 
 	@TimeUtil.measure_time
-	def generate_cluster_vocab_tensors(self, max_voca_restriction=None, max_jamo_restriction=None):
+	def generate_cluster_vocab_tensors(self, corpus, max_voca_restriction=None, max_jamo_restriction=None):
 		logging.info("Generating Vocab tensors...")
-		for cluster in tqdm(self.corpus.cluster.values(), desc="Generating vocab tensors"):
+		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
 			for vocab in cluster:
 				if vocab.tagged: continue
 				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
@@ -227,14 +227,14 @@ class DataGenerator():
 		logging.info("Done")
 		# add padding
 		logging.info("Add padding...")
-		max_voca = max([len(x) for x in self.corpus.cluster.values()])
+		max_voca = max([len(x) for x in corpus.cluster.values()])
 		if max_voca_restriction is not None and max_voca_restriction > 0:
 			max_voca = min(max_voca, max_voca_restriction)
-		max_jamo = max([x.max_jamo for x in self.corpus.cluster.values()])
+		max_jamo = max([x.max_jamo for x in corpus.cluster.values()])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
 			max_jamo = min(max_jamo, max_jamo_restriction)
 			
-		for cluster in tqdm(self.corpus.cluster.values(), desc="Padding vocab tensors"):
+		for cluster in tqdm(corpus.cluster.values(), desc="Padding vocab tensors"):
 			jamo, wlctx, wrctx, elctx, erctx, _ = cluster.vocab_tensors
 			if cluster.max_jamo > max_jamo:
 				cut = []
@@ -260,5 +260,6 @@ class DataGenerator():
 		logging.info("Done")
 
 	def convert_cluster_to_tensor(self, j):
-		cluster = Cluster.from_json(j)
-		
+		corpus = Corpus.load_corpus(j, filter_nik=True)
+		self.generate_cluster_vocab_tensors(corpus)
+		return corpus

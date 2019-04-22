@@ -47,7 +47,7 @@ class Corpus():
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path):
+	def load_corpus(cls, path, filter_nik=False):
 		# load from crowdsourcing form
 		if type(path) is str:
 			path = jsonload(path)
@@ -59,7 +59,8 @@ class Corpus():
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
 			corpus.add_sentence(sentence)
-			for nt in sentence.not_in_kb_entities:
+			target = sentence.entities if filter_nik else sentence.not_in_kb_entities
+			for nt in target:
 				if nt.entity not in corpus.cluster:
 					c = Cluster(nt.entity)
 					c.id = len(corpus.cluster)

@@ -83,13 +83,22 @@ class EV():
 		# self.validation_model.pretrain(self.cluster_generator)
 		gl.logger.info("Pretraining Done")
 
-	def validate(self, entity_set):
+	def validate(self, corpus):
 		# entity set to tensor
-		
-		# validate tensor
-		# mark
+		assert type(corpus) is dict
+		corpus = self.dataset.convert_cluster_to_tensor(corpus)
+		loader = DataLoader(ClusterGenerator(corpus), batch_size=self.batch_size, shuffle=False)
 
-		pass
+		# validate tensor
+		pred = []
+		for jamo, wl, wr, el, er, _ in train_dataloader:
+			jamo, wl, wr, el, er = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device)
+			pred += [1 if x > 0.5 else 0 for x in self.validation_model(jamo, wl, wr, el, er)]
+			labels += label
+		# mark
+		for cluster, prediction in zip(cluster.entity_list, pred):
+			cluster.kb_uploadable = prediction > 0.5
+		
 
 	def __call__(self, entity_set):
 		return self.validate(entity_set)
