@@ -24,7 +24,8 @@ class Tokenizer():
 		assert mode in ["glove", "elmo", "bert"]
 		self.tokenize_mode = mode
 		if w2i is not None:
-			self.w2i = lambda x: w2i[x] if x in w2i else 0
+			self.w2ilen = len(w2i)
+			self.w2i = lambda x: w2i[x] if x in w2i else self.w2ilen
 
 	def tokenize(self, sent):
 		"""

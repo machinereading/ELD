@@ -80,7 +80,7 @@ class EL():
 		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
 
 
-	def predict(self, sentences, form):
+	def predict(self, sentences, form, delete_candidate=True):
 		if type(sentences) is str:
 			sentences = [sentences]
 		batches = split_to_batch(sentences, 100)
@@ -117,7 +117,7 @@ class EL():
 			e = D.make_result_dict(dataset, predictions)
 			# if self.debug:
 			# 	jsondump(e, "debug/debug_prediction.json")
-			yield merge_item(j, e)
+			yield merge_item(j, e, delete_candidate)
 			it += 1
 			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
 		# print(ents, cands, cands / ents)

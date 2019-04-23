@@ -1,4 +1,4 @@
-def merge_item(j, result_dict):
+def merge_item(j, result_dict, delete_candidate=True):
 	if type(j) is not list:
 		j = [j]
 
@@ -14,9 +14,13 @@ def merge_item(j, result_dict):
 			if item["fileName"] == doc_name:
 				target_json = item
 				for item in target_json["entities"]:
-					# del item["candidates"]
+					if delete_candidate:
+						del item["candidates"]
+						del item["answer"]
 					# to get precise result, don't remove candidates
 					item["text"] = item["surface"]
+					item["dataType"] = item["ne_type"]
+					del item["ne_type"]
 					del item["surface"]
 				break
 		else:

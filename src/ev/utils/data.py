@@ -55,12 +55,16 @@ class DataGenerator():
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
 
-		w2i = {w: i+1 for i, w in enumerate(readfile(args.word_embedding_path+".word"))} if self.make_word_tensor else None
+		w2i = {w: i for i, w in enumerate(readfile(args.word_embedding_path+".word"))} if self.make_word_tensor else None
 		self.wt = Tokenizer(args.word_embedding_type, w2i)
+		self.wt_pad = len(w2i)+1
 
-		e2i = {e: i+1 for i, e in enumerate(readfile(args.entity_embedding_path+".word"))} if self.make_entity_tensor else None
+		e2i = {e: i for i, e in enumerate(readfile(args.entity_embedding_path+".word"))} if self.make_entity_tensor else None
 		self.et = Tokenizer(args.entity_embedding_type, e2i)
+		self.et_pad = len(e2i)+1
+		self.chunk_size = args.chunk_size
 
+		self.kb = readfile(args.kb)
 		# check if we can load data from pre-defined cluster
 		if mode == "train":
 			self.batch_size = args.batch_size
@@ -83,7 +87,7 @@ class DataGenerator():
 						
 					self.corpus = Corpus.from_json(sentence)
 					# self.generate_vocab_tensors()
-					self.generate_cluster_vocab_tensors(self.corpus)
+					self.generate_cluster_vocab_tensors(self.corpus, max_voca_restriction=getattr(args, "max_voca_restriction", -1), max_jamo_restriction=getattr(args, "max_jamo_restriction", -1))
 					return
 				except FileNotFoundError:
 					traceback.print_exc()
@@ -183,16 +187,16 @@ class DataGenerator():
 					if dark_entity_tokens >= filter_size:
 						continue
 				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
-				vocab.lctxw_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind)
+				vocab.lctxw_ind = torch.tensor([self.wt_pad for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind)
 
 				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
-				vocab.rctxw_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1])
+				vocab.rctxw_ind = torch.tensor(([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1])
 
 				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
-				vocab.lctxe_ind = torch.tensor([0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind)
+				vocab.lctxe_ind = torch.tensor([self.et_pad for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind)
 				
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
-				vocab.rctxe_ind = torch.tensor(([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
+				vocab.rctxe_ind = torch.tensor(([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
 				# print(vocab.entity, lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind) # why everything is zero?
 				sentence.tagged_voca_len += 1
 				sentence.tagged_tokens.append(vocab)
@@ -210,19 +214,21 @@ class DataGenerator():
 	def generate_cluster_vocab_tensors(self, corpus, max_voca_restriction=None, max_jamo_restriction=None):
 		logging.info("Generating Vocab tensors...")
 		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
+			if cluster.target_entity not in self.kb:
+				cluster.target_entity = None
 			for vocab in cluster:
 				if vocab.tagged: continue
 				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
-				vocab.lctxw_ind = [0 for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind
+				vocab.lctxw_ind = [self.wt_pad for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind
 
 				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
-				vocab.rctxw_ind = ([0 for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]
+				vocab.rctxw_ind = ([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]
 
 				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
-				vocab.lctxe_ind = [0 for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind
+				vocab.lctxe_ind = [self.et_pad for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind
 				
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
-				vocab.rctxe_ind = ([0 for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
+				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
 				vocab.tagged = True
 		logging.info("Done")
 		# add padding
@@ -230,12 +236,17 @@ class DataGenerator():
 		max_voca = max([len(x) for x in corpus.cluster.values()])
 		if max_voca_restriction is not None and max_voca_restriction > 0:
 			max_voca = min(max_voca, max_voca_restriction)
+		max_voca += self.chunk_size - max_voca % self.chunk_size if max_voca % self.chunk_size > 0 else 0
+		
 		max_jamo = max([x.max_jamo for x in corpus.cluster.values()])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
 			max_jamo = min(max_jamo, max_jamo_restriction)
-			
+		# max_jamo += self.chunk_size - max_jamo % self.chunk_size if max_jamo % self.chunk_size > 0 else 0
+
+		print("Max vocabulary in cluster(with padding):", max_voca)
+		print("Max jamo in word: ", max_jamo)
 		for cluster in tqdm(corpus.cluster.values(), desc="Padding vocab tensors"):
-			jamo, wlctx, wrctx, elctx, erctx, _ = cluster.vocab_tensors
+			jamo, wlctx, wrctx, elctx, erctx, _, _ = cluster.vocab_tensors
 			if cluster.max_jamo > max_jamo:
 				cut = []
 				for i, item in enumerate(jamo):
@@ -258,6 +269,7 @@ class DataGenerator():
 			erctx += [[0] * self.ctx_window_size] * pad
 			cluster.update_tensor(torch.tensor(jamo), torch.tensor(wlctx), torch.tensor(wrctx), torch.tensor(elctx), torch.tensor(erctx))
 		logging.info("Done")
+
 
 	def convert_cluster_to_tensor(self, j):
 		corpus = Corpus.load_corpus(j, filter_nik=True)
