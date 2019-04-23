@@ -19,10 +19,11 @@ class ValidationModel(nn.Module):
 		self.kb = None
 		self.window_size = args.ctx_window_size
 		self.target_device = args.device
+		self.chunk_size = args.chunk_size
 
 		self.we = Embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
 		self.ee = Embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
-		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha), args.char_embedding_dim).to(self.target_device)
+		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.char_embedding_dim).to(self.target_device)
 		self.we_dim = self.we.embedding_dim
 		self.ee_dim = self.ee.embedding_dim
 		self.ce_dim = args.char_embedding_dim
@@ -48,7 +49,7 @@ class ValidationModel(nn.Module):
 		except:
 			logging.info("Failed to load transformer from %s" % args.transformer_model_path)
 
-	def forward(self, jamo_index, cluster_word_lctx, cluster_word_rctx, cluster_entity_lctx, cluster_entity_rctx):
+	def forward(self, jamo_index, cluster_word_lctx, cluster_word_rctx, cluster_entity_lctx, cluster_entity_rctx, size):
 		"""
 		Input
 			jamo_index: Tensor of batch_size * max_vocab_size * max jamo size
@@ -58,7 +59,26 @@ class ValidationModel(nn.Module):
 		"""
 		# cluster -> representation
 		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_entity_lctx.size())
+		# split into 100
+		chunks = jamo_index.size()[0] * jamo_index.size()[1] // self.chunk_size
+		size = (size-1) // self.chunk_size + 1
 		jamo_size = jamo_index.size()[-1]
+		window_size = cluster_word_lctx.size()[-1]
+
+		# print(jamo_index.size())
+		# for item in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1):
+		# 	print(item.size(), torch.sum(item))
+		# print(torch.stack([x for x in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1) if torch.sum(x) != 0]).size())
+		jamo_index = torch.stack([x for x in jamo_index.view(-1, self.chunk_size, jamo_size) if torch.sum(x) != 0]).view(-1, jamo_size)
+		cluster_word_lctx = torch.stack([x for x in cluster_word_lctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		cluster_word_rctx = torch.stack([x for x in cluster_word_rctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		cluster_entity_lctx = torch.stack([x for x in cluster_entity_lctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		cluster_entity_rctx = torch.stack([x for x in cluster_entity_rctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		
+		# print(size)
+		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size()) # 100 * non-empty batch size * jamo size
+		assert jamo_index.size()[0] == cluster_word_lctx.size()[0] == cluster_word_rctx.size()[0] == cluster_entity_lctx.size()[0] == cluster_entity_rctx.size()[0], "Size mismatch"
+		# assert torch.sum(size) == jamo.index.size()[0]
 		c_embedding = self.ce(jamo_index).view(-1, jamo_size, self.ce_dim) # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
 		voca_size = jamo_index.size()[1]
 		# bert attention mask?
@@ -70,24 +90,29 @@ class ValidationModel(nn.Module):
 		
 		if self.encode_sequence:
 			c_embedding = self.jamo_embedder(c_embedding)
-			c_embedding = c_embedding.view(-1, voca_size, c_embedding.size()[-1])
+			c_embedding = c_embedding.view(-1, self.chunk_size, c_embedding.size()[-1])
 			w_embedding = self.cw_embedder(wlctx, wrctx) # (batch_size * max_vocab_size) * embedding size
 			# print(w_embedding.size())
-			w_embedding = w_embedding.view(-1, voca_size, w_embedding.size()[-1]) # batch_size * max_vocab_size * embedding size - 각각의 token마다 embedding dimension의 context embedding 하나씩 들고있음
+			w_embedding = w_embedding.view(-1, self.chunk_size, w_embedding.size()[-1]) # batch_size * max_vocab_size * embedding size - 각각의 token마다 embedding dimension의 context embedding 하나씩 들고있음
 			# print(w_embedding.size())
 			e_embedding = self.ce_embedder(elctx, erctx)
-			e_embedding = e_embedding.view(-1, voca_size, e_embedding.size()[-1])
+			e_embedding = e_embedding.view(-1, self.chunk_size, e_embedding.size()[-1])
 		else:
 			w_embedding = torch.cat([wlctx, wrctx], 2)
 			e_embedding = torch.cat([elctx, erctx], 2)
 
 		
 		cluster_representation = self.cluster_transformer(c_embedding, w_embedding, e_embedding) # batch size * cluster representation size
-		
+		# print(cluster_representation.size())
+		# print(cluster_representation)
 		# prediction - let's try simple FFNN this time
-		return self.predict(cluster_representation)
+		prediction = self.predict(cluster_representation)
+		# print("Prediction:", prediction)
+		return prediction
 
 	def loss(self, prediction, label):
+		print(prediction)
+		print(label)
 		return F.binary_cross_entropy(prediction, label)
 
 	def pretrain(self, dataset):
@@ -98,3 +123,17 @@ class ValidationModel(nn.Module):
 
 		for param in self.cluster_transformer:
 			param.requires_grad = False
+
+	def _split_with_pad(self, tensor, size):
+		tensor_size = tensor.size()
+		if size < self.chunk_size:
+			if tensor_size[0] < self.chunk_size:
+				yield torch.stack([tensor, torch.zeros([self.chunk_size - tensor_size[0], tensor_size[1]])])
+				return
+			yield tensor[:self.chunk_size, :]
+			return
+		slices = tensor_size[0] // self.chunk_size
+		for i in range(slices):
+			yield tensor[i*self.chunk_size:(i+1)*self.chunk_size, :]
+		yield torch.stack([tensor[slices * self.chunk_size:, :], torch.zeros([self.chunk_size - (size - slices * self.chunk_size), tensor_size[1]])])
+		return

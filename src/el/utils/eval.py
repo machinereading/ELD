@@ -10,7 +10,7 @@ def eval(module, corpus_dir):
 			eval_target.append(j)
 
 	prediction = []
-	for item in module.predict(eval_target, form="CROWDSOURCING"):
+	for item in module.predict(eval_target, form="CROWDSOURCING", delete_candidate=False):
 		prediction += item
 	print(len(prediction), len(eval_target))
 	jsondump(prediction, "debug/debug_prediction.json")

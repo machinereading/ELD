@@ -39,7 +39,7 @@ class Embedding(nn.Module):
 		self.embedding_type = embedding_type
 		if embedding_type == "glove":
 			e = np.load(embedding_path+".npy")
-			e = np.vstack([np.zeros([1, e.shape[1]]), e])
+			e = np.vstack([e, np.zeros([2, e.shape[1]])])
 			glove_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(e))
 			self.embedding = glove_embedding
 			self.embedding_dim = e.shape[1]

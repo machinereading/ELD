@@ -1,9 +1,11 @@
-
-class EVArgs():
+from ...utils.AbstractArgument import AbstractArgument
+class EVArgs(AbstractArgument):
 	def __init__(self):
+		# KB
+		self.kb = "data/el/kb_entities"
 		# Embedding
 		self.word_embedding_path = "data/embedding/wiki_stem"
-		self.word_embedding_type = "bert"
+		self.word_embedding_type = "glove"
 		self.entity_embedding_path = "data/embedding/ent_1903"
 		self.entity_embedding_type = "glove"
 		self.char_embedding_dim = 50
@@ -23,7 +25,7 @@ class EVArgs():
 		self.filter_data_tokens = True
 
 		# training batch size
-		self.batch_size = 64
+		self.batch_size = 16
 
 		self.force_pretrain = True
 		self.pretrain_epoch = 20
@@ -48,38 +50,13 @@ class EVArgs():
 		self.transform_dim = 200
 
 		# Train config
-		self.epoch = 1
+		self.epoch = 10
 		self.lr = 1e-4
 		self.momentum = 0.9
 		self.eval_per_epoch = 1
 
-	@classmethod
-	def from_json(cls, json_file):
-		from ...utils import jsonload
-		args = EV_Args()
-		if type(json_file) is str:
-			json_file = jsonload(json_file)
-		for attr, value in json_file:
-			setattr(args, attr, value)
-		return args
+		self.chunk_size = 100
 
-	@classmethod
-	def from_config(cls, ini_file):
-		import configparser
-		from ... import GlobalValues as gl
-		c = configparser.ConfigParser()
-		c.read(ini_file)
-		args = EVArgs()
-		for attr, section in c.items():
-			for k, v in section.items():
-				if v in ["True", "False"]:
-					v = gl.boolmap(v)
-				setattr(args, k, v)
-		return args
-
-
-	def to_json(self):
-		return self.__dict__
 
 	@property
 	def er_model_path(self):

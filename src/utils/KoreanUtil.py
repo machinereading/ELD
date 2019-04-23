@@ -52,11 +52,11 @@ def char_to_elem_ind(character):
 	elems = char_to_elem(character, to_num=True)
 	if type(elems) is str:
 		# 한국어가 아님
-		return [alpha.index(elems)+len(cho)+len(jung)+len(jong)+1 if elems in alpha else 0]
+		return [alpha.index(elems)+len(cho)+len(jung)+len(jong) if elems in alpha else len(cho)+len(jung)+len(jong)+len(alpha)]
 	else:
-		cho_ind = elems[0] + 1
-		jung_ind = elems[1] + len(cho) + 1
-		jong_ind = elems[2] + len(cho) + len(jung) + 1
+		cho_ind = elems[0]
+		jung_ind = elems[1] + len(cho)
+		jong_ind = elems[2] + len(cho) + len(jung)
 		return [cho_ind, jung_ind, jong_ind]
 
 def stem_sentence(sentence):
