@@ -64,7 +64,7 @@ class DataGenerator():
 		self.et_pad = len(e2i)+1
 		self.chunk_size = args.chunk_size
 
-		self.kb = readfile(args.kb)
+		self.kb = [x for x in readfile(args.kb)]
 		# check if we can load data from pre-defined cluster
 		if mode == "train":
 			self.batch_size = args.batch_size
@@ -215,6 +215,7 @@ class DataGenerator():
 		logging.info("Generating Vocab tensors...")
 		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
 			if cluster.target_entity not in self.kb:
+				# print(cluster.target_entity)
 				cluster.target_entity = None
 			for vocab in cluster:
 				if vocab.tagged: continue
@@ -231,6 +232,7 @@ class DataGenerator():
 				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
 				vocab.tagged = True
 		logging.info("Done")
+
 		# add padding
 		logging.info("Add padding...")
 		max_voca = max([len(x) for x in corpus.cluster.values()])
@@ -241,7 +243,6 @@ class DataGenerator():
 		max_jamo = max([x.max_jamo for x in corpus.cluster.values()])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
 			max_jamo = min(max_jamo, max_jamo_restriction)
-		# max_jamo += self.chunk_size - max_jamo % self.chunk_size if max_jamo % self.chunk_size > 0 else 0
 
 		print("Max vocabulary in cluster(with padding):", max_voca)
 		print("Max jamo in word: ", max_jamo)
@@ -272,6 +273,7 @@ class DataGenerator():
 
 
 	def convert_cluster_to_tensor(self, j):
+		# for validation
 		corpus = Corpus.load_corpus(j, filter_nik=True)
 		self.generate_cluster_vocab_tensors(corpus)
 		return corpus

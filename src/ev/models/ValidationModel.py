@@ -111,8 +111,8 @@ class ValidationModel(nn.Module):
 		return prediction
 
 	def loss(self, prediction, label):
-		print(prediction)
-		print(label)
+		# print(prediction)
+		# print(label)
 		return F.binary_cross_entropy(prediction, label)
 
 	def pretrain(self, dataset):

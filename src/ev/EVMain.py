@@ -36,8 +36,6 @@ class EV():
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
 		# load / initialize model
-		# self.cluster_model = JointScorerModel(self.args).to(self.args.device)
-		# self.cluster_model = ThreeScorerModel(self.args).to(self.args.device)
 		
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		try:
@@ -49,9 +47,6 @@ class EV():
 			else:
 				raise Exception("Model %s not exists!" % model_name)
 		print("Total number of parameters: ", sum(p.numel() for p in self.validation_model.parameters() if p.requires_grad))
-		# import sys
-		# sys.exit(0)
-		# self.cluster_generator = ClusterGenerator(self.dataset.corpus)
 
 		# pretrain
 		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
@@ -75,7 +70,7 @@ class EV():
 				jamo, wl, wr, el, er, size, label = [x.to(self.args.device) for x in batch]
 				# jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device), label.to(self.args.device)
 				optimizer.zero_grad()
-				pred = self.validation_model(jamo, wl, wr, el, er, size)
+				pred = self.validation_model(jamo, wl, wr, el, er, size).view(-1)
 				li = 0
 				scores = []
 				labels = []
@@ -90,7 +85,7 @@ class EV():
 				self.validation_model.eval()
 				preds = []
 				labels = []
-				for batch in train_dataloader:
+				for batch in dev_dataloader:
 					jamo, wl, wr, el, er, size, label = [x.to(self.args.device) for x in batch]
 					pred = self.validation_model(jamo, wl, wr, el, er, size)
 					pi = 0
@@ -98,10 +93,13 @@ class EV():
 					for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
 						scores.append(torch.mean(pred[pi:pi+s]))
 						pi += s
-					pred = torch.tensor(scores).to(self.args.device)
 					preds += [1 if x > 0.5 else 0 for x in pred]
 					labels += list(label.cpu().numpy())
-				f1 = metrics.f1_score(labels, pred)
+					print(pred, label)
+					print(len(preds), len(labels))
+					assert len(preds) == len(labels)
+
+				f1 = metrics.f1_score(labels, preds)
 				print("F1: %.2f" % (f1 * 100))
 
 				if f1 > best_dev_f1:
