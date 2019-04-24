@@ -93,9 +93,9 @@ class EV():
 					for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
 						scores.append(torch.mean(pred[pi:pi+s]))
 						pi += s
-					preds += [1 if x > 0.5 else 0 for x in pred]
+					preds += [1 if x > 0.5 else 0 for x in scores]
 					labels += list(label.cpu().numpy())
-					print(pred, label)
+					print(scores, label)
 					print(len(preds), len(labels))
 					assert len(preds) == len(labels)
 

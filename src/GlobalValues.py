@@ -8,16 +8,16 @@ from datetime import datetime
 
 # logging config
 logger = logging.getLogger("DefaultLogger")
-f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
+# f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 c = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%I:%M:%S')
-f.setLevel(logging.DEBUG)
-f.setFormatter(formatter)
+# f.setLevel(logging.DEBUG)
+# f.setFormatter(formatter)
 
 c.setLevel(logging.INFO)
 c.setFormatter(formatter)
 logger.addHandler(c)
-logger.addHandler(f)
+# logger.addHandler(f)
 logger.info("[START]")
 
 

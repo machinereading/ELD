@@ -245,7 +245,7 @@ class DataGenerator():
 			max_jamo = min(max_jamo, max_jamo_restriction)
 
 		print("Max vocabulary in cluster(with padding):", max_voca)
-		print("Max jamo in word: ", max_jamo)
+		print("Max jamo in word:", max_jamo)
 		for cluster in tqdm(corpus.cluster.values(), desc="Padding vocab tensors"):
 			jamo, wlctx, wrctx, elctx, erctx, _, _ = cluster.vocab_tensors
 			if cluster.max_jamo > max_jamo:

@@ -79,7 +79,7 @@ class AvgTransformer(nn.Module):
 		er_input_dim = args.er_output_dim
 		el_input_dim = args.el_output_dim
 		jamo_dim = args.char_embedding_dim
-		self.transformer = nn.Linear(48+er_input_dim*2+el_input_dim*2, args.transform_dim)
+		self.transformer = nn.Linear(48+er_input_dim*2+el_input_dim*2, args.transform_dim) # 48 is hard coded
 
 	def forward(self, jamo, word, entity):
 		# input: batch size * max voca * embedding size
