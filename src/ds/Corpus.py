@@ -59,7 +59,7 @@ class Corpus():
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
 			corpus.add_sentence(sentence)
-			target = sentence.entities if filter_nik else sentence.not_in_kb_entities
+			target = sentence.entities if not filter_nik else sentence.not_in_kb_entities
 			for nt in target:
 				if nt.entity not in corpus.cluster:
 					c = Cluster(nt.entity)
