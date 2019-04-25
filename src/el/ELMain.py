@@ -1,5 +1,6 @@
 from .utils import data as data
-from .utils.args import EL_Args
+from .utils.data_new import DataModule
+from .utils.args import ELArgs
 from .utils.postprocess import merge_item
 from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
@@ -7,19 +8,21 @@ from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
 from ..utils import *
+from ..ds import Sentence
 
 gl.entity_voca, gl.entity_embeddings = U.load_voca_embs('data/el/embeddings/dict.entity', 'data/el/embeddings/entity_embeddings.npy')
 gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict.word', 'data/el/embeddings/word_embeddings.npy')
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
-			self.arg = EL_Args()
+			self.args = ELArgs()
+			self.data = DataModule(self.args)
 			self.model_name = model_name
-			self.arg.mode = mode
-			self.arg.model_path = "data/el/%s" % model_name
+			self.args.mode = mode
+			self.args.model_path = "data/el/%s" % model_name
 			self.model_name = model_name
 			self.debug = False
-			arg = self.arg
+			arg = self.args
 			voca_emb_dir = 'data/el/embeddings/'
 
 			
@@ -66,7 +69,7 @@ class EL():
 			dc = readfile("debug/dev.conll")
 			dt = readfile("debug/dev.tsv")
 		else:
-			tj, tc, tt = data.prepare(*train_items, form="CROWDSOURCING", filter_rate=self.arg.train_filter_rate)
+			tj, tc, tt = data.prepare(*train_items, form="CROWDSOURCING", filter_rate=self.args.train_filter_rate)
 			dj, dc, dt = data.prepare(*dev_items, form="CROWDSOURCING")
 			if self.debug:
 				jsondump(tj, "debug/train.json")
@@ -77,19 +80,19 @@ class EL():
 				writefile(dt, "debug/dev.tsv")
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
-		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.arg.learning_rate, 'n_epochs': self.arg.n_epochs})
+		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
 
 
-	def predict(self, sentences, form, delete_candidate=True):
-		if type(sentences) is str:
-			sentences = [sentences]
+	def predict(self, sentences, delete_candidate=True):
+		type_list = [type(x) for x in sentences]
+		assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all([x is Sentence for x in type_list])
 		batches = split_to_batch(sentences, 100)
 		it = 0
 		cands = {}
 		ents = 0
 		for batch in batches:
-			j, conll_str, tsv_str = data.prepare(*batch, form=form)
-			x = D.read_tsv_from_str(tsv_str)
+			j, conll_str, tsv_str = self.data.prepare(*batch, form=form)
+			# x = D.read_tsv_from_str(tsv_str)
 			# for k, v in x.items():
 			# 	ents += len(v)
 			# 	cands += sum([len(x["candidates"]) for x in v])
@@ -122,10 +125,12 @@ class EL():
 			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
 		# print(ents, cands, cands / ents)
 
-	def __call__(self, sentences):
-		if type(sentences) is str:
-			sentences = [sentences]
+	def __call__(self, *sentences):
 		result = []
 		for batch in self.predict(sentences, "PLAIN_SENTENCE"):
 			result += batch
 		return result
+
+	def reload_ranker(self):
+		self.args.mode = "train"
+		self.ranker = EDRanker()

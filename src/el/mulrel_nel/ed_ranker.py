@@ -29,7 +29,7 @@ class EDRanker:
     """
 
     def __init__(self, config):
-        print('--- create model ---')
+        # print('--- create model ---')
 
         config['entity_embeddings'] = config['entity_embeddings'] / \
                                       np.maximum(np.linalg.norm(config['entity_embeddings'],
@@ -40,16 +40,16 @@ class EDRanker:
                                                               axis=1, keepdims=True), 1e-12)
         config['word_embeddings'][config['word_voca'].unk_id] = 1e-10
 
-        print('prerank model')
+        # print('prerank model')
         self.prerank_model = ntee.NTEE(config)
         self.args = config['args']
 
-        print('main model')
+        # print('main model')
         if self.args.mode in ['eval', 'test']:
-            print('try loading model from', self.args.model_path)
+            # print('try loading model from', self.args.model_path)
             self.model = load_model(self.args.model_path, ModelClass)
         else:
-            print('create new model')
+            # print('create new model')
             if config['mulrel_type'] == 'rel-norm':
                 config['use_stargmax'] = False
             if config['mulrel_type'] == 'ment-norm':

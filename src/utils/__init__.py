@@ -1,6 +1,7 @@
 import json
 import functools
 import logging
+import pickle
 
 # not used anymore - use tqdm instead
 def progress(curprog, total, size=10):
@@ -32,6 +33,11 @@ def writefile(iterable, fname, processor=lambda x: x):
 	with open(fname, "w", encoding="UTF8") as f:
 		for item in iterable:
 			f.write(processor(item)+"\n")
+
+def pickleload(fname):
+	with open(fname, "rb") as f:
+		result = pickle.load(f)
+	return result
 
 
 def split_to_batch(l, batch_size=100):

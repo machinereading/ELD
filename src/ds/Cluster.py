@@ -4,6 +4,7 @@ class Cluster():
 	def __init__(self, target_entity):
 		self.cluster = set([])
 		self.target_entity = target_entity
+		self.is_in_kb = True
 		self.id = -1
 		self.max_jamo = 0
 		self.kb_uploadable = False
@@ -72,7 +73,7 @@ class Cluster():
 			self.has_tensor = True
 			# add padding? no need to do in this level - padding must be performed in global level
 
-		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(self), float(1) if not self.target_entity else float(0)
+		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(self), float(1) if not self.is_in_kb else float(0)
 
 	def update_tensor(self, jamo, wlctx, wrctx, elctx, erctx):
 		self._jamo = jamo

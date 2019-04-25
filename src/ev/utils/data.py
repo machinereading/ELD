@@ -26,8 +26,21 @@ class SentenceGenerator(Dataset):
 		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type+1
 
 class ClusterGenerator(Dataset):
-	def __init__(self, corpus):
+	def __init__(self, corpus, for_train=False):
 		self.corpus = corpus
+		
+		if for_train:
+			# add more labels if label is biased
+			l1 = [x for x in corpus.cluster_list if not x.is_in_kb]
+			l0 = [x for x in corpus.cluster_list if x.is_in_kb]
+			l0_l1_ratio = round(len(l0) / len(l1))
+			l1_l0_ratio = round(len(l1) / len(l0))
+			for _ in range(l0_l1_ratio - 1):
+				self.corpus.additional_cluster += l1
+			for _ in range(l1_l0_ratio - 1):
+				self.corpus.additional_cluster += l0
+			print(len([x for x in corpus.cluster_list if not x.is_in_kb]))
+			print(len([x for x in corpus.cluster_list if x.is_in_kb]))
 
 	def __len__(self):
 		return len(self.corpus.cluster_list)
@@ -48,9 +61,9 @@ class ClusterContextSetGenerator(Dataset):
 
 
 
-class DataGenerator():
+class DataModule():
 	def __init__(self, mode, args):
-		logging.info("Initializing DataGenerator")
+		logging.info("Initializing EV DataModule")
 		# 0 for oov, 1 for out of range
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
@@ -216,7 +229,7 @@ class DataGenerator():
 		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
 			if cluster.target_entity not in self.kb:
 				# print(cluster.target_entity)
-				cluster.target_entity = None
+				cluster.is_in_kb = False
 			for vocab in cluster:
 				if vocab.tagged: continue
 				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
@@ -272,8 +285,9 @@ class DataGenerator():
 		logging.info("Done")
 
 
-	def convert_cluster_to_tensor(self, j):
+	def convert_cluster_to_tensor(self, corpus):
 		# for validation
-		corpus = Corpus.load_corpus(j, filter_nik=True)
+		if type(corpus) is not Corpus:
+			corpus = Corpus.load_corpus(corpus, filter_nik=True)
 		self.generate_cluster_vocab_tensors(corpus)
 		return corpus

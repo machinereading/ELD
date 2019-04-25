@@ -5,7 +5,7 @@ import numpy as np
 # 데이터로부터 (mention, entity(link), type)의 리스트 생성
 def make_entity_list():
     entity_list = []
-    with open('../data/entityTypeTaggedText_fixed.txt', 'rb') as f:
+    with open('corpus/wiki_silver/entityTypeTaggedText_fixed.txt', 'rb') as f:
         i = 1
         for d in f:
             print(i)
@@ -26,7 +26,7 @@ def make_entity_list():
                 entity_list.append((mention, entity, ent_type))
             i += 1
 
-    with open('../data/wiki/wiki_entity.pickle', 'wb') as f:
+    with open('data/wiki/wiki_entity.pickle', 'wb') as f:
         pickle.dump(entity_list, f, pickle.HIGHEST_PROTOCOL)
 
     return entity_list
@@ -46,7 +46,7 @@ def make_entity_dict(entity_list):
             entity_dict[m] = {}
             entity_dict[m][e] = 1
 
-    with open('../data/wiki/wiki_entity_dict.pickle', 'wb') as f:
+    with open('data/wiki/wiki_entity_dict.pickle', 'wb') as f:
         pickle.dump(entity_dict, f, pickle.HIGHEST_PROTOCOL)
 
     return entity_dict
@@ -63,7 +63,7 @@ def make_calc_dict(entity_dict):
             calc_dict[m][key] = (values[i], idx)
             idx += 1
 
-    with open('../data/wiki/wiki_entity_calc.pickle', 'wb') as f:
+    with open('data/wiki/wiki_entity_calc.pickle', 'wb') as f:
         pickle.dump(calc_dict, f, pickle.HIGHEST_PROTOCOL)
 
     return calc_dict        
@@ -81,17 +81,18 @@ def basic_prob(x):
 
 def main():
     try:
-        entity_list = pickle.load(open('../data/wiki/wiki_entity.pickle', 'rb'))
+        entity_list = pickle.load(open('data/wiki/wiki_entity.pickle', 'rb'))
     except FileNotFoundError:
         entity_list = make_entity_list()
 
     try:
-        entity_dict = pickle.load(open('../data/wiki/wiki_entity_dict.pickle', 'rb'))
+        entity_dict = pickle.load(open('data/wiki/wiki_entity_dict.pickle', 'rb'))
+        print(entity_dict["지미 카터"])
     except FileNotFoundError:
         entity_dict = make_entity_dict(entity_list)
 
     try:
-        calc_dict = pickle.load(open('../data/wiki/wiki_entity_calc.pickle', 'rb'))
+        calc_dict = pickle.load(open('data/wiki/wiki_entity_calc.pickle', 'rb'))
     except FileNotFoundError:
         calc_dict = make_calc_dict(entity_dict)
 

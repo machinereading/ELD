@@ -1,6 +1,6 @@
 
 import argparse
-class EL_Args():
+class ELArgs():
 	def __init__(self):
 		self.mode = "train"
 		self.model_path = ""
@@ -25,9 +25,18 @@ class EL_Args():
 		self.n_loops = 10
 		self.train_filter_rate = 0.9
 
+		# data
+		self.ent_list_path = "data/el/kb_entities"
+		self.word_voca_path = 'data/el/embeddings/dict.word'
+		self.word_embedding_path = 'data/el/embeddings/word_embeddings.npy'
+		self.snd_word_voca_path = 'data/el/embeddings/glove/dict_no_pos.word'
+		self.snd_word_embedding_path = 'data/el/embeddings/glove/word_embeddings.npy'
+		self.entity_voca_path = 'data/el/embeddings/dict.entity'
+		self.entity_embedding_path = 'data/el/embeddings/entity_embeddings.npy'
+
 
 def get_args():
-	return EL_Args()
+	return ELArgs()
 def get_args_old():
 	parser = argparse.ArgumentParser()
 

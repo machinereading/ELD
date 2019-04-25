@@ -1,20 +1,22 @@
-import json
-import os
-import pickle
 from konlpy.tag import Okt
-import socket
-from functools import reduce
-from ...utils import TimeUtil, progress, printfunc
+import numpy as np
+
+from ...utils import TimeUtil, progress, printfunc, pickleload
+from ...ds import *
 from . import candidate_dict
+
+
 import re
 import random
 import string
-
+import json
+import os
+import pickle
+from functools import reduce
+import socket
 RE_EMOJI = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
-lock = False
-error_file = open("error.txt", "w", encoding="UTF8")
 with open("data/el/wiki_entity_calc.pickle", "rb") as f:
 	ent_dict = pickle.load(f)
 with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
@@ -22,6 +24,10 @@ with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
 ent_form = ent_form.keys()
 with open("data/el/redirects.pickle", "rb") as f:
 	redirects = pickle.load(f)
+
+
+
+
 
 @TimeUtil.measure_time
 def candidates(word):
@@ -212,7 +218,6 @@ def get_context_words(text, pos, direction, maximum_context=30):
 	return result
 
 def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
-	global error_file
 	if form not in ["PLAIN_SENTENCE", "ETRI", "CROWDSOURCING"]: raise Exception("Form not match")
 	# print(sentence)
 	if form == "PLAIN_SENTENCE":
@@ -281,8 +286,6 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 			bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
 			ne, en, sp, ep, cand = link
 			last_link = link
-			if m not in ne:
-				error_file.write("%s, %s, %s" % (sentence, m, ne)+"\n")
 			assert m in ne, "%s, %s, %s" % (sentence, m, ne)
 			conlls.append([m, bi, ne, en, "%s%s" % (dbpedia_prefix, en), "000", "000"])
 			if bi == "B":
@@ -323,12 +326,6 @@ def generate_input(sentence, predict=False, form="PLAIN_SENTENCE"):
 def prepare_sentence(sentence, form, predict):
 	try:
 		return generate_input(sentence, predict, form)
-	# ne_marked = sentence if ne_marked else mark_ne(sentence)
-	# j = make_json(ne_marked, predict)
-	# try:
-	# 	conll = change_to_conll(j)
-	# 	tsv = change_to_tsv(j)
-	# 	return j, conll, tsv
 	except:
 		import traceback
 		traceback.print_exc()
@@ -340,33 +337,6 @@ def prepare(*sentences, form, predict=False, filter_rate=0.0):
 	conlls = []
 	tsvs = []
 	cw_form = []
-	# prog = 0
-	# def job(sents, ne_marked, predict, lock, conlls, tsvs, cw_form):
-	# 	# print(len(sents))
-	# 	for sentence in sents:
-	# 		try:
-	# 			j, c, t = prepare_sentence(sentence, ne_marked, predict)
-	# 			# conll = change_to_conll(sentence)
-	# 			# tsv = change_to_tsv(sentence)
-	# 			with lock:
-	# 				# print(sentence)
-	# 				cw_form.append(j)
-	# 				conlls += c
-	# 				conlls += [""]
-	# 				tsvs += t
-	# 				print(len(cw_form))
-	# 		except Exception as e:
-	# 			import traceback
-	# 			traceback.print_exc()
-	# l = len(sentences)//worker
-	# partition = [sentences[(k*l):((k+1)*l)] for k in range(worker)]
-	# threads = []
-	# for p in partition:
-	# 	threads.append(threading.Thread(target=job, args=[p, ne_marked, predict, lock, conlls, tsvs, cw_form]))
-	# for t in threads:
-	# 	t.start()
-	# for t in threads:
-	# 	t.join()
 	for sentence in sentences:
 		s = random.random()
 		

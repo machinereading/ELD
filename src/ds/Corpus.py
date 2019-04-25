@@ -9,6 +9,8 @@ class Corpus():
 		self.corpus = [] # list of sentence
 		self.tagged_voca_lens = []
 		self.cluster = {} # dict of str(entity form): Cluster
+		self.additional_cluster = []
+		self.id2c = {}
 
 	def add_sentence(self, sentence):
 		self.corpus.append(sentence)
@@ -23,7 +25,7 @@ class Corpus():
 
 	@property
 	def cluster_list(self):
-		return [x for x in self.cluster.values()]
+		return [x for x in self.cluster.values()] + self.additional_cluster
 
 	@property
 	def max_jamo(self):
@@ -66,6 +68,7 @@ class Corpus():
 					c.id = len(corpus.cluster)
 					corpus.cluster[nt.entity] = c
 				corpus.cluster[nt.entity].add_elem(nt)
+		corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
 

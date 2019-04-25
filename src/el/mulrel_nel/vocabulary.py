@@ -74,3 +74,9 @@ class Vocabulary:
     def get_id(self, token):
         tok = Vocabulary.normalize(token)
         return self.word2id.get(tok, self.unk_id)
+
+    def __iadd__(self, tokens):
+        for token in tokens:
+            self.id2word.append(token)
+            self.word2id[token] = len(self.id2word) - 1
+            self.counts.append(1)

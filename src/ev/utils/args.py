@@ -25,7 +25,7 @@ class EVArgs(AbstractArgument):
 		self.filter_data_tokens = True
 
 		# training batch size
-		self.batch_size = 16
+		self.batch_size = 32
 
 		self.force_pretrain = True
 		self.pretrain_epoch = 20
@@ -50,10 +50,10 @@ class EVArgs(AbstractArgument):
 		self.transform_dim = 200
 
 		# Train config
-		self.epoch = 10
+		self.epoch = 20
 		self.lr = 1e-4
 		self.momentum = 0.9
-		self.eval_per_epoch = 1
+		self.eval_per_epoch = 2
 
 		self.chunk_size = 100
 

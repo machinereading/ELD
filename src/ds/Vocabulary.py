@@ -3,6 +3,7 @@ class Vocabulary():
 		self.surface = surface
 		self.surface_ind = -1
 		self.is_entity = False
+		self.ne_type = None
 		self.entity = None
 		self.entity_ind = -1
 		self.entity_in_kb = False
