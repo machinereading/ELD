@@ -1,5 +1,6 @@
 from .. import GlobalValues as gl
 from ..ds import Corpus
+from ..utils import jsondump
 from .models.IntraClusterModel import ThreeScorerModel, JointScorerModel
 from .models.ValidationModel import ValidationModel
 from .utils.args import EVArgs
@@ -19,11 +20,18 @@ class EV():
 		# initialize arguments
 		self.mode = mode
 		self.logger = logging.getLogger("DefaultLogger")
-		self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
-		if torch.cuda.is_available():
-			self.args.device = torch.device("cuda")
+		if mode == "train":
+			self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		else:
-			self.args.device = torch.device("cpu")
+			try:
+				self.args = EVArgs.from_json("data/ev/%s_args.json" % model_name)
+			except:
+				print("No argument file exists!")
+		# self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
+		if torch.cuda.is_available():
+			self.args.device = "cuda"
+		else:
+			self.args.device = "cpu"
 		self.args.model_name = model_name
 		self.batch_size = self.args.batch_size
 
@@ -32,20 +40,25 @@ class EV():
 		self.dataset = DataModule(mode, self.args)
 		if self.mode == "train":
 			print("Cluster size:", len(self.dataset.corpus.cluster_list))
-			print("Cluster out of KB:", len([x for x in self.dataset.corpus.cluster_list if not x.target_entity]))
+			print("Cluster out of KB:", len([x for x in self.dataset.corpus.cluster_list if not x.is_in_kb]))
 			self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
+			jsondump(self.args.to_json(), "data/ev/%s_args.json" % model_name)
 		# load / initialize model
 		
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
+		
 		try:
+			print("Loading model from %s" % self.args.validation_model_path)
 			self.validation_model.load_state_dict(torch.load(self.args.validation_model_path))
 			print("Validation model loaded")
 		except:
 			if self.mode == "train":
 				print("Creating new validation model")
 			else:
+				import traceback
+				traceback.print_exc()
 				raise Exception("Model %s not exists!" % model_name)
 		print("Total number of parameters: ", sum(p.numel() for p in self.validation_model.parameters() if p.requires_grad))
 
@@ -109,7 +122,7 @@ class EV():
 				if f1 > best_dev_f1:
 					best_dev_f1 = f1
 					best_epoch = epoch
-					torch.save(self.validation_model.state_dict, self.args.validation_model_path)
+					torch.save(self.validation_model.state_dict(), self.args.validation_model_path)
 				print("Best F1: %.2f @ epoch %d" % (best_dev_f1 * 100, best_epoch))
 	def pretrain(self):
 		self.logger.info("Start EV Pretraining")

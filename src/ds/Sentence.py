@@ -89,7 +89,10 @@ class Sentence():
 
 		text = cw_form["text"]
 		entities = cw_form["entities"]
+
 		sentence = cls(text)
+		if "fileName" in cw_form:
+			sentence.id = cw_form["fileName"]
 		error_count = 0
 		# if len(entities) > 1000:
 		# 	print(cw_form["fileName"])

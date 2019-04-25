@@ -24,6 +24,8 @@ class EVArgs(AbstractArgument):
 		self.ctx_window_size = 5 # context window size of token
 		self.filter_data_tokens = True
 
+		self.max_jamo = 69 #
+
 		# training batch size
 		self.batch_size = 32
 
