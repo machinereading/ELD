@@ -26,7 +26,8 @@ class SentenceGenerator(Dataset):
 		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type+1
 
 class ClusterGenerator(Dataset):
-	def __init__(self, corpus, for_train=False):
+	def __init__(self, corpus, for_train=False, filter_nik=False):
+		assert not (for_train and filter_nik)
 		self.corpus = corpus
 		
 		if for_train:
@@ -41,7 +42,8 @@ class ClusterGenerator(Dataset):
 				self.corpus.additional_cluster += l0
 			print(len([x for x in corpus.cluster_list if not x.is_in_kb]))
 			print(len([x for x in corpus.cluster_list if x.is_in_kb]))
-
+		if filter_nik:
+			self.corpus.cluster = {k: v for k, v in corpus.cluster.items() if not v.is_in_kb}
 	def __len__(self):
 		return len(self.corpus.cluster_list)
 
@@ -65,6 +67,7 @@ class DataModule():
 	def __init__(self, mode, args):
 		logging.info("Initializing EV DataModule")
 		# 0 for oov, 1 for out of range
+		print(mode)
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
 
@@ -79,10 +82,10 @@ class DataModule():
 
 		self.kb = [x for x in readfile(args.kb)]
 		# check if we can load data from pre-defined cluster
+		self.batch_size = args.batch_size
+		self.ctx_window_size = args.ctx_window_size
+		self.filter_data_tokens = args.filter_data_tokens
 		if mode == "train":
-			self.batch_size = args.batch_size
-			self.ctx_window_size = args.ctx_window_size
-			self.filter_data_tokens = args.filter_data_tokens
 			if args.data_load_path is not None:
 				self.data_load_path = args.data_load_path
 				corpus_path = args.data_load_path
@@ -264,8 +267,10 @@ class DataModule():
 			if cluster.max_jamo > max_jamo:
 				cut = []
 				for i, item in enumerate(jamo):
-					if len(jamo) > max_jamo_restriction:
+					# print(len(item))
+					if len(item) > max_jamo:
 						cut.append(i)
+				# print(cut)
 				jamo = [x for i, x in enumerate(jamo) if i not in cut]
 				wlctx = [x for i, x in enumerate(wlctx) if i not in cut]
 				wrctx = [x for i, x in enumerate(wrctx) if i not in cut]
@@ -285,9 +290,9 @@ class DataModule():
 		logging.info("Done")
 
 
-	def convert_cluster_to_tensor(self, corpus):
+	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):
 		# for validation
 		if type(corpus) is not Corpus:
-			corpus = Corpus.load_corpus(corpus, filter_nik=True)
-		self.generate_cluster_vocab_tensors(corpus)
+			corpus = Corpus.load_corpus(corpus)
+		self.generate_cluster_vocab_tensors(corpus, max_jamo_restriction=max_jamo_restriction)
 		return corpus

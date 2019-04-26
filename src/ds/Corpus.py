@@ -49,7 +49,7 @@ class Corpus():
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path, filter_nik=False):
+	def load_corpus(cls, path):
 		# load from crowdsourcing form
 		if type(path) is str:
 			path = jsonload(path)
@@ -61,13 +61,17 @@ class Corpus():
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
 			corpus.add_sentence(sentence)
-			target = sentence.entities if not filter_nik else sentence.not_in_kb_entities
-			for nt in target:
-				if nt.entity not in corpus.cluster:
-					c = Cluster(nt.entity)
+			
+			for nt in sentence.entities:
+				if nt.entity not in ["NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "NOT_AN_ENTITY"]: # for gold set test
+					entity = nt.entity
+				else:
+					entity = nt.surface
+				if entity not in corpus.cluster:
+					c = Cluster(entity)
 					c.id = len(corpus.cluster)
-					corpus.cluster[nt.entity] = c
-				corpus.cluster[nt.entity].add_elem(nt)
+					corpus.cluster[entity] = c
+				corpus.cluster[entity].add_elem(nt)
 		corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
@@ -80,7 +84,7 @@ class Corpus():
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
-		for sentence in tqdm(json[:1000], desc="Loading EV corpus"): # limit data for runnablity 
+		for sentence in tqdm(json, desc="Loading EV corpus"): # limit data for runnablity 
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.corpus.append(sentence)

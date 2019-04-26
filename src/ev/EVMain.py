@@ -26,6 +26,8 @@ class EV():
 			try:
 				self.args = EVArgs.from_json("data/ev/%s_args.json" % model_name)
 			except:
+				import traceback
+				traceback.print_exc()
 				print("No argument file exists!")
 		# self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		if torch.cuda.is_available():
@@ -135,17 +137,22 @@ class EV():
 	def validate(self, corpus):
 		# entity set to tensor
 		assert type(corpus) is dict or type(corpus) is Corpus
-		corpus = self.dataset.convert_cluster_to_tensor(corpus)
-		loader = DataLoader(ClusterGenerator(corpus), batch_size=self.batch_size, shuffle=False)
+		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=self.args.max_jamo)
+		loader = DataLoader(ClusterGenerator(corpus, filter_nik=True), batch_size=self.batch_size, shuffle=False)
 
 		# validate tensor
-		pred = []
-		for jamo, wl, wr, el, er, _ in train_dataloader:
+		preds = []
+		for jamo, wl, wr, el, er, size, _ in loader:
 			jamo, wl, wr, el, er = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device)
-			pred += [1 if x > 0.5 else 0 for x in self.validation_model(jamo, wl, wr, el, er)]
-			labels += label
+			pred = self.validation_model(jamo, wl, wr, el, er, size)
+			pi = 0
+			scores = []
+			for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
+				scores.append(torch.mean(pred[pi:pi+s]))
+				pi += s
+			preds += [1 if x > 0.5 else 0 for x in scores]
 		# mark
-		for cluster, prediction in zip(cluster.entity_list, pred):
+		for cluster, prediction in zip(corpus.cluster_list, preds):
 			cluster.kb_uploadable = prediction > 0.5
 		return corpus
 		

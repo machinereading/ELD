@@ -41,8 +41,10 @@ class Cluster():
 		return {
 			"id": self.id,
 			"target_entity": self.target_entity,
-			"cluster": [x.to_json() for x in self.cluster]
+			"cluster": [x.to_json() for x in self.cluster],
+			"kb_uploadable": self.kb_uploadable
 		}
+	
 
 	@classmethod
 	def from_json(cls, json):

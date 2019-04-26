@@ -6,7 +6,7 @@ class AbstractArgument(ABC):
 		args = cls()
 		if type(json_file) is str:
 			json_file = jsonload(json_file)
-		for attr, value in json_file:
+		for attr, value in json_file.items():
 			setattr(args, attr, value)
 		return args
 
