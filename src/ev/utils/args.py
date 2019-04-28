@@ -27,7 +27,7 @@ class EVArgs(AbstractArgument):
 		self.max_jamo = 69 #
 
 		# training batch size
-		self.batch_size = 32
+		self.batch_size = 64
 
 		self.force_pretrain = True
 		self.pretrain_epoch = 20

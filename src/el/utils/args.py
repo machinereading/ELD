@@ -27,6 +27,8 @@ class ELArgs():
 
 		# data
 		self.ent_list_path = "data/el/kb_entities"
+		self.entity_calc_path = "data/el/wiki_entity_calc.pickle"
+		self.redirects_path = "data/el/redirects.pickle"
 		self.word_voca_path = 'data/el/embeddings/dict.word'
 		self.word_embedding_path = 'data/el/embeddings/word_embeddings.npy'
 		self.snd_word_voca_path = 'data/el/embeddings/glove/dict_no_pos.word'

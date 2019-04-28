@@ -8,9 +8,9 @@ def eval(module, corpus_dir):
 			j = json.load(f)
 			j["fileName"] = item.split(".")[0]
 			eval_target.append(j)
-
+	print(len(eval_target))
 	prediction = []
-	for item in module.predict(eval_target, form="CROWDSOURCING", delete_candidate=False):
+	for item in module.predict(eval_target, delete_candidate=False):
 		prediction += item
 	print(len(prediction), len(eval_target))
 	jsondump(prediction, "debug/debug_prediction.json")

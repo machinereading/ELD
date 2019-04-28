@@ -98,8 +98,8 @@ class EV():
 				loss = self.validation_model.loss(pred, torch.FloatTensor(labels).to(self.args.device))
 				loss.backward()
 				optimizer.step()
-				tp += [1 if x > 0.5 else 0 for x in pred]
-				tl += [x.data for x in labels]
+				# tp += [1 if x > 0.5 else 0 for x in pred]
+				# tl += [x.data for x in labels]
 			# print(tp[:10], tl[:10])
 			# print("Train F1: %.2f" % metrics.f1_score(tl, tp, labels=[0,1], average="micro"))
 			if epoch % self.args.eval_per_epoch == 0:

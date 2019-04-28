@@ -1,17 +1,13 @@
-from .utils import data as data
-from .utils.data_new import DataModule
+from .utils.data import DataModule
 from .utils.args import ELArgs
 from .utils.postprocess import merge_item
 from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
-from .mulrel_nel import utils as U
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
 from ..utils import *
 from ..ds import Sentence
 
-gl.entity_voca, gl.entity_embeddings = U.load_voca_embs('data/el/embeddings/dict.entity', 'data/el/embeddings/entity_embeddings.npy')
-gl.word_voca, gl.word_embeddings = U.load_voca_embs('data/el/embeddings/dict.word', 'data/el/embeddings/word_embeddings.npy')
 class EL():
 	def __init__(self, mode, model_name):
 		with TimeUtil.TimeChecker("EL_init"):
@@ -22,32 +18,26 @@ class EL():
 			self.args.model_path = "data/el/%s" % model_name
 			self.model_name = model_name
 			self.debug = False
-			arg = self.args
-			voca_emb_dir = 'data/el/embeddings/'
-
-			
-			snd_word_voca, snd_word_embeddings = U.load_voca_embs(voca_emb_dir + '/glove/dict_no_pos.word',
-															  voca_emb_dir + '/glove/word_embeddings.npy')
 			
 			config={
-				'hid_dims': arg.hid_dims,
-				'emb_dims': gl.entity_embeddings.shape[1],
+				'hid_dims': self.args.hid_dims,
+				'emb_dims': self.data.entity_embedding.shape[1],
 				'freeze_embs': True,
-				'tok_top_n': arg.tok_top_n,
-				'margin': arg.margin,
-				'word_voca': gl.word_voca,
-				'entity_voca': gl.entity_voca,
-				'word_embeddings': gl.word_embeddings,
-				'entity_embeddings': gl.entity_embeddings,
-				'snd_word_voca': snd_word_voca,
-				'snd_word_embeddings': snd_word_embeddings,
-				'dr': arg.dropout_rate,
-				'args': arg
+				'tok_top_n': self.args.tok_top_n,
+				'margin': self.args.margin,
+				'word_voca': self.data.word_voca,
+				'entity_voca': self.data.entity_voca,
+				'word_embeddings': self.data.word_embedding,
+				'entity_embeddings': self.data.entity_embedding,
+				'snd_word_voca': self.data.snd_word_voca,
+				'snd_word_embeddings': self.data.snd_word_embedding,
+				'dr': self.args.dropout_rate,
+				'args': self.args
 			}
-			config['df'] = arg.df
-			config['n_loops'] = arg.n_loops
-			config['n_rels'] = arg.n_rels
-			config['mulrel_type'] = arg.mulrel_type
+			config['df'] = self.args.df
+			config['n_loops'] = self.args.n_loops
+			config['n_rels'] = self.args.n_rels
+			config['mulrel_type'] = self.args.mulrel_type
 		
 			self.ranker = EDRanker(config=config)
 		
@@ -87,30 +77,16 @@ class EL():
 		type_list = [type(x) for x in sentences]
 		assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all([x is Sentence for x in type_list])
 		batches = split_to_batch(sentences, 100)
-		it = 0
-		cands = {}
-		ents = 0
 		for batch in batches:
-			j, conll_str, tsv_str = self.data.prepare(*batch, form=form)
-			# x = D.read_tsv_from_str(tsv_str)
-			# for k, v in x.items():
-			# 	ents += len(v)
-			# 	cands += sum([len(x["candidates"]) for x in v])
+			j, conll_str, tsv_str = self.data.prepare(*batch)
+			# print(len(batch), len(j))
 			if self.debug:
 				jsondump(j, "debug/prepare.json")
 				writefile(conll_str, "debug/debug.conll")
 				writefile(tsv_str, "debug/debug.tsv")
-				# with open("debug/debug.json", "w", encoding="UTF8") as f:
-				# 	json.dump(j, f, ensure_ascii=False, indent="\t")
-				# with open("debug/debug.conll", "w", encoding="UTF8") as f:
-				# 	for item in conll_str:
-				# 		f.write(item+"\n")
-				# with open("debug/debug.tsv", "w", encoding="UTF8") as f:
-				# 	for item in tsv_str:
-				# 		f.write(item+"\n")
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
 			data_items = self.ranker.get_data_items(dataset, predict=True)
-
+			# print(len(data_items))
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data_items)
 			if self.debug:
@@ -118,12 +94,7 @@ class EL():
 				jsondump(dataset, "debug/dataset.json")
 				jsondump(data_items, "debug/data.json")
 			e = D.make_result_dict(dataset, predictions)
-			# if self.debug:
-			# 	jsondump(e, "debug/debug_prediction.json")
 			yield merge_item(j, e, delete_candidate)
-			it += 1
-			# printfunc("EL Progress: %d/%d" % (it, len(batches)))
-		# print(ents, cands, cands / ents)
 
 	def __call__(self, *sentences):
 		result = []
