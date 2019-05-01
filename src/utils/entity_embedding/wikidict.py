@@ -68,6 +68,20 @@ def make_calc_dict(entity_dict):
 
     return calc_dict        
 
+def make_count_dict(entity_dict):
+    calc_dict = {}
+    idx = 1
+    for m, e in entity_dict.items():
+        print(idx)
+        values = list(e.values())
+        calc_dict[m] = {}
+        for i, (key, value) in enumerate(e.items()):
+            calc_dict[m][key] = values[i]
+            idx += 1
+
+    with open('data/wiki/wiki_entity_count.pickle', 'wb') as f:
+        pickle.dump(calc_dict, f, pickle.HIGHEST_PROTOCOL)
+
 
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
@@ -87,7 +101,7 @@ def main():
 
     try:
         entity_dict = pickle.load(open('data/wiki/wiki_entity_dict.pickle', 'rb'))
-        print(entity_dict["지미 카터"])
+        # print(entity_dict["지미 카터"])
     except FileNotFoundError:
         entity_dict = make_entity_dict(entity_list)
 
@@ -95,7 +109,7 @@ def main():
         calc_dict = pickle.load(open('data/wiki/wiki_entity_calc.pickle', 'rb'))
     except FileNotFoundError:
         calc_dict = make_calc_dict(entity_dict)
-
+    count_dict = make_count_dict(entity_dict)
     keyword = 'E_(상수)'
     print(sorted(calc_dict[keyword].items(), key=lambda x: x[1][0], reverse=True))
 

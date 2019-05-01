@@ -2,7 +2,7 @@ import json
 import functools
 import logging
 import pickle
-
+from .AbstractArgument import AbstractArgument
 # not used anymore - use tqdm instead
 def progress(curprog, total, size=10):
 	if curprog < 0 or total < 0 or size < 0:

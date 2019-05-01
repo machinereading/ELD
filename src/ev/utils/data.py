@@ -3,6 +3,7 @@ from ...ds.Corpus import Corpus
 from ...ds.Cluster import Cluster
 from ...ds.Vocabulary import Vocabulary
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, KoreanUtil
+from ... import GlobalValues as gl
 
 import numpy as np
 import torch
@@ -11,7 +12,6 @@ from tqdm import tqdm
 
 import random
 import os
-import logging
 import traceback
 
 class SentenceGenerator(Dataset):
@@ -65,9 +65,8 @@ class ClusterContextSetGenerator(Dataset):
 
 class DataModule():
 	def __init__(self, mode, args):
-		logging.info("Initializing EV DataModule")
+		gl.logger.info("Initializing EV DataModule")
 		# 0 for oov, 1 for out of range
-		print(mode)
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
 
@@ -85,6 +84,7 @@ class DataModule():
 		self.batch_size = args.batch_size
 		self.ctx_window_size = args.ctx_window_size
 		self.filter_data_tokens = args.filter_data_tokens
+		self.target_device = args.device
 		if mode == "train":
 			if args.data_load_path is not None:
 				self.data_load_path = args.data_load_path
@@ -186,7 +186,7 @@ class DataModule():
 	def generate_vocab_tensors(self):
 		# Deprecated: BERT need original tokenizer
 		# corpus postprocessing
-		logging.info("Generating Vocab tensors...")
+		gl.logger.info("Generating Vocab tensors...")
 		filter_size = 10
 		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus.corpus)):
 			# print(len(sentence))
@@ -228,7 +228,7 @@ class DataModule():
 
 	@TimeUtil.measure_time
 	def generate_cluster_vocab_tensors(self, corpus, max_voca_restriction=None, max_jamo_restriction=None):
-		logging.info("Generating Vocab tensors...")
+		gl.logger.info("Generating Vocab tensors...")
 		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
 			if cluster.target_entity not in self.kb:
 				# print(cluster.target_entity)
@@ -247,18 +247,18 @@ class DataModule():
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
 				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
 				vocab.tagged = True
-		logging.info("Done")
+		gl.logger.info("Done")
 
 		# add padding
-		logging.info("Add padding...")
+		gl.logger.info("Add padding...")
 		max_voca = max([len(x) for x in corpus.cluster.values()])
 		if max_voca_restriction is not None and max_voca_restriction > 0:
-			max_voca = min(max_voca, max_voca_restriction)
+			max_voca = max_voca_restriction
 		max_voca += self.chunk_size - max_voca % self.chunk_size if max_voca % self.chunk_size > 0 else 0
 		
 		max_jamo = max([x.max_jamo for x in corpus.cluster.values()])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
-			max_jamo = min(max_jamo, max_jamo_restriction)
+			max_jamo = max_jamo_restriction
 
 		print("Max vocabulary in cluster(with padding):", max_voca)
 		print("Max jamo in word:", max_jamo)
@@ -286,8 +286,8 @@ class DataModule():
 			wrctx += [[0] * self.ctx_window_size] * pad
 			elctx += [[0] * self.ctx_window_size] * pad
 			erctx += [[0] * self.ctx_window_size] * pad
-			cluster.update_tensor(torch.tensor(jamo), torch.tensor(wlctx), torch.tensor(wrctx), torch.tensor(elctx), torch.tensor(erctx))
-		logging.info("Done")
+			cluster.update_tensor(*[torch.tensor(x).to(self.target_device) for x in [jamo, wlctx, wrctx, elctx, erctx]])
+		gl.logger.info("Done")
 
 
 	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):

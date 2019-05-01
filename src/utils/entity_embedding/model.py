@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 import numpy as np
 import pickle
-from utils import DataLoad
+from .utils import DataLoad
 import time
 
 device = torch.device('cuda')
@@ -43,7 +43,7 @@ def train():
     loss = checkpoint['loss']
     model.train()
 
-    total_batch = (entity_dim // batch_size) + 1
+    total_batch = (entity_dim // batch_size) + 1 
     for epoch in range(5):
         for i in range(total_batch):
             time1 = time.time()

@@ -2,23 +2,35 @@
 # stores only global values
 # set attributes by calling setattr in main module
 from .utils import readfile
+
 import logging
 import re
 from datetime import datetime
+import signal, sys
+
+def ki_handler(signal, frame):
+	import TimeUtil
+	TimeUtil.time_analysis()
+	sys.exit(0)
+
+signal.signal(signal.SIGINT, ki_handler)
 
 # logging config
+formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
+logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger("DefaultLogger")
 logger.setLevel(logging.INFO)
-# f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
-c = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%I:%M:%S')
-# f.setLevel(logging.DEBUG)
-# f.setFormatter(formatter)
+f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
+# c = logging.StreamHandler()
 
-c.setLevel(logging.INFO)
-c.setFormatter(formatter)
-logger.addHandler(c)
-# logger.addHandler(f)
+# f.setLevel(logging.DEBUG)
+f.setFormatter(formatter)
+
+# c.setLevel(logging.INFO)
+# c.setFormatter(formatter)
+# c.propagate = False
+# logger.addHandler(c)
+logger.addHandler(f)
 logger.info("[START]")
 
 

@@ -1,7 +1,11 @@
+from ...utils import TimeUtil
+
+from tqdm import tqdm
+
 import re
 import time
 import pickle
-from ...utils import TimeUtil
+
 
 def load_person_names(path):
     data = []
@@ -46,7 +50,7 @@ def read_csv_file(path):
 
 def read_tsv_from_str(texts):
     data = {}
-    for line in texts:
+    for line in tqdm(texts, desc="Generating tsv format"):
         if len(line.strip()) == 0: continue
         comps = line.strip().split('\t')
         doc_name = comps[0] + ' ' + comps[1]
@@ -80,7 +84,7 @@ def read_conll_from_str(data, texts):
     cur_sent = None
     cur_doc = None
 
-    for line in texts:
+    for line in tqdm(texts, desc="Generating conll format"):
         line = line.strip()
         if line.startswith('-DOCSTART-'):
             docname = line.split()[1][1:]
@@ -157,13 +161,10 @@ def read_conll_from_str(data, texts):
     
     return data
 
-# @TimeUtil.measure_time
+@TimeUtil.measure_time
 def generate_dataset_from_str(conll_str, tsv_str):
     dataset = read_tsv_from_str(tsv_str)
     dataset = read_conll_from_str(dataset, conll_str)
-    with open("data_conll.json", "w", encoding="UTF8") as f:
-        import json
-        json.dump(dataset, f, ensure_ascii=False, indent="\t")
     return dataset
 
 def find_coref(ment, mentlist, person_names):

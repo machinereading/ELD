@@ -5,14 +5,19 @@ jong = ['e','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','�
 alpha = [chr(x) for x in range(ord('a'), ord('z')+1)] + [chr(x) for x in range(ord('A'), ord('Z')+1)] + [".", ",", ":"]
 decomposer = {"ㄳ": ["ㄱ","ㅅ"], "ㄵ": ["ㄴ","ㅈ"], "ㄶ": ["ㄴ", "ㅎ"], "ㄺ": ["ㄹ", "ㄱ"], "ㄻ": ["ㄹ", "ㅁ"], "ㄼ": ["ㄹ", "ㅂ"], "ㅀ": ["ㄹ","ㅎ"], "ㅄ": ["ㅂ","ㅅ"]}
 
-eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '다', '의', '에', '에서', '으로', '로', '까지', '와', '과']
+eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '다', '의', '에', '에서', '으로', '로', '까지', '와', '과', '는지', '는데']
 eogan = ['하였', '했', '에서', '들']
 jamo_len = len(cho) + len(jung) + len(jong)
 
 def is_korean_character(char):
 	return 0xAC00 <= ord(char) <= 0xD7A3
+
+def is_alphabet(char):
+	return 'a' <= ord(char) <= 'z' or 'A' <= ord(char) <= 'Z'
+
 def is_digit(char):
 	return '0' <= char <= '9'
+
 def decompose_sent(sentence, decompose=False):
 	if type(sentence) is not str:
 		print(sentence, "is not string")
@@ -81,6 +86,56 @@ def stem_sentence(sentence):
 	# print(" ".join(result))
 	return result
 
+# def tokenize_sentence(sentence):
+# 	def char_mode(char):
+# 		if is_korean_character(char):
+# 			return 0
+# 		if is_alphabet(char):
+# 			return 1
+# 		if is_digit(char):
+# 			return 2
+# 		return 3
+
+# 	def split_josa(word):
+
+# 		for e in eomi:
+# 			if word.endswith(e):
+# 				word = word[:-len(e)]
+# 				eomi_removed = True
+# 				break
+# 		if eomi_removed:
+# 			for e in eogan:
+# 				if word.endswith(e):
+# 					word = word[:-len(e)]
+# 					break
+# 		if len(word) > 0:
+# 			result.append(word)
+# 	result = []
+# 	# split by non-alphabet
+# 	buf = []
+# 	mode_buf = -1
+# 	char_buf = ""
+# 	for word in sentence.split():
+# 		for char in word:
+# 			cmod = char_mode(char)
+# 			if mode_buf != cmod:
+# 				if mode_buf != -1:
+# 					buf.append(char_buf)
+# 				char_buf = ""
+# 				mode_buf = cmod
+# 			char_buf += char
+# 		buf.append(char_buf)
+# 		char_buf = ""
+# 		mode_buf = -1
+
+# 	buf = list(filter(lambda x: len(x) > 0, buf))
+
+# 	# 현재상태: word단위 split, word 내에서 특수문자/숫자/알파벳 종류 따라 split
+# 	# 한국어의 경우 조사 떼는 과정 수행
+# 	for item in buf:
+
+# 	return result
+
 def tokenize(sentence):
 	result = []
 	for token in sentence.split():
@@ -98,7 +153,7 @@ def tokenize(sentence):
 		buf.append(-1)
 		for ind, i in enumerate(buf):
 			if i != last or ind == len(buf)-1:
-				print(word)
+				# print(word)
 				if last == 0:
 
 					# tokenize eomi
@@ -119,7 +174,7 @@ def tokenize(sentence):
 								break
 						else:
 							x = [word] + x
-					print("x", x)
+					# print("x", x)
 					tt += x[:]
 				else:
 					tt.append(word)

@@ -46,6 +46,7 @@ def candidates_old(word):
 
 @TimeUtil.measure_time
 def getETRI(text):
+	print("ETRI")
 	host = '143.248.135.146'
 	port = 33333
 	
@@ -64,8 +65,9 @@ def getETRI(text):
 				break
 			buffer.extend(data)
 		result = json.loads(buffer.decode(encoding='utf-8'))
-
+		print("DONE")
 		return result
+
 	except Exception as e:
 		return None
 

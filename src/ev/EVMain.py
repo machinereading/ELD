@@ -19,16 +19,13 @@ class EV():
 	def __init__(self, mode, model_name, config_file=None):
 		# initialize arguments
 		self.mode = mode
-		self.logger = logging.getLogger("DefaultLogger")
 		if mode == "train":
 			self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		else:
 			try:
 				self.args = EVArgs.from_json("data/ev/%s_args.json" % model_name)
 			except:
-				import traceback
-				traceback.print_exc()
-				print("No argument file exists!")
+				gl.logger.info("No argument file exists!")
 		# self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		if torch.cuda.is_available():
 			self.args.device = "cuda"
@@ -41,8 +38,8 @@ class EV():
 
 		self.dataset = DataModule(mode, self.args)
 		if self.mode == "train":
-			print("Cluster size:", len(self.dataset.corpus.cluster_list))
-			print("Cluster out of KB:", len([x for x in self.dataset.corpus.cluster_list if not x.is_in_kb]))
+			gl.logger.info("Cluster size:", len(self.dataset.corpus.cluster_list))
+			gl.logger.info("Cluster out of KB:", len([x for x in self.dataset.corpus.cluster_list if not x.is_in_kb]))
 			self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
@@ -52,17 +49,17 @@ class EV():
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		
 		try:
-			print("Loading model from %s" % self.args.validation_model_path)
+			gl.logger.info("Loading model from %s" % self.args.validation_model_path)
 			self.validation_model.load_state_dict(torch.load(self.args.validation_model_path))
-			print("Validation model loaded")
+			gl.logger.info("Validation model loaded")
 		except:
 			if self.mode == "train":
-				print("Creating new validation model")
+				gl.logger.info("Creating new validation model")
 			else:
 				import traceback
 				traceback.print_exc()
 				raise Exception("Model %s not exists!" % model_name)
-		print("Total number of parameters: ", sum(p.numel() for p in self.validation_model.parameters() if p.requires_grad))
+		gl.logger.debug("Total number of parameters: %d" % sum(p.numel() for p in self.validation_model.parameters() if p.requires_grad))
 
 		# pretrain
 		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
@@ -100,8 +97,8 @@ class EV():
 				optimizer.step()
 				# tp += [1 if x > 0.5 else 0 for x in pred]
 				# tl += [x.data for x in labels]
-			# print(tp[:10], tl[:10])
-			# print("Train F1: %.2f" % metrics.f1_score(tl, tp, labels=[0,1], average="micro"))
+			# gl.logger.info(tp[:10], tl[:10])
+			# gl.logger.info("Train F1: %.2f" % metrics.f1_score(tl, tp, labels=[0,1], average="micro"))
 			if epoch % self.args.eval_per_epoch == 0:
 				self.validation_model.eval()
 				preds = []
@@ -118,21 +115,22 @@ class EV():
 					labels += list(label.to(device="cpu", dtype=torch.int32).numpy())
 
 				f1 = metrics.f1_score(labels, preds, labels=[0,1], average="micro")
-				print("F1: %.2f" % (f1 * 100))
+				gl.logger.info("F1: %.2f" % (f1 * 100))
 				# import sys
 				# sys.exit(0)
 				if f1 > best_dev_f1:
 					best_dev_f1 = f1
 					best_epoch = epoch
 					torch.save(self.validation_model.state_dict(), self.args.validation_model_path)
-				print("Best F1: %.2f @ epoch %d" % (best_dev_f1 * 100, best_epoch))
+				gl.logger.info("Best F1: %.2f @ epoch %d" % (best_dev_f1 * 100, best_epoch))
+	
 	def pretrain(self):
-		self.logger.info("Start EV Pretraining")
+		gl.logger.info("Start EV Pretraining")
 
 		# self.cluster_model.pretrain(SentenceGenerator(self.sentence_train), SentenceGenerator(self.sentence_dev))
 		# self.cluster_model.pretrain(self.dataset)
 		# self.validation_model.pretrain(self.cluster_generator)
-		self.logger.info("Pretraining Done")
+		gl.logger.info("Pretraining Done")
 
 	def validate(self, corpus):
 		# entity set to tensor
@@ -159,3 +157,12 @@ class EV():
 
 	def __call__(self, corpus):
 		return self.validate(corpus)
+
+	@property
+	def word_embedding(self):
+		return self.validation_model.we
+
+	@property
+	def entity_embedding(self):
+		return self.validation_model.ee
+		

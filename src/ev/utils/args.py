@@ -6,7 +6,7 @@ class EVArgs(AbstractArgument):
 		# Embedding
 		self.word_embedding_path = "data/embedding/wiki_stem"
 		self.word_embedding_type = "glove"
-		self.entity_embedding_path = "data/embedding/ent_1903"
+		self.entity_embedding_path = "data/embedding/entity_kbox_gl"
 		self.entity_embedding_type = "glove"
 		self.char_embedding_dim = 50
 

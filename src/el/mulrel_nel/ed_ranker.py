@@ -10,15 +10,18 @@ from .abstract_word_entity import load as load_model
 from .mulrel_ranker import MulRelRanker
 
 from . import utils as utils
-from ...utils import TimeUtil, jsondump
+from ...utils import TimeUtil, jsondump, KoreanUtil
+from ... import GlobalValues as gl
+import re
 
 from random import shuffle
 import torch.optim as optim
 
 from pprint import pprint
-from konlpy.tag import Okt
 
-okt = Okt()
+# from konlpy.tag import Okt
+
+# okt = Okt()
 ModelClass = MulRelRanker
 wiki_prefix = 'ko.dbpedia.org/resource/'
 
@@ -201,24 +204,28 @@ class EDRanker:
 
                 # lctx = m['context'][0].strip().split()
                 lctx = utils.strip_e(m['context'][0].strip())
-                tags = list(filter(lambda x: x[1] != 'Punctuation', okt.pos(lctx)))
-                lctx = ['/'.join(tag) for tag in tags]
+                lctx = list(filter(lambda x: re.sub(r"[.,?!@#$%^&*()~{}:;/\[\]]+", "", x) != "", KoreanUtil.tokenize(lctx)))
+                # ----original version----
+                # lctx = utils.strip_e(m['context'][0].strip())
+                # tags = list(filter(lambda x: x[1] != 'Punctuation', okt.pos(lctx)))
+                # lctx = ['/'.join(tag) for tag in tags]
+                # ----original version end----
                 lctx_ids = [self.prerank_model.word_voca.get_id(t) for t in lctx if utils.is_important_word(t)]
                 lctx_ids = [tid for tid in lctx_ids if tid != self.prerank_model.word_voca.unk_id]
                 lctx_ids = lctx_ids[max(0, len(lctx_ids) - self.args.ctx_window//2):]
 
                 # rctx = m['context'][1].strip().split()
                 rctx = utils.strip_e(m['context'][1].strip())
-                tags = list(filter(lambda x: x[1] != 'Punctuation' , okt.pos(rctx)))
-                rctx = ['/'.join(tag) for tag in tags]
+                rctx = list(filter(lambda x: re.sub(r"[.,?!@#$%^&*()~{}:;/\[\]]+", "", x) != "", KoreanUtil.tokenize(rctx)))
+                # rctx = ['/'.join(tag) for tag in tags]
                 rctx_ids = [self.prerank_model.word_voca.get_id(t) for t in rctx if utils.is_important_word(t)]
                 rctx_ids = [tid for tid in rctx_ids if tid != self.prerank_model.word_voca.unk_id]
                 rctx_ids = rctx_ids[:min(len(rctx_ids), self.args.ctx_window//2)]
 
                 # ment = m['mention'].strip().split()
                 ment = utils.strip_e(m['mention'].strip())
-                tags = list(filter(lambda x: x[1] != 'Punctuation', okt.pos(ment)))
-                ment = ['/'.join(tag) for tag in tags]
+                ment = list(filter(lambda x: re.sub(r"[.,?!@#$%^&*()~{}:;/\[\]]+", "", x) != "", KoreanUtil.tokenize(ment)))
+                # ment = ['/'.join(tag) for tag in tags]
                 ment_ids = [self.prerank_model.word_voca.get_id(t) for t in ment if utils.is_important_word(t)]
                 ment_ids = [tid for tid in ment_ids if tid != self.prerank_model.word_voca.unk_id]
 
@@ -276,16 +283,16 @@ class EDRanker:
 
     def train(self, org_train_dataset, org_dev_datasets, config):
         with TimeUtil.TimeChecker("EL Data Extraction"):
-            print('extracting training data')
+            gl.logger.info('extracting training data')
             train_dataset = self.get_data_items(org_train_dataset, predict=False)
-            print('#train docs', len(train_dataset))
+            gl.logger.debug('#train docs: %d' % len(train_dataset))
 
             dev_datasets = []
             for dname, data in org_dev_datasets:
                 dev_datasets.append((dname, self.get_data_items(data, predict=True)))
-                print(dname, '#dev docs', len(dev_datasets[-1][1]))
+                gl.logger.debug("%s %s %d" % (dname, '#dev docs', len(dev_datasets[-1][1])))
 
-        print('creating optimizer')
+        gl.logger.debug('creating optimizer')
         optimizer = optim.Adam([p for p in self.model.parameters() if p.requires_grad], lr=config['lr'])
         best_f1 = -1
         not_better_count = 0

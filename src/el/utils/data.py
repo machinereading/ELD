@@ -3,24 +3,28 @@ from ..mulrel_nel import utils as U
 from ...utils import KoreanUtil, TimeUtil, readfile, pickleload
 from ...ds import *
 
-from konlpy.tag import Okt
+from tqdm import tqdm
+import numpy as np
 
 import random
 import re
-
+import string
 
 class DataModule():
 	def __init__(self, args):
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
-		self.surface_ent_dict = CandDict(pickleload(args.entity_calc_path), self.redirects)
+		self.surface_ent_dict = CandDict(pickleload(args.entity_dict_path), self.redirects)
 		self.word_voca, self.word_embedding = U.load_voca_embs(args.word_voca_path, args.word_embedding_path)
 		self.snd_word_voca, self.snd_word_embedding = U.load_voca_embs(args.snd_word_voca_path, args.snd_word_embedding_path)
 		self.entity_voca, self.entity_embedding = U.load_voca_embs(args.entity_voca_path, args.entity_embedding_path)
 
 	def update_ent_embedding(self, entity_voca, entity_embedding):
 		assert len(entity_voca) == len(entity_embedding)
+		if type(entity_embedding) is list:
+			entity_embedding = np.array(entity_embedding)
 		self.entity_voca += entity_voca
+		print(self.entity_embedding.shape, entity_embedding.shape)
 		self.entity_embedding = np.concatenate([self.entity_embedding, entity_embedding], axis=0)
 
 	def sentence_to_json(self, sentence):
@@ -112,7 +116,8 @@ class DataModule():
 			sent.replace(char, " ")
 		
 		sent = datafunc.RE_EMOJI.sub(r'', sent)
-		morphs = datafunc.okt.morphs(sent)
+		# morphs = datafunc.okt.morphs(sent)
+		morphs = KoreanUtil.tokenize(sent)
 		inds = []
 		last_char_ind = 0
 		conlls = []
@@ -175,7 +180,7 @@ class DataModule():
 		conlls = []
 		tsvs = []
 		cw_form = []
-		for sentence in sentences:
+		for sentence in tqdm(sentences, desc="Formatting input"):
 			s = random.random()
 			
 			if filter_rate > s: continue
@@ -195,12 +200,15 @@ class DataModule():
 
 
 
-
+def basic_prob(x):
+	return 
 
 class CandDict():
 	def __init__(self, init_dict, redirect_dict):
 		self._dict = init_dict
 		self._redirects = redirect_dict
+		self._calc_dict = {} # lazy property
+		self._update_flag = False
 	
 	def add_instance(self, surface, entity):
 		if surface not in self._dict:
@@ -208,9 +216,24 @@ class CandDict():
 		if entity not in self._dict[surface]:
 			self._dict[surface][entity] = 0
 		self._dict[surface][entity] += 1
+		self._update_flag = False
+
+	def generate_calc_dict(self):
+		self._calc_dict = {}
+		idx = 0
+		for m, e in self._dict.items():
+			x = list(e.values())
+			values = np.around(x / np.sum(x), 4)
+			self._calc_dict[m] = {}
+			for i, (key, value) in enumerate(e.items()):
+				self._calc_dict[m][key] = (values[i], idx)
+				idx += 1
+		self._update_flag = True
 
 	def __getitem__(self, item):
-		candidates = self._dict[item] if item in self._dict else {}
+		if not self._update_flag:
+			self.generate_calc_dict()
+		candidates = self._calc_dict[item] if item in self._calc_dict else {}
 		cand_list = []
 		for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
 			cand_name = self._redirects[cand_name] if cand_name in self._redirects else cand_name
