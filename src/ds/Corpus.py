@@ -84,7 +84,7 @@ class Corpus():
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
-		for sentence in tqdm(json, desc="Loading EV corpus"): # limit data for runnablity 
+		for sentence in tqdm(json[:1000], desc="Loading EV corpus"): # limit data for runnablity 
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.corpus.append(sentence)

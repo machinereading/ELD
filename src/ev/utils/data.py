@@ -85,6 +85,9 @@ class DataModule():
 		self.ctx_window_size = args.ctx_window_size
 		self.filter_data_tokens = args.filter_data_tokens
 		self.target_device = args.device
+		self.fake_er_rate = args.fake_er_rate
+		self.fake_el_rate = args.fake_el_rate
+		self.fake_ec_rate = args.fake_ec_rate
 		if mode == "train":
 			if args.data_load_path is not None:
 				self.data_load_path = args.data_load_path
@@ -114,9 +117,6 @@ class DataModule():
 
 
 			self.data_path = args.data_path
-			self.fake_er_rate = args.fake_er_rate
-			self.fake_el_rate = args.fake_el_rate
-			self.fake_ec_rate = args.fake_ec_rate
 			self.generate_data()
 			# self.generate_vocab_tensors()
 			self.generate_cluster_vocab_tensors()
@@ -156,8 +156,11 @@ class DataModule():
 				token.error_type = 1
 				self.fake_tokens.append(token)
 
-	def add_fake_ec(self, sentence):
-		pass
+	
+	def generate_fake_cluster(self):
+		gl.logger.info("Generating fake clusters")
+		for item in self.corpus:
+			pass
 
 	def save(self, path):
 		j = self.corpus.to_json()
@@ -263,7 +266,9 @@ class DataModule():
 		print("Max vocabulary in cluster(with padding):", max_voca)
 		print("Max jamo in word:", max_jamo)
 		for cluster in tqdm(corpus.cluster.values(), desc="Padding vocab tensors"):
+
 			jamo, wlctx, wrctx, elctx, erctx, _, _ = cluster.vocab_tensors
+
 			if cluster.max_jamo > max_jamo:
 				cut = []
 				for i, item in enumerate(jamo):
@@ -286,8 +291,13 @@ class DataModule():
 			wrctx += [[0] * self.ctx_window_size] * pad
 			elctx += [[0] * self.ctx_window_size] * pad
 			erctx += [[0] * self.ctx_window_size] * pad
+			if len(jamo) > max_voca:
+				jamo = jamo[:max_voca]
+				wlctx = wlctx[:max_voca]
+				wrctx = wrctx[:max_voca]
+				elctx = elctx[:max_voca]
+				erctx = erctx[:max_voca]
 			cluster.update_tensor(*[torch.tensor(x).to(self.target_device) for x in [jamo, wlctx, wrctx, elctx, erctx]])
-		gl.logger.info("Done")
 
 
 	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):

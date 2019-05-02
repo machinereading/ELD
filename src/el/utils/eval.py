@@ -8,11 +8,9 @@ def eval(module, corpus_dir):
 			j = json.load(f)
 			j["fileName"] = item.split(".")[0]
 			eval_target.append(j)
-	print(len(eval_target))
 	prediction = []
 	for item in module.predict(eval_target, delete_candidate=False):
 		prediction += item
-	print(len(prediction), len(eval_target))
 	jsondump(prediction, "debug/debug_prediction.json")
 	correct_count = 0
 	dark_entity_correct_count = 0
@@ -87,10 +85,11 @@ def eval(module, corpus_dir):
 	}
 	with open("debug/%s_eval_result.json" % module.model_name, "w", encoding="UTF8") as f:
 		json.dump(result, f, ensure_ascii=False, indent="\t")
+	print(p_target, r_target, correct_count)
 	p = correct_count / p_target
 	r = correct_count / r_target
 	f = 2 * p * r / (p + r)
-	print("P: %.2f, R: %.2f, F1: %.2f" % (p,r,f))
+	print("P: %f, R: %f, F1: %f" % (p,r,f))
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):
 		print("Type %d Error: %d" % (i+1, len(wrong_list[i])))

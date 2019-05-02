@@ -12,36 +12,23 @@ class EL():
 	def __init__(self, mode, model_name):
 		gl.logger.info("Initializing EL Module")
 		with TimeUtil.TimeChecker("EL_init"):
-			self.args = ELArgs()
+			if mode == "train":
+				self.args = ELArgs()
+			else:
+				try:
+					self.args = ELArgs.from_json("data/el/%s_args.json" % model_name)
+				except:
+					gl.logger.critical("EL %s: No argument file exists!" % model_name)
+					import sys
+					sys.exit(1)
 			self.data = DataModule(self.args)
 			self.model_name = model_name
 			self.args.mode = mode
-			self.args.model_path = "data/el/%s" % model_name
-			self.model_name = model_name
+			self.args.model_name = model_name
 			self.debug = False
 			
-			config={
-				'hid_dims': self.args.hid_dims,
-				'emb_dims': self.data.entity_embedding.shape[1],
-				'freeze_embs': True,
-				'tok_top_n': self.args.tok_top_n,
-				'margin': self.args.margin,
-				'word_voca': self.data.word_voca,
-				'entity_voca': self.data.entity_voca,
-				'word_embeddings': self.data.word_embedding,
-				'entity_embeddings': self.data.entity_embedding,
-				'snd_word_voca': self.data.snd_word_voca,
-				'snd_word_embeddings': self.data.snd_word_embedding,
-				'dr': self.args.dropout_rate,
-				'df': self.args.df,
-				'n_loops': self.args.n_loops,
-				'n_rels': self.args.n_rels,
-				'mulrel_type': self.args.mulrel_type,
-				'args': self.args
-			}
-		
 			self.ranker = EDRanker(config=self.config)
-		
+			jsondump(self.args.to_json(), "data/el/%s_args.json" % model_name)
 
 	def train(self, train_items, dev_items):
 		"""

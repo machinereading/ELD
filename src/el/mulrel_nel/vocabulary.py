@@ -80,3 +80,4 @@ class Vocabulary:
             self.id2word.append(token)
             self.word2id[token] = len(self.id2word) - 1
             self.counts.append(1)
+        return self

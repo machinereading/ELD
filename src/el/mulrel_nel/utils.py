@@ -102,11 +102,11 @@ def load_voca_embs(voca_path, embs_path):
 
     # check if sizes are matched
     if embs.shape[0] == voca.size() - 1:
-        print(embs.shape)
+        # print(embs.shape)
         unk_emb = np.mean(embs, axis=0, keepdims=True)
         embs = np.append(embs, unk_emb, axis=0)
     elif embs.shape[0] != voca.size():
-        print(embs.shape, voca.size())
+        # print(embs.shape, voca.size())
         raise Exception("embeddings and vocabulary have differnt number of items ")
 
     return voca, embs

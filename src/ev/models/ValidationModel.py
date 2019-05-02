@@ -9,8 +9,6 @@ from .modules import ContextEmbedder, Transformer
 from .modules.Embedding import Embedding
 
 
-import logging
-
 class ValidationModel(nn.Module):
 	def __init__(self, args):
 		super(ValidationModel, self).__init__()
@@ -29,13 +27,19 @@ class ValidationModel(nn.Module):
 		self.ce_dim = args.char_embedding_dim
 		
 		self.transformer_type = args.transformer
-		self.cluster_transformer = Transformer.get_transformer(args)
+		
 		self.encode_sequence = args.encode_sequence
+
 		# sequential encoding
 		if self.encode_sequence:
 			self.jamo_embedder = ContextEmbedder.CNNEmbedder(args.max_jamo, 2, 2)
 			self.cw_embedder = ContextEmbedder.BiContextEmbedder(args.er_model, self.we_dim, args.er_output_dim)
 			self.ce_embedder = ContextEmbedder.BiContextEmbedder(args.el_model, self.ee_dim, args.el_output_dim)
+			args.jamo_embed_dim = (args.char_embedding_dim - 2) // 2 * 2
+		else:
+			args.jamo_embed_dim = args.char_embedding_dim
+
+		self.cluster_transformer = Transformer.get_transformer(args)
 		# final prediction layer
 		self.predict = nn.Sequential(
 			nn.Linear(args.transform_dim, 100),
@@ -47,7 +51,7 @@ class ValidationModel(nn.Module):
 			self.cluster_transformer.load_state_dict(torch.load(args.transformer_model_path))
 			self.pretrain_transformer = False
 		except:
-			logging.info("Failed to load transformer from %s" % args.transformer_model_path)
+			gl.logger.info("Failed to load transformer from %s" % args.transformer_model_path)
 
 	def forward(self, jamo_index, cluster_word_lctx, cluster_word_rctx, cluster_entity_lctx, cluster_entity_rctx, size):
 		"""

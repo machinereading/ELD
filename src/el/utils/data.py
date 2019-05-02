@@ -20,11 +20,14 @@ class DataModule():
 		self.entity_voca, self.entity_embedding = U.load_voca_embs(args.entity_voca_path, args.entity_embedding_path)
 
 	def update_ent_embedding(self, entity_voca, entity_embedding):
-		assert len(entity_voca) == len(entity_embedding)
+		if type(entity_embedding) is list:
+			assert len(entity_voca) == len(entity_embedding)
+		else:
+			assert len(entity_voca) == entity_embedding.shape[0]
 		if type(entity_embedding) is list:
 			entity_embedding = np.array(entity_embedding)
 		self.entity_voca += entity_voca
-		print(self.entity_embedding.shape, entity_embedding.shape)
+		# print(self.entity_embedding.shape, entity_embedding.shape)
 		self.entity_embedding = np.concatenate([self.entity_embedding, entity_embedding], axis=0)
 
 	def sentence_to_json(self, sentence):

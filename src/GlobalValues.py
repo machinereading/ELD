@@ -9,7 +9,7 @@ from datetime import datetime
 import signal, sys
 
 def ki_handler(signal, frame):
-	import TimeUtil
+	from .utils import TimeUtil
 	TimeUtil.time_analysis()
 	sys.exit(0)
 
@@ -19,7 +19,7 @@ signal.signal(signal.SIGINT, ki_handler)
 formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger("DefaultLogger")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()
 
