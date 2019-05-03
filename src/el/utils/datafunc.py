@@ -1,4 +1,4 @@
-from konlpy.tag import Okt
+# from konlpy.tag import Okt
 import numpy as np
 
 from ...utils import TimeUtil, progress, printfunc, pickleload
@@ -17,15 +17,15 @@ from functools import reduce
 import socket
 
 RE_EMOJI = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
-okt = Okt()
+# okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
-with open("data/el/wiki_entity_calc.pickle", "rb") as f:
-	ent_dict = pickle.load(f)
-with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
-	ent_form = pickle.load(f)
-ent_form = ent_form.keys()
-with open("data/el/redirects.pickle", "rb") as f:
-	redirects = pickle.load(f)
+# with open("data/el/wiki_entity_calc.pickle", "rb") as f:
+# 	ent_dict = pickle.load(f)
+# with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
+# 	ent_form = pickle.load(f)
+# ent_form = ent_form.keys()
+# with open("data/el/redirects.pickle", "rb") as f:
+# 	redirects = pickle.load(f)
 
 
 

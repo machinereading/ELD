@@ -9,7 +9,7 @@ from ..utils import *
 from ..ds import Sentence
 
 class EL():
-	def __init__(self, mode, model_name):
+	def __init__(self, mode="test", model_name="no_okt_ent_emb"):
 		gl.logger.info("Initializing EL Module")
 		with TimeUtil.TimeChecker("EL_init"):
 			if mode == "train":
@@ -70,7 +70,7 @@ class EL():
 
 	def __call__(self, *sentences):
 		result = []
-		for batch in self.predict(sentences, "PLAIN_SENTENCE"):
+		for batch in self.predict(sentences):
 			result += batch
 		return result
 
