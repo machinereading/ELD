@@ -183,7 +183,8 @@ class DataModule():
 		conlls = []
 		tsvs = []
 		cw_form = []
-		for sentence in tqdm(sentences, desc="Formatting input"):
+		for sentence in sentences:
+		# for sentence in tqdm(sentences, desc="Formatting input"):
 			s = random.random()
 			
 			if filter_rate > s: continue

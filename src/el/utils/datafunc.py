@@ -3,6 +3,7 @@ import numpy as np
 
 from ...utils import TimeUtil, progress, printfunc, pickleload
 from ...ds import *
+from ... import GlobalValues as gl
 # from . import candidate_dict
 
 
@@ -14,6 +15,7 @@ import os
 import pickle
 from functools import reduce
 import socket
+
 RE_EMOJI = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
 okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
@@ -46,7 +48,6 @@ def candidates_old(word):
 
 @TimeUtil.measure_time
 def getETRI(text):
-	print("ETRI")
 	host = '143.248.135.146'
 	port = 33333
 	
@@ -55,6 +56,7 @@ def getETRI(text):
 	try: 
 		clientSocket.connect(ADDR)
 	except Exception as e:
+		gl.logger.warning("ETRI connection failed")
 		return None
 	try:
 		clientSocket.sendall(str.encode(text))
@@ -65,10 +67,10 @@ def getETRI(text):
 				break
 			buffer.extend(data)
 		result = json.loads(buffer.decode(encoding='utf-8'))
-		print("DONE")
 		return result
 
 	except Exception as e:
+		gl.logger.warning("ETRI connection lost")
 		return None
 
 

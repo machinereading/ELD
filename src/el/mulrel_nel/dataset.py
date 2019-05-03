@@ -50,7 +50,8 @@ def read_csv_file(path):
 
 def read_tsv_from_str(texts):
     data = {}
-    for line in tqdm(texts, desc="Generating tsv format"):
+    for line in texts:
+    # for line in tqdm(texts, desc="Generating tsv format"):
         if len(line.strip()) == 0: continue
         comps = line.strip().split('\t')
         doc_name = comps[0] + ' ' + comps[1]
@@ -83,8 +84,8 @@ def read_conll_from_str(data, texts):
     conll = {}
     cur_sent = None
     cur_doc = None
-
-    for line in tqdm(texts, desc="Generating conll format"):
+    for line in texts:
+    # for line in tqdm(texts, desc="Generating conll format"):
         line = line.strip()
         if line.startswith('-DOCSTART-'):
             docname = line.split()[1][1:]
