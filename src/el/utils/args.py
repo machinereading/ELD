@@ -38,5 +38,5 @@ class ELArgs(AbstractArgument):
 
 	@property
 	def model_path(self):
-		return "data/ev/" + self.model_name
+		return "data/el/" + self.model_name
 	

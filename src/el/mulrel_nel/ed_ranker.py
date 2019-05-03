@@ -362,7 +362,7 @@ class EDRanker:
                         predictions = self.predict(data)
                         f1 = D.eval(org_dev_datasets[di][1], predictions)
                         prediction_raw = D.make_result_dict(org_dev_datasets[di][1], predictions)
-                        jsondump(prediction_raw, "%s_eval_%d.json" % (self.args.model_path.split("/")[-1], e+1))
+                        # jsondump(prediction_raw, "%s_eval_%d.json" % (self.args.model_path.split("/")[-1], e+1))
                         print(dname, utils.tokgreen('micro F1: ' + str(f1)))
 
                         if dname == 'dev':

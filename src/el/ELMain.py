@@ -17,9 +17,13 @@ class EL():
 			else:
 				try:
 					self.args = ELArgs.from_json("data/el/%s_args.json" % model_name)
-				except:
+				except FileNotFoundError:
 					gl.logger.critical("EL %s: No argument file exists!" % model_name)
 					import sys
+					sys.exit(1)
+				except Exception:
+					import traceback, sys
+					traceback.print_exc()
 					sys.exit(1)
 			self.data = DataModule(self.args)
 			self.model_name = model_name

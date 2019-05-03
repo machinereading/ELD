@@ -7,7 +7,10 @@ class AbstractArgument(ABC):
 		if type(json_file) is str:
 			json_file = jsonload(json_file)
 		for attr, value in json_file.items():
-			setattr(args, attr, value)
+			try:
+				setattr(args, attr, value)
+			except AttributeError:
+				pass
 		return args
 
 	@classmethod
@@ -21,7 +24,10 @@ class AbstractArgument(ABC):
 			for k, v in section.items():
 				if v in ["True", "False"]:
 					v = gl.boolmap(v)
-				setattr(args, k, v)
+				try:
+					setattr(args, k, v)
+				except AttributeError:
+					pass
 		return args
 
 
