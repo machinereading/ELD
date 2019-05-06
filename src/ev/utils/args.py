@@ -61,28 +61,28 @@ class EVArgs(AbstractArgument):
 	@property
 	def er_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"er_scorer_%s_%s_%d.pt" % (self.er_model, self.word_embedding_type, self.er_output_dim)
+			return "data/ev/"+self.model_name+"_er_scorer_%s_%s_%d.pt" % (self.er_model, self.word_embedding_type, self.er_output_dim)
 		except:
 			return None
 
 	@property
 	def el_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"el_scorer_%s_%s_%d.pt" % (self.el_model, self.entity_embedding_type, self.el_output_dim)
+			return "data/ev/"+self.model_name+"_el_scorer_%s_%s_%d.pt" % (self.el_model, self.entity_embedding_type, self.el_output_dim)
 		except:
 			return None
 
 	@property
 	def ec_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"ec_scorer.pt"
+			return "data/ev/"+self.model_name+"_ec_scorer.pt"
 		except:
 			return None
 
 	@property
 	def joint_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"joint_scorer.pt"
+			return "data/ev/"+self.model_name+"_joint_scorer.pt"
 		except:
 			return None
 	
@@ -90,13 +90,13 @@ class EVArgs(AbstractArgument):
 	@property
 	def transformer_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"transformer.pt"
+			return "data/ev/"+self.model_name+"_transformer.pt"
 		except:
 			return None
 
 	@property
 	def validation_model_path(self):
 		try:
-			return "data/ev/"+self.model_name+"validation.pt"
+			return "data/ev/"+self.model_name+"_validation.pt"
 		except:
 			return None

@@ -2,7 +2,7 @@ from .Vocabulary import Vocabulary
 from ..utils import KoreanUtil
 class Cluster():
 	def __init__(self, target_entity):
-		self.cluster = set([])
+		self.cluster = []
 		self.target_entity = target_entity
 		self.is_in_kb = True
 		self.id = -1
@@ -17,11 +17,12 @@ class Cluster():
 		self._rctx_words = []
 		self._lctx_entities = []
 		self._rctx_entities = []
+		self._len = 0
 
 	def add_elem(self, vocab):
 		assert type(vocab) is Vocabulary
 		# assert vocab not in self.cluster, vocab
-		self.cluster.add(vocab)
+		self.cluster.append(vocab)
 		vocab.cluster = self
 		je = []
 		for char in vocab.surface:
@@ -58,7 +59,7 @@ class Cluster():
 			for char in v.surface:
 				je += KoreanUtil.char_to_elem_ind(char)
 			v.jamo_elem = je
-			c.cluster.add(v)
+			c.cluster.append(v)
 			v.cluster = c
 		c.max_jamo = max([len(x.jamo_elem) for x in c])
 		return c
@@ -73,9 +74,8 @@ class Cluster():
 				self._lctx_entities.append(vocab.lctxe_ind)
 				self._rctx_entities.append(vocab.rctxe_ind)
 			self.has_tensor = True
-			# add padding? no need to do in this level - padding must be performed in global level
 
-		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(self), float(1) if not self.is_in_kb else float(0)
+		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(self), float(1) if not type(self) is Cluster else float(0)
 
 	def update_tensor(self, jamo, wlctx, wrctx, elctx, erctx):
 		self._jamo = jamo
@@ -84,3 +84,20 @@ class Cluster():
 		self._lctx_entities = elctx
 		self._rctx_entities = erctx
 		self.has_pad_tensor = True
+
+class FakeCluster(Cluster):
+	def __init__(self, name):
+		super(FakeCluster, self).__init__("Fake_%s" % name)
+		self.is_in_kb = False
+
+	def add_elem(self, vocab):
+		assert type(vocab) is Vocabulary
+		# assert vocab not in self.cluster, vocab
+		self.cluster.append(vocab)
+		if not hasattr(vocab, "jamo_elem"):
+			je = []
+			for char in vocab.surface:
+				je += KoreanUtil.char_to_elem_ind(char)
+			vocab.jamo_elem = je
+			if len(je) > self.max_jamo:
+				self.max_jamo = len(je)

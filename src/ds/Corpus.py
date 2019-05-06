@@ -10,7 +10,6 @@ class Corpus():
 		self.tagged_voca_lens = []
 		self.cluster = {} # dict of str(entity form): Cluster
 		self.additional_cluster = []
-		self.id2c = {}
 
 	def add_sentence(self, sentence):
 		self.corpus.append(sentence)
@@ -26,6 +25,11 @@ class Corpus():
 	@property
 	def cluster_list(self):
 		return [x for x in self.cluster.values()] + self.additional_cluster
+
+	@property
+	def id2c(self):
+		return {i: v for i, v in enumerate(self.cluster_list)}
+	
 
 	@property
 	def max_jamo(self):
@@ -72,7 +76,7 @@ class Corpus():
 					c.id = len(corpus.cluster)
 					corpus.cluster[entity] = c
 				corpus.cluster[entity].add_elem(nt)
-		corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
+		# corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
 
@@ -98,7 +102,7 @@ class Corpus():
 		# 		parent_sentence_id = token.parent_sentence
 		# 		token.parent_sentence = corpus.corpus[parent_sentence_id]
 		# 		assert token.parent_sentence.id == parent_sentence_id
-
+		# corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
 	def split_sentence_to_dev(self):
@@ -121,5 +125,10 @@ class Corpus():
 				dev.cluster[k] = v
 			else:
 				train.cluster[k] = v
+		for i, v in enumerate(self.additional_cluster):
+			if i % 10 == 0:
+				dev.additional_cluster.append(v)
+			else:
+				train.additional_cluster.append(v)
 
 		return train, dev

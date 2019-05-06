@@ -82,24 +82,30 @@ class EV():
 			self.validation_model.train()
 			tp = []
 			tl = []
+			err_count = 0
 			for batch in train_dataloader:
-				jamo, wl, wr, el, er, size, label = [x.to(self.args.device) for x in batch]
-				# jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device), label.to(self.args.device)
-				optimizer.zero_grad()
-				pred = self.validation_model_parallel(jamo, wl, wr, el, er, size).view(-1)
-				li = 0
-				labels = []
-				for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
-					for _ in range(s):
-						labels.append(label[li])
-					li += 1
-				loss = self.validation_model.loss(pred, torch.FloatTensor(labels).to(self.args.device))
-				# loss = F.binary_cross_entropy(pred, torch.FloatTensor(labels).to(self.args.device))
-				loss.backward()
-				optimizer.step()
-				# tp += [1 if x > 0.5 else 0 for x in pred]
-				# tl += [x.data for x in labels]
+				try:
+					jamo, wl, wr, el, er, size, label = [x.to(self.args.device) for x in batch]
+					# print(size)
+					optimizer.zero_grad()
 
+					pred = self.validation_model_parallel(jamo, wl, wr, el, er, size).view(-1)
+					li = 0
+					labels = []
+					for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
+						for _ in range(s):
+							labels.append(label[li])
+						li += 1
+					# print(len(labels), len(pred))
+					loss = self.validation_model.loss(pred, torch.FloatTensor(labels).to(self.args.device))
+					# loss = F.binary_cross_entropy(pred, torch.FloatTensor(labels).to(self.args.device))
+					loss.backward()
+					optimizer.step()
+					# tp += [1 if x > 0.5 else 0 for x in pred]
+					# tl += [x.data for x in labels]
+				except:
+					err_count += 1
+			gl.logger.debug("Epoch %d error %d" % (epoch, err_count))
 			# gl.logger.info(tp[:10], tl[:10])
 			# gl.logger.info("Train F1: %.2f" % metrics.f1_score(tl, tp, labels=[0,1], average="micro"))
 			gl.logger.info("Epoch %d loss %f" % (epoch, loss))

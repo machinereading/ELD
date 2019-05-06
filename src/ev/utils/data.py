@@ -1,7 +1,5 @@
 from .Tokenizer import Tokenizer
-from ...ds.Corpus import Corpus
-from ...ds.Cluster import Cluster
-from ...ds.Vocabulary import Vocabulary
+from ...ds import *
 from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, KoreanUtil
 from ... import GlobalValues as gl
 
@@ -32,18 +30,17 @@ class ClusterGenerator(Dataset):
 		
 		if for_train:
 			# add more labels if label is biased
-			l1 = [x for x in corpus.cluster_list if not x.is_in_kb]
-			l0 = [x for x in corpus.cluster_list if x.is_in_kb]
+			l1 = [x for x in corpus.cluster_list if type(x) is Cluster]
+			l0 = [x for x in corpus.cluster_list if type(x) is FakeCluster]
 			l0_l1_ratio = round(len(l0) / len(l1))
 			l1_l0_ratio = round(len(l1) / len(l0))
 			for _ in range(l0_l1_ratio - 1):
 				self.corpus.additional_cluster += l1
 			for _ in range(l1_l0_ratio - 1):
 				self.corpus.additional_cluster += l0
-			print(len([x for x in corpus.cluster_list if not x.is_in_kb]))
-			print(len([x for x in corpus.cluster_list if x.is_in_kb]))
 		if filter_nik:
 			self.corpus.cluster = {k: v for k, v in corpus.cluster.items() if not v.is_in_kb}
+
 	def __len__(self):
 		return len(self.corpus.cluster_list)
 
@@ -51,17 +48,12 @@ class ClusterGenerator(Dataset):
 		cluster = self.corpus.get_cluster_by_index(ind)
 		return cluster.vocab_tensors
 		
-
-
-
 class ClusterContextSetGenerator(Dataset):
 	def __init__(self, corpus):
 		self.corpus = corpus
 
 	def __len__(self):
 		return len(self.corpus.cluster)
-
-
 
 class DataModule():
 	def __init__(self, mode, args):
@@ -88,6 +80,7 @@ class DataModule():
 		self.fake_er_rate = args.fake_er_rate
 		self.fake_el_rate = args.fake_el_rate
 		self.fake_ec_rate = args.fake_ec_rate
+		self.corpus = None
 		if mode == "train":
 			if args.data_load_path is not None:
 				self.data_load_path = args.data_load_path
@@ -103,11 +96,7 @@ class DataModule():
 						if not item.startswith(file_prefix): continue
 						if "sentence" in item:
 							sentence += jsonload(path+item)
-						
 					self.corpus = Corpus.from_json(sentence)
-					# self.generate_vocab_tensors()
-					self.generate_cluster_vocab_tensors(self.corpus, max_voca_restriction=getattr(args, "max_voca_restriction", -1), max_jamo_restriction=getattr(args, "max_jamo_restriction", -1))
-					return
 				except FileNotFoundError:
 					traceback.print_exc()
 				except:
@@ -115,11 +104,12 @@ class DataModule():
 					import sys
 					sys.exit(1)
 
-
-			self.data_path = args.data_path
-			self.generate_data()
-			# self.generate_vocab_tensors()
-			self.generate_cluster_vocab_tensors()
+			else:
+				self.data_path = args.data_path
+				self.generate_data()
+			self.mark_kb(self.corpus)
+			self.generate_fake_cluster(self.corpus)
+			self.generate_cluster_vocab_tensors(self.corpus, max_voca_restriction=getattr(args, "max_voca_restriction", -1), max_jamo_restriction=getattr(args, "max_jamo_restriction", -1))
 
 	@TimeUtil.measure_time
 	def generate_data(self):
@@ -156,11 +146,51 @@ class DataModule():
 				token.error_type = 1
 				self.fake_tokens.append(token)
 
-	
-	def generate_fake_cluster(self):
+	@TimeUtil.measure_time
+	def generate_fake_cluster(self, corpus):
+		# call after corpus and cluster is generated
+		assert corpus is not None
 		gl.logger.info("Generating fake clusters")
-		for item in self.corpus:
-			pass
+		dark_entity_len = len(list(filter(lambda x: not x.is_in_kb, corpus.cluster_list)))
+		added_cluster_count = 0
+		# generate fake cluster by adding same surface form entities
+		suf_tok_dict = {}
+		suf_tok_dict_nae = {}
+		for sentence in corpus:
+			for token in sentence:
+				if token.is_entity:
+					if token.surface not in suf_tok_dict:
+						suf_tok_dict[token.surface] = []
+					suf_tok_dict[token.surface].append(token)
+				else:
+					if token.surface not in suf_tok_dict_nae:
+						suf_tok_dict_nae[token.surface] = []
+					suf_tok_dict_nae[token.surface].append(token)
+		for surface, tokens in suf_tok_dict.items():
+			entity_token_dict = {}
+			for token in tokens:
+				if token.entity not in entity_token_dict:
+					entity_token_dict[token.entity] = []
+				entity_token_dict[token.entity].append(token)
+			if len(entity_token_dict) < 2: continue # single cluster -> not a fake cluster
+			lens = [len(x) for x in entity_token_dict.values()]
+			s = sum(lens)
+			m = max(lens)
+			if s - m < m // 3: continue # not enough invalid values to make fake cluster
+			newc = FakeCluster(surface)
+			for token in tokens:
+				newc.add_elem(token)
+			corpus.additional_cluster.append(newc)
+			added_cluster_count += 1
+		# generate fake cluster with not_an_entity items
+		for surface, tokens in suf_tok_dict_nae.items():
+			if len(tokens) < 10: continue
+			newc = FakeCluster(surface)
+			for token in tokens:
+				newc.add_elem(token)
+			corpus.additional_cluster.append(newc)
+			added_cluster_count += 1
+		return corpus
 
 	def save(self, path):
 		j = self.corpus.to_json()
@@ -185,57 +215,17 @@ class DataModule():
 		
 		return gen
 
-	@TimeUtil.measure_time
-	def generate_vocab_tensors(self):
-		# Deprecated: BERT need original tokenizer
-		# corpus postprocessing
-		gl.logger.info("Generating Vocab tensors...")
-		filter_size = 10
-		for sentence in tqdm(self.corpus, desc="Generating vocab tensors", total = len(self.corpus.corpus)):
-			# print(len(sentence))
-			sentence.tagged_voca_len = 0
-			er_error_tokens = 0
-			el_error_tokens = 0
-			dark_entity_tokens = 0
-			for vocab in sentence:
-				if self.filter_data_tokens:
-					if er_error_tokens >= filter_size and not vocab.is_entity:
-						continue 
-					if el_error_tokens >= filter_size and vocab.is_entity and vocab.entity_in_kb:
-						continue
-					if dark_entity_tokens >= filter_size:
-						continue
-				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
-				vocab.lctxw_ind = torch.tensor([self.wt_pad for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind)
-
-				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
-				vocab.rctxw_ind = torch.tensor(([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1])
-
-				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
-				vocab.lctxe_ind = torch.tensor([self.et_pad for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind)
-				
-				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
-				vocab.rctxe_ind = torch.tensor(([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1])
-				# print(vocab.entity, lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind) # why everything is zero?
-				sentence.tagged_voca_len += 1
-				sentence.tagged_tokens.append(vocab)
-				vocab.tagged = True
-				if self.filter_data_tokens:
-					if not vocab.is_entity:
-						er_error_tokens += 1
-					elif vocab.is_entity and vocab.entity_in_kb:
-						el_error_tokens += 1
-					else:
-						dark_entity_tokens += 1
-		self.corpus.tagged_voca_lens = [x.tagged_voca_len for x in self.corpus.corpus]
+	def mark_kb(self, corpus):
+		gl.logger.info("Filtering KB Clusters")
+		for cluster in corpus.cluster_list:
+			cluster.is_in_kb = cluster.target_entity in self.kb
+		corpus.cluster = {k: v for k, v in corpus.cluster.items() if not v.is_in_kb}
+		gl.logger.debug("Remaining clusters: %d" % len(corpus.cluster_list))
 
 	@TimeUtil.measure_time
 	def generate_cluster_vocab_tensors(self, corpus, max_voca_restriction=None, max_jamo_restriction=None):
 		gl.logger.info("Generating Vocab tensors...")
-		for cluster in tqdm(corpus.cluster.values(), desc="Generating vocab tensors"):
-			if cluster.target_entity not in self.kb:
-				# print(cluster.target_entity)
-				cluster.is_in_kb = False
+		for cluster in tqdm(corpus.cluster_list, desc="Generating vocab tensors"):
 			for vocab in cluster:
 				if vocab.tagged: continue
 				lctxw_ind = self.wt(vocab.lctx[-10:])[-self.ctx_window_size:]
@@ -250,22 +240,21 @@ class DataModule():
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
 				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
 				vocab.tagged = True
-		gl.logger.info("Done")
 
 		# add padding
 		gl.logger.info("Add padding...")
-		max_voca = max([len(x) for x in corpus.cluster.values()])
+		max_voca = max([len(x) for x in corpus.cluster_list])
 		if max_voca_restriction is not None and max_voca_restriction > 0:
 			max_voca = max_voca_restriction
 		max_voca += self.chunk_size - max_voca % self.chunk_size if max_voca % self.chunk_size > 0 else 0
 		
-		max_jamo = max([x.max_jamo for x in corpus.cluster.values()])
+		max_jamo = max([x.max_jamo for x in corpus.cluster_list])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
 			max_jamo = max_jamo_restriction
 
-		print("Max vocabulary in cluster(with padding):", max_voca)
-		print("Max jamo in word:", max_jamo)
-		for cluster in tqdm(corpus.cluster.values(), desc="Padding vocab tensors"):
+		gl.logger.debug("Max vocabulary in cluster(with padding): %d" % max_voca)
+		gl.logger.debug("Max jamo in word: %d" % max_jamo)
+		for cluster in tqdm(corpus.cluster_list, desc="Padding vocab tensors"):
 
 			jamo, wlctx, wrctx, elctx, erctx, _, _ = cluster.vocab_tensors
 
@@ -284,19 +273,23 @@ class DataModule():
 
 			for item in jamo:
 				item += [0] * (max_jamo - len(item))
-
-			pad = max_voca - len(jamo)
-			jamo += [[0] * max_jamo] * pad
-			wlctx += [[0] * self.ctx_window_size] * pad
-			wrctx += [[0] * self.ctx_window_size] * pad
-			elctx += [[0] * self.ctx_window_size] * pad
-			erctx += [[0] * self.ctx_window_size] * pad
-			if len(jamo) > max_voca:
+			if len(jamo) < max_voca:
+				pad = max_voca - len(jamo)
+				jamo += [[0] * max_jamo] * pad
+				wlctx += [[0] * self.ctx_window_size] * pad
+				wrctx += [[0] * self.ctx_window_size] * pad
+				elctx += [[0] * self.ctx_window_size] * pad
+				erctx += [[0] * self.ctx_window_size] * pad
+			elif len(jamo) > max_voca:
 				jamo = jamo[:max_voca]
 				wlctx = wlctx[:max_voca]
 				wrctx = wrctx[:max_voca]
 				elctx = elctx[:max_voca]
 				erctx = erctx[:max_voca]
+
+			assert len(jamo) == max_voca
+			assert len(jamo[0]) == max_jamo
+			cluster.cluster = cluster.cluster[:max_voca]
 			cluster.update_tensor(*[torch.tensor(x).to(self.target_device) for x in [jamo, wlctx, wrctx, elctx, erctx]])
 
 
