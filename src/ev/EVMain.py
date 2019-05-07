@@ -1,5 +1,5 @@
 from .. import GlobalValues as gl
-from ..ds import Corpus
+from ..ds import Corpus, FakeCluster
 from ..utils import jsondump
 from .models.IntraClusterModel import ThreeScorerModel, JointScorerModel
 from .models.ValidationModel import ValidationModel
@@ -40,7 +40,7 @@ class EV():
 		self.dataset = DataModule(mode, self.args)
 		if self.mode == "train":
 			gl.logger.info("Cluster size: %d" % len(self.dataset.corpus.cluster_list))
-			gl.logger.info("Cluster out of KB: %d" % len([x for x in self.dataset.corpus.cluster_list if not x.is_in_kb]))
+			gl.logger.info("Cluster out of KB: %d" % len([x for x in self.dataset.corpus.cluster_list if type(x) is FakeCluster]))
 			self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
@@ -104,8 +104,11 @@ class EV():
 					# tp += [1 if x > 0.5 else 0 for x in pred]
 					# tl += [x.data for x in labels]
 				except:
+					import traceback
+					traceback.print_exc()
 					err_count += 1
-			gl.logger.debug("Epoch %d error %d" % (epoch, err_count))
+			if err_count > 0:
+				gl.logger.debug("Epoch %d error %d" % (epoch, err_count))
 			# gl.logger.info(tp[:10], tl[:10])
 			# gl.logger.info("Train F1: %.2f" % metrics.f1_score(tl, tp, labels=[0,1], average="micro"))
 			gl.logger.info("Epoch %d loss %f" % (epoch, loss))

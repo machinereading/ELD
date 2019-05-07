@@ -290,7 +290,7 @@ class DataModule():
 			assert len(jamo) == max_voca
 			assert len(jamo[0]) == max_jamo
 			cluster.cluster = cluster.cluster[:max_voca]
-			cluster.update_tensor(*[torch.tensor(x).to(self.target_device) for x in [jamo, wlctx, wrctx, elctx, erctx]])
+			cluster.update_tensor(*[torch.tensor(x) for x in [jamo, wlctx, wrctx, elctx, erctx]])
 
 
 	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):

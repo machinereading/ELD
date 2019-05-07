@@ -58,7 +58,7 @@ class AvgTransformer(nn.Module):
 		er_input_dim = args.er_output_dim
 		el_input_dim = args.el_output_dim
 		jamo_dim = args.char_embedding_dim
-		self.transformer = nn.Linear(args.jamo_embed_dim+er_input_dim*2+el_input_dim*2, args.transform_dim) # 48 is hard coded
+		self.transformer = nn.Linear(args.jamo_embed_dim+er_input_dim*2+el_input_dim*2+2, args.transform_dim) # 48 is hard coded
 
 	def forward(self, jamo, word, entity):
 		# input: batch size * max voca * embedding size
@@ -66,8 +66,12 @@ class AvgTransformer(nn.Module):
 		j = TensorUtil.nonzero_avg_stack(jamo)
 		w = TensorUtil.nonzero_avg_stack(word)
 		e = TensorUtil.nonzero_avg_stack(entity)
+
+		w_std = TensorUtil.nonzero_std_dev(word).view(-1, 1)
+		e_std = TensorUtil.nonzero_std_dev(entity).view(-1, 1)
+		# print(w_std.size(), e_std.size())
 		# print(j.size(), w.size(), e.size())
-		return F.relu(self.transformer(torch.cat([j, w, e], -1)))
+		return F.relu(self.transformer(torch.cat([j, w, w_std, e, e_std], -1)))
 		
 
 

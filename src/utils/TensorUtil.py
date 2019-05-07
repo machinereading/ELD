@@ -2,13 +2,16 @@ import torch
 from . import TimeUtil
 
 
-@TimeUtil.measure_time
+def nonzero_std_dev(tensor):
+	nzt = [torch.mean(torch.std(t[:nonzero_item_count(t)], dim=1)) for t in tensor]
+	return torch.stack(nzt)
+
+
 def nonzero_avg_stack(tensor):
 	# input: 3 dimension tensor - max voca * max jamo * embedding size
 	# output: 2 dimension tensor - max voca * embedding size
-	# 지금 이거 원하는대로 동작 안함. 지금 임베딩이 빠지는 중이니까 확인 필요
-	nz = nonzero_item_count(tensor)
-	tensor = tensor.sum(1) / nz if nz > 0 else tensor
+	nz = torch.tensor([nonzero_item_count(t) for t in tensor]).to(tensor.device, dtype=torch.float32).view(-1, 1) + 0.01
+	tensor = tensor.sum(1) / nz
 	return tensor
 
 
@@ -21,3 +24,4 @@ def nonzero_item_count(tensor):
 			continue
 		result += 1
 	return result
+

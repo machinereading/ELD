@@ -67,20 +67,26 @@ class ValidationModel(nn.Module):
 		chunks = jamo_index.size()[0] * jamo_index.size()[1] // self.chunk_size
 		size = (size-1) // self.chunk_size + 1
 		jamo_size = jamo_index.size()[-1]
-		window_size = cluster_word_lctx.size()[-1]
 
 		# print(jamo_index.size())
 		# for item in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1):
 		# 	print(item.size(), torch.sum(item))
 		# print(torch.stack([x for x in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1) if torch.sum(x) != 0]).size())
-		jamo_index = torch.stack([x for x in jamo_index.view(-1, self.chunk_size, jamo_size) if torch.sum(x) != 0]).view(-1, jamo_size)
-		cluster_word_lctx = torch.stack([x for x in cluster_word_lctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
-		cluster_word_rctx = torch.stack([x for x in cluster_word_rctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
-		cluster_entity_lctx = torch.stack([x for x in cluster_entity_lctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
-		cluster_entity_rctx = torch.stack([x for x in cluster_entity_rctx.view(-1, self.chunk_size, window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
-		
+		nonzero_stack = lambda tensor, size: torch.stack([x for x in tensor.view(-1, self.chunk_size, size) if torch.sum(x) != 0]).view(-1, size)
+
+		# jamo_index = torch.stack([x for x in jamo_index.view(-1, self.chunk_size, jamo_size) if torch.sum(x) != 0]).view(-1, jamo_size)
+		# cluster_word_lctx = torch.stack([x for x in cluster_word_lctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		# cluster_word_rctx = torch.stack([x for x in cluster_word_rctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		# cluster_entity_lctx = torch.stack([x for x in cluster_entity_lctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		# cluster_entity_rctx = torch.stack([x for x in cluster_entity_rctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
+		jamo_index = nonzero_stack(jamo_index, jamo_size)
+		cluster_word_lctx = nonzero_stack(cluster_word_lctx, self.window_size)
+		cluster_word_rctx = nonzero_stack(cluster_word_rctx, self.window_size)
+		cluster_entity_lctx = nonzero_stack(cluster_entity_lctx, self.window_size)
+		cluster_entity_rctx = nonzero_stack(cluster_entity_rctx, self.window_size)
+
 		# print(size)
-		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size()) # 100 * non-empty batch size * jamo size
+		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size(), size.size()) # 100 * non-empty batch size * jamo size
 		assert jamo_index.size()[0] == cluster_word_lctx.size()[0] == cluster_word_rctx.size()[0] == cluster_entity_lctx.size()[0] == cluster_entity_rctx.size()[0], "Size mismatch"
 		# assert torch.sum(size) == jamo.index.size()[0]
 		c_embedding = self.ce(jamo_index).view(-1, jamo_size, self.ce_dim) # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
@@ -107,7 +113,6 @@ class ValidationModel(nn.Module):
 
 		
 		cluster_representation = self.cluster_transformer(c_embedding, w_embedding, e_embedding) # batch size * cluster representation size
-		# print(cluster_representation.size())
 		# print(cluster_representation)
 		# prediction - let's try simple FFNN this time
 		prediction = self.predict(cluster_representation)
