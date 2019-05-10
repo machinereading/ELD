@@ -1,18 +1,18 @@
 import json
-import functools
-import logging
 import pickle
+import socket
+
 from .AbstractArgument import AbstractArgument
+
 # not used anymore - use tqdm instead
 def progress(curprog, total, size=10):
 	if curprog < 0 or total < 0 or size < 0:
 		return ""
 	a = int((curprog / total) * size)
-	return "["+("*"*a)+(" "*(size - a)) + "]"
+	return "[" + ("*" * a) + (" " * (size - a)) + "]"
 
 def printfunc(s):
-	print("\r"+s, end="", flush=True)
-
+	print("\r" + s, end="", flush=True)
 
 # useful macros
 def jsonload(fname):
@@ -32,29 +32,29 @@ def readfile(fname):
 def writefile(iterable, fname, processor=lambda x: x):
 	with open(fname, "w", encoding="UTF8") as f:
 		for item in iterable:
-			f.write(processor(item)+"\n")
+			f.write(processor(item) + "\n")
 
 def pickleload(fname):
 	with open(fname, "rb") as f:
 		result = pickle.load(f)
 	return result
 
-
 def split_to_batch(l, batch_size=100):
-	return [l[x*batch_size:x*batch_size+batch_size] for x in range(len(l) // batch_size + 1)]
-	# result = []
-	# temp = []
-	# for item in l:
-	# 	temp.append(item)
-	# 	if len(temp) == batch_size:
-	# 		result.append(temp[:])
-	# 		temp = []
-	# result.append(temp)
-	# return result
+	return [l[x * batch_size:x * batch_size + batch_size] for x in range(len(l) // batch_size + 1)]
+
+# result = []
+# temp = []
+# for item in l:
+# 	temp.append(item)
+# 	if len(temp) == batch_size:
+# 		result.append(temp[:])
+# 		temp = []
+# result.append(temp)
+# return result
 
 def split_to_equal_size(l, num):
 	k = len(l) // num
-	return [l[x*k:(x+1)*k] for x in range(num+1)]
+	return [l[x * k:(x + 1) * k] for x in range(num + 1)]
 
 def one_hot(i, total):
 	i = int(i)
@@ -62,6 +62,30 @@ def one_hot(i, total):
 	result[i] = 1
 	return result
 
-#useful macros
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
+def getETRI(text):
+	host = '143.248.135.146'
+	port = 33333
+
+	ADDR = (host, port)
+	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	try:
+		clientSocket.connect(ADDR)
+	except Exception as e:
+		gl.logger.warning("ETRI connection failed")
+		return None
+	try:
+		clientSocket.sendall(str.encode(text))
+		buffer = bytearray()
+		while True:
+			data = clientSocket.recv(1024)
+			if not data:
+				break
+			buffer.extend(data)
+		result = json.loads(buffer.decode(encoding='utf-8'))
+		return result
+
+	except Exception as e:
+		gl.logger.warning("ETRI connection lost")
+		return None

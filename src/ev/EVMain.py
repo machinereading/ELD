@@ -1,32 +1,30 @@
+import sklearn.metrics as metrics
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+from .models import ValidationModel, JointScorerModel
+from .utils.args import EVArgs
+from .utils.data import DataModule, ClusterGenerator
 from .. import GlobalValues as gl
 from ..ds import Corpus, FakeCluster
 from ..utils import jsondump
-from .models.IntraClusterModel import ThreeScorerModel, JointScorerModel
-from .models.ValidationModel import ValidationModel
-from .utils.args import EVArgs
-from .utils.data import DataModule, SentenceGenerator, ClusterGenerator
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-import numpy as np
-from tqdm import tqdm
-import sklearn.metrics as metrics
-
-import logging
-
-class EV():
+class EV:
 	def __init__(self, mode, model_name, config_file=None):
 		# initialize arguments
 		self.mode = mode
 		if mode == "train":
-			self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
+			self.args = EVArgs(model_name) if config_file is None else EVArgs.from_config(config_file)
 		else:
 			try:
 				self.args = EVArgs.from_json("data/ev/%s_args.json" % model_name)
+			except FileNotFoundError:
+				gl.logger.critical("No argument file exists!")
 			except:
-				gl.logger.info("No argument file exists!")
+				gl.logger.critical("Error on loading argument file")
+				import traceback
+				traceback.print_exc()
 		# self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 		if torch.cuda.is_available():
 			self.args.device = "cuda"
@@ -40,45 +38,44 @@ class EV():
 		self.dataset = DataModule(mode, self.args)
 		if self.mode == "train":
 			gl.logger.info("Cluster size: %d" % len(self.dataset.corpus.cluster_list))
-			gl.logger.info("Cluster out of KB: %d" % len([x for x in self.dataset.corpus.cluster_list if type(x) is FakeCluster]))
+			gl.logger.info(
+					"Cluster out of KB: %d" % len(
+							[x for x in self.dataset.corpus.cluster_list if type(x) is FakeCluster]))
 			self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
 			jsondump(self.args.to_json(), "data/ev/%s_args.json" % model_name)
 		# load / initialize model
-		
+		if self.args.use_intracluster_scoring:
+			self.intra_cluster_model = JointScorerModel(self.args).to(self.args.device)
 		self.validation_model = ValidationModel(self.args).to(self.args.device)
 		self.validation_model_parallel = nn.DataParallel(self.validation_model)
 		try:
 			gl.logger.info("Loading model from %s" % self.args.validation_model_path)
 			self.validation_model.load_state_dict(torch.load(self.args.validation_model_path))
+			if self.args.use_intracluster_scoring:
+				self.intra_cluster_model.load_state_dict(torch.load(self.args.joint_model_path))
 			gl.logger.info("Validation model loaded")
-		except:
+		except Exception:
 			if self.mode == "train":
 				gl.logger.info("Creating new validation model")
 			else:
 				import traceback
 				traceback.print_exc()
 				raise Exception("Model %s not exists!" % model_name)
-		gl.logger.debug("Total number of parameters: %d" % sum(p.numel() for p in self.validation_model_parallel.parameters() if p.requires_grad))
-
-		# pretrain
-		# pretrain is required to fix inner models of scorer, even if there is nothing to pretrain
-		self.pretrain()
-		
+		gl.logger.debug("Total number of parameters: %d" % sum(
+				p.numel() for p in self.validation_model_parallel.parameters() if p.requires_grad))
 
 	def train(self):
 		gl.logger.info("Start EV Training")
 		best_dev_f1 = 0
-		best_dev_precision = 0
-		best_dev_recall = 0
 		best_epoch = 0
 		optimizer = torch.optim.Adam(self.validation_model_parallel.parameters(), lr=self.args.lr)
 		train_generator = ClusterGenerator(self.cluster_train, for_train=True)
 		train_dataloader = DataLoader(train_generator, batch_size=self.batch_size, shuffle=True)
 		dev_generator = ClusterGenerator(self.cluster_dev)
 		dev_dataloader = DataLoader(dev_generator, batch_size=self.batch_size, shuffle=False)
-		for epoch in range(1, self.args.epoch+1):
+		for epoch in range(1, self.args.epoch + 1):
 			self.validation_model.train()
 			tp = []
 			tl = []
@@ -92,7 +89,7 @@ class EV():
 					pred = self.validation_model_parallel(jamo, wl, wr, el, er, size).view(-1)
 					li = 0
 					labels = []
-					for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
+					for s in [(x - 1) // self.args.chunk_size + 1 for x in size]:
 						for _ in range(s):
 							labels.append(label[li])
 						li += 1
@@ -101,8 +98,8 @@ class EV():
 					# loss = F.binary_cross_entropy(pred, torch.FloatTensor(labels).to(self.args.device))
 					loss.backward()
 					optimizer.step()
-					# tp += [1 if x > 0.5 else 0 for x in pred]
-					# tl += [x.data for x in labels]
+				# tp += [1 if x > 0.5 else 0 for x in pred]
+				# tl += [x.data for x in labels]
 				except:
 					import traceback
 					traceback.print_exc()
@@ -121,13 +118,13 @@ class EV():
 					pred = self.validation_model_parallel(jamo, wl, wr, el, er, size)
 					pi = 0
 					scores = []
-					for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
-						scores.append(torch.mean(pred[pi:pi+s]))
+					for s in [(x - 1) // self.args.chunk_size + 1 for x in size]:
+						scores.append(torch.mean(pred[pi:pi + s]))
 						pi += s
 					preds += [1 if x > 0.5 else 0 for x in scores]
 					labels += list(label.to(device="cpu", dtype=torch.int32).numpy())
 
-				f1 = metrics.f1_score(labels, preds, labels=[0,1], average="micro")
+				f1 = metrics.f1_score(labels, preds, labels=[0, 1], average="micro")
 				gl.logger.info("F1: %.2f" % (f1 * 100))
 				# import sys
 				# sys.exit(0)
@@ -136,36 +133,30 @@ class EV():
 					best_epoch = epoch
 					torch.save(self.validation_model.state_dict(), self.args.validation_model_path)
 				gl.logger.info("Best F1: %.2f @ epoch %d" % (best_dev_f1 * 100, best_epoch))
-	
-	def pretrain(self):
-		gl.logger.info("Start EV Pretraining")
-
-		# self.cluster_model.pretrain(SentenceGenerator(self.sentence_train), SentenceGenerator(self.sentence_dev))
-		# self.cluster_model.pretrain(self.dataset)
-		# self.validation_model.pretrain(self.cluster_generator)
+		gl.logger.info("Model %s train complete" % self.args.model_name)
 
 	def validate(self, corpus):
 		# entity set to tensor
 		assert type(corpus) is dict or type(corpus) is Corpus
 		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=self.args.max_jamo)
 		loader = DataLoader(ClusterGenerator(corpus, filter_nik=True), batch_size=self.batch_size, shuffle=False)
-
+		gl.logger.info("Clusters to validate: %d" % len(corpus.cluster_list))
 		# validate tensor
 		preds = []
 		for jamo, wl, wr, el, er, size, _ in loader:
-			jamo, wl, wr, el, er = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(self.args.device), er.to(self.args.device)
+			jamo, wl, wr, el, er = jamo.to(self.args.device), wl.to(self.args.device), wr.to(self.args.device), el.to(
+					self.args.device), er.to(self.args.device)
 			pred = self.validation_model_parallel(jamo, wl, wr, el, er, size)
 			pi = 0
 			scores = []
-			for s in [(x-1) // self.args.chunk_size + 1 for x in size]:
-				scores.append(torch.mean(pred[pi:pi+s]))
+			for s in [(x - 1) // self.args.chunk_size + 1 for x in size]:
+				scores.append(torch.mean(pred[pi:pi + s]))
 				pi += s
-			preds += [1 if x > 0.5 else 0 for x in scores]
+			preds += [1 if x.data > 0.5 else 0 for x in scores]
 		# mark
 		for cluster, prediction in zip(corpus.cluster_list, preds):
 			cluster.kb_uploadable = prediction > 0.5
 		return corpus
-		
 
 	def __call__(self, corpus):
 		return self.validate(corpus)
@@ -177,4 +168,14 @@ class EV():
 	@property
 	def entity_embedding(self):
 		return self.validation_model.ee
-		
+
+class EV_All:
+	def __call__(self, corpus):
+		for cluster in corpus.cluster_list:
+			cluster.kb_uploadable = True
+
+class EV_Random:
+	def __call__(self, corpus):
+		import random
+		for cluster in corpus.cluster_list:
+			cluster.kb_uploadable = random.random() > 0.5

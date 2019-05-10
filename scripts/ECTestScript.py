@@ -1,4 +1,4 @@
-from src.ec.ECMain import EC
+from src.ec.ECMain_synsetmine import EC
 from src.utils import readfile, writefile, jsondump, jsonload, TimeUtil
 
 

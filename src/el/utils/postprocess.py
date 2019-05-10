@@ -2,9 +2,7 @@ def merge_item(j, result_dict, delete_candidate=True):
 	if type(j) is not list:
 		j = [j]
 
-	result = {}
 	target_name = ""
-	target_json = None
 	# ind = 0
 
 	for doc_name, pred in result_dict.items():
@@ -33,17 +31,25 @@ def merge_item(j, result_dict, delete_candidate=True):
 				p = "NOT_IN_CANDIDATE"
 			target_json["entities"][ind]["entity"] = p
 			ind += 1
-					
 
-		# target_json["entities"][ind]["entity"] = l[2]
-		# print(target_json["entities"][ind]["start"])
-		# ind += 1
+	# target_json["entities"][ind]["entity"] = l[2]
+	# print(target_json["entities"][ind]["start"])
+	# ind += 1
 	return j
 
+def merge_item_with_corpus(sentences, result_dict):
+	for s, r in zip(sentences, result_dict):
+		for entity in r["entities"]:
+			target_voca = s.find_token_by_index(entity["start"])
+			if target_voca is not None:
+				target_voca.entity = entity["entity"]
+	return sentences
 
 if __name__ == '__main__':
 	print("merge result")
 	import json
-	with open("test_result_marking.txt", encoding="UTF8") as result_file, open("tta.json", encoding="UTF8") as j, open("tta_merged.json", "w", encoding="UTF8") as wf:
+
+	with open("test_result_marking.txt", encoding="UTF8") as result_file, open("tta.json", encoding="UTF8") as j, open(
+			"tta_merged.json", "w", encoding="UTF8") as wf:
 		jj = json.load(j)
 		json.dump(merge_item(jj, result_file), wf, ensure_ascii=False, indent="\t")

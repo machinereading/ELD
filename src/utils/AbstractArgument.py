@@ -1,4 +1,5 @@
 from abc import ABC
+
 class AbstractArgument(ABC):
 	@classmethod
 	def from_json(cls, json_file):
@@ -29,7 +30,6 @@ class AbstractArgument(ABC):
 				except AttributeError:
 					pass
 		return args
-
 
 	def to_json(self):
 		return self.__dict__

@@ -1,10 +1,12 @@
-import os
 import json
+import os
+
 from ...utils import jsondump
+
 def eval(module, corpus_dir):
 	eval_target = []
 	for item in os.listdir(corpus_dir):
-		with open(corpus_dir+item, encoding="UTF8") as f:
+		with open(corpus_dir + item, encoding="UTF8") as f:
 			j = json.load(f)
 			j["fileName"] = item.split(".")[0]
 			eval_target.append(j)
@@ -20,7 +22,7 @@ def eval(module, corpus_dir):
 	r_target = 0
 	p_target = 0
 	wrong_count = [0, 0, 0, 0]
-	wrong_list = [[],[],[],[]]
+	wrong_list = [[], [], [], []]
 	correct_candidates = {}
 	wrong_candidates = {}
 	candidate_lens = {}
@@ -76,12 +78,12 @@ def eval(module, corpus_dir):
 
 	entity_count = sum(map(lambda x: len(x["entities"]), eval_target))
 	result = {
-		"Total": entity_count,
-		"Correct": correct_count,
-		"Error": error_count,
-		"Wrong": {"Type %d" % (i+1): len(wrong_list[i]) for i in range(len(wrong_list))},
-		"Wrong Result": {"Type %d" % (i+1): wrong_list[i] for i in range(len(wrong_list))},
-		"Dark entity": "%d / %d" % (dark_entity_correct_count, dark_entity_count),
+		"Total"       : entity_count,
+		"Correct"     : correct_count,
+		"Error"       : error_count,
+		"Wrong"       : {"Type %d" % (i + 1): len(wrong_list[i]) for i in range(len(wrong_list))},
+		"Wrong Result": {"Type %d" % (i + 1): wrong_list[i] for i in range(len(wrong_list))},
+		"Dark entity" : "%d / %d" % (dark_entity_correct_count, dark_entity_count),
 	}
 	with open("debug/%s_eval_result.json" % module.model_name, "w", encoding="UTF8") as f:
 		json.dump(result, f, ensure_ascii=False, indent="\t")
@@ -89,10 +91,10 @@ def eval(module, corpus_dir):
 	p = correct_count / p_target
 	r = correct_count / r_target
 	f = 2 * p * r / (p + r)
-	print("P: %f, R: %f, F1: %f" % (p,r,f))
+	print("P: %f, R: %f, F1: %f" % (p, r, f))
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):
-		print("Type %d Error: %d" % (i+1, len(wrong_list[i])))
+		print("Type %d Error: %d" % (i + 1, len(wrong_list[i])))
 	print("Dark entity detection rate: %.2f" % (dark_entity_correct_count / dark_entity_count * 100))
 	# print("Correct candidates: ", correct_candidates / correct_count, "Wrong candidates: ", wrong_candidates / sum(wrong_count))
 	jsondump(candidate_lens, "candidate_lens.json")

@@ -1,5 +1,7 @@
 import torch
+
 from ...utils import TensorUtil
+
 class EmbeddingCalculator():
 	def __init__(self, word_embedding, entity_embedding):
 		if torch.cuda.is_available():
@@ -16,9 +18,9 @@ class EmbeddingCalculator():
 		lctx_emb = self.entity_embedding(lctxe)
 		rctx_emb = self.entity_embedding(rctxe)
 
-		cvec = (lctx_emb + rctx_emb) / 2 # -1, 100, 5, 300 -> -1, 300
+		cvec = (lctx_emb + rctx_emb) / 2  # -1, 100, 5, 300 -> -1, 300
 
 		size = cvec.size()
-		cvec = cvec.view([-1, size[1]*size[2], self.entity_embedding.embedding_dim]) # -1, 500, 300
+		cvec = cvec.view([-1, size[1] * size[2], self.entity_embedding.embedding_dim])  # -1, 500, 300
 		cvec = TensorUtil.nonzero_avg_stack(cvec)
 		return cvec.cpu().numpy()

@@ -1,5 +1,4 @@
 from .CandidateDict import CandidateDict
-from ...utils import TimeUtil
 
 # with TimeUtil.TimeChecker("Entity dict load"):
 # 	with open("data/el/wiki_entity_dict.json", encoding="UTF8") as f:

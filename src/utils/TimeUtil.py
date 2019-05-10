@@ -1,7 +1,9 @@
-import time
 import functools
+import time
+
 time_checker = {}
 time_millis = lambda: int(round(time.time() * 1000))
+
 class TimeHierarchy():
 	def __init__(self, name, parent):
 		self.parent = parent
@@ -11,7 +13,7 @@ class TimeHierarchy():
 			self.name = name
 		self.start_time = 0
 		self.total_time = 0
-		
+
 		if self.parent is not None:
 			self.parent.child.append(self)
 		self.child = []
@@ -25,20 +27,23 @@ class TimeHierarchy():
 
 		if self.total_time is None:
 			raise Exception("Time not measured properly: %s" % self.name)
-		
+
 		# parent_total_time = self.parent.total_time if self.parent is not None else self.total_time
 		longest_name = max([len(x) for x in time_checker.keys()])
 		if self.parent is None:
 			self.total_time = time_millis() - self.start_time
 			total_time_len = len(convert_millis(self.total_time))
-			print(("{0:%d}{1:%d}{2:10}" % (longest_name+5, total_time_len+5)).format("Name", "Time", "Global %"))
-		
+			print(("{0:%d}{1:%d}{2:10}" % (longest_name + 5, total_time_len + 5)).format("Name", "Time", "Global %"))
+
 		global_total_time = self.getroot().total_time
 		global_total_time_str = convert_millis(global_total_time)
-		print(("{0:%d}{1:%d}{2:10}" % (longest_name+5, len(global_total_time_str)+5)).format(self.name, convert_millis(self.total_time), "%.2f%%" % (self.total_time / global_total_time * 100)))
+		print(("{0:%d}{1:%d}{2:10}" % (longest_name + 5, len(global_total_time_str) + 5)).format(self.name,
+		                                                                                         convert_millis(
+			                                                                                         self.total_time),
+		                                                                                         "%.2f%%" % (
+					                                                                                         self.total_time / global_total_time * 100)))
 		for item in sorted(self.child, key=lambda x: x.total_time):
 			item.printiter()
-
 
 def convert_millis(val):
 	millis = val % 1000
@@ -55,8 +60,6 @@ def convert_millis(val):
 	if hour > 0:
 		result = ("%dh " % hour) + result
 	return result
-	
-
 
 root = TimeHierarchy("R", None)
 current_running_item = root
@@ -64,7 +67,6 @@ root.start_time = time_millis()
 
 def time_analysis(except_keys=[]):
 	root.printiter()
-
 
 def enter(key):
 	global current_running_item
@@ -89,6 +91,7 @@ def measure_time(fn):
 		result = fn(*args, **kwargs)
 		out()
 		return result
+
 	return wrapper
 
 class TimeChecker():

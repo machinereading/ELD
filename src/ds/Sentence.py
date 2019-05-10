@@ -1,7 +1,7 @@
-from ..utils.KoreanUtil import stem_sentence
-from .. import GlobalValues as gl
 from .Vocabulary import Vocabulary
-class Sentence():
+from .. import GlobalValues as gl
+
+class Sentence:
 	def __init__(self, sentence, tokenize_method=lambda x: x.split(" "), init=True):
 		if not init: return
 		self.original_sentence = sentence
@@ -24,7 +24,7 @@ class Sentence():
 	def __iter__(self):
 		for token in self.tokens:
 			yield token
-			
+
 	def __len__(self):
 		return len(self.tokens)
 
@@ -39,12 +39,16 @@ class Sentence():
 	def not_in_kb_entities(self):
 		return [x for x in self.tokens if x.is_entity and not x.entity_in_kb]
 
-
-	
+	def find_token_by_index(self, ind):
+		for item in self.tokens:
+			if item.char_ind == ind:
+				return item
+		return None
 
 	def add_ne(self, sin, ein, surface, entity=None):
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
+
 		def split_token(new_token, token):
 			sin = new_token.char_ind
 			ein = new_token.char_ind + len(new_token.surface)
@@ -55,15 +59,15 @@ class Sentence():
 			if ein <= token.char_ind: return [token]
 			# case 1: token start / sin / token end
 			if token.char_ind < sin < token_end:
-				tok1 = Vocabulary(token.surface[:sin-token.char_ind], self, char_ind=token.char_ind)
+				tok1 = Vocabulary(token.surface[:sin - token.char_ind], self, char_ind=token.char_ind)
 				return [tok1, new_token]
 			# case 2: token start / ein / token end
 			if token.char_ind < ein < token_end:
-				tok1 = Vocabulary(token.surface[ein-token.char_ind:], self, char_ind=ein)
+				tok1 = Vocabulary(token.surface[ein - token.char_ind:], self, char_ind=ein)
 				return [new_token, tok1]
 			# case 3: token start / sin / ein / token end
-			tok1 = Vocabulary(token.surface[:sin-token.char_ind], self, char_ind=token.char_ind)
-			tok2 = Vocabulary(token.surface[ein-token.char_ind:], self, char_ind=ein)
+			tok1 = Vocabulary(token.surface[:sin - token.char_ind], self, char_ind=token.char_ind)
+			tok2 = Vocabulary(token.surface[ein - token.char_ind:], self, char_ind=ein)
 			return [tok1, new_token, tok2]
 
 		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_ind=sin)
@@ -73,7 +77,8 @@ class Sentence():
 		new_token_list = []
 		for token in self.tokens:
 			new_token_list += split_token(new_token, token)
-			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[:-1]
+			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[
+			                                                                                          :-1]
 		for i, token in enumerate(new_token_list):
 			token.token_ind = i
 
@@ -81,7 +86,6 @@ class Sentence():
 
 	def add_fake_entity(self, target_vocab):
 		assert target_vocab in self.tokens
-
 
 	@classmethod
 	def from_cw_form(cls, cw_form):
@@ -103,18 +107,18 @@ class Sentence():
 			except:
 				error_count += 1
 		# if error_count > 0:
-			# print(error_count, len(entities))
+		# print(error_count, len(entities))
 		# postprocess
 		sentence.tokens = sorted(list(set(sentence.tokens)), key=lambda x: x.char_ind)
 		return sentence
 
-
 	def to_json(self):
 		return {
 			"original_sentence": self.original_sentence,
-			"id": self.id,
-			"tokens": [x.to_json() for x in self.tokens]
+			"id"               : self.id,
+			"tokens"           : [x.to_json() for x in self.tokens]
 		}
+
 	@classmethod
 	def from_json(cls, json):
 		sentence = cls(json["original_sentence"])
@@ -132,11 +136,11 @@ class Sentence():
 	def vocab_tensors(self):
 		if self._vocab_tensors is None:
 			self._vocab_tensors = {
-				"lctx_words": [],
-				"rctx_words": [],
+				"lctx_words"   : [],
+				"rctx_words"   : [],
 				"lctx_entities": [],
 				"rctx_entities": [],
-				"error_type": []
+				"error_type"   : []
 			}
 			for vocab in self:
 				self._vocab_tensors["lctx_words"].append(vocab.lctxw_ind)
@@ -144,6 +148,5 @@ class Sentence():
 				self._vocab_tensors["lctx_entities"].append(vocab.lctxe_ind)
 				self._vocab_tensors["rctx_entities"].append(vocab.rctxe_ind)
 				self._vocab_tensors["error_type"].append(vocab.error_type)
-		
+
 		return self._vocab_tensors
-			

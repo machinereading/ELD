@@ -1,14 +1,16 @@
-from .Sentence import Sentence
-from .Cluster import Cluster
-from ..utils import jsonload, TimeUtil
+import logging
 
 from tqdm import tqdm
-import logging
-class Corpus():
+
+from .Cluster import Cluster
+from .Sentence import Sentence
+from ..utils import jsonload, TimeUtil
+
+class Corpus:
 	def __init__(self):
-		self.corpus = [] # list of sentence
+		self.corpus = []  # list of sentence
 		self.tagged_voca_lens = []
-		self.cluster = {} # dict of str(entity form): Cluster
+		self.cluster = {}  # dict of str(entity form): Cluster
 		self.additional_cluster = []
 
 	def add_sentence(self, sentence):
@@ -29,12 +31,10 @@ class Corpus():
 	@property
 	def id2c(self):
 		return {i: v for i, v in enumerate(self.cluster_list)}
-	
 
 	@property
 	def max_jamo(self):
 		return max([x.max_jamo for x in self.cluster_list])
-	
 
 	@TimeUtil.measure_time
 	def __getitem__(self, ind):
@@ -47,7 +47,7 @@ class Corpus():
 				return self.corpus[senind][ind - acclen]
 			senind += 1
 			accbuf += l
-		raise IndexOutOfRangeException
+		raise IndexError
 
 	def get_cluster_by_index(self, ind):
 		return self.cluster_list[ind]
@@ -65,9 +65,9 @@ class Corpus():
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
 			corpus.add_sentence(sentence)
-			
+
 			for nt in sentence.entities:
-				if nt.entity not in ["NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "NOT_AN_ENTITY"]: # for gold set test
+				if nt.entity not in ["NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "NOT_AN_ENTITY"]:  # for gold set test
 					entity = nt.entity
 				else:
 					entity = nt.surface
@@ -79,16 +79,15 @@ class Corpus():
 		# corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
-
 	def to_json(self):
 		return [sent.to_json() for sent in self.corpus]
-		
+
 	@classmethod
 	def from_json(cls, json):
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
-		for sentence in tqdm(json, desc="Loading EV corpus"): # limit data for runnablity 
+		for sentence in tqdm(json, desc="Loading EV corpus"):  # limit data for runnablity
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.corpus.append(sentence)

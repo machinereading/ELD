@@ -1,24 +1,21 @@
 # from konlpy.tag import Okt
-import numpy as np
 
-from ...utils import TimeUtil, progress, printfunc, pickleload
-from ...ds import *
-from ... import GlobalValues as gl
-# from . import candidate_dict
-
-
-import re
-import random
-import string
 import json
-import os
-import pickle
-from functools import reduce
+import random
+import re
 import socket
+import string
+from functools import reduce
+
+from ... import GlobalValues as gl
+from ...utils import TimeUtil
+
+# from . import candidate_dict
 
 RE_EMOJI = re.compile('[\U00010000-\U0010ffff]', flags=re.UNICODE)
 # okt = Okt()
 dbpedia_prefix = "ko.dbpedia.org/resource/"
+
 # with open("data/el/wiki_entity_calc.pickle", "rb") as f:
 # 	ent_dict = pickle.load(f)
 # with open("data/el/wiki_entity_cooccur.pickle", "rb") as f:
@@ -26,9 +23,6 @@ dbpedia_prefix = "ko.dbpedia.org/resource/"
 # ent_form = ent_form.keys()
 # with open("data/el/redirects.pickle", "rb") as f:
 # 	redirects = pickle.load(f)
-
-
-
 
 
 @TimeUtil.measure_time
@@ -50,10 +44,10 @@ def candidates_old(word):
 def getETRI(text):
 	host = '143.248.135.146'
 	port = 33333
-	
+
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	try: 
+	try:
 		clientSocket.connect(ADDR)
 	except Exception as e:
 		gl.logger.warning("ETRI connection failed")
@@ -73,7 +67,6 @@ def getETRI(text):
 		gl.logger.warning("ETRI connection lost")
 		return None
 
-
 def find_ne_pos(j):
 	def find_in_wsd(wsd, ind):
 		for item in wsd:
@@ -81,9 +74,10 @@ def find_ne_pos(j):
 				return item
 		print(wsd, ind)
 		raise IndexError(ind)
+
 	if j is None:
 		return None
-	original_text = reduce(lambda x, y: x+y, list(map(lambda z: z["text"], j["sentence"])))
+	original_text = reduce(lambda x, y: x + y, list(map(lambda z: z["text"], j["sentence"])))
 	# original_text = j["sentence"]
 	# print(original_text)
 	# print(j)
@@ -92,7 +86,7 @@ def find_ne_pos(j):
 		for v in j["sentence"]:
 			sentence = v["text"]
 			for ne in v["NE"]:
-				morph_start = find_in_wsd(v["morp"],ne["begin"])
+				morph_start = find_in_wsd(v["morp"], ne["begin"])
 				# morph_end = find_in_wsd(v["WSD"],ne["end"])
 				byte_start = morph_start["position"]
 				# print(ne["text"], byte_start)
@@ -126,12 +120,14 @@ def make_json(ne_marked_dict, predict=False):
 	cs_form = {}
 	cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
 	cs_form["entities"] = []
-	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict["fileName"] == "" else ne_marked_dict["fileName"]
+	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in
+	                              range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict["fileName"] == "" else \
+		ne_marked_dict["fileName"]
 	entities = ne_marked_dict["NE"] if "NE" in ne_marked_dict else ne_marked_dict["entities"]
 	for item in entities:
 		skip_flag = False
 		if "type" in item:
-			for prefix in ["QT", "DT"]: # HARD-CODED: ONLY WORKS FOR ETRI TYPES
+			for prefix in ["QT", "DT"]:  # HARD-CODED: ONLY WORKS FOR ETRI TYPES
 				if item["type"].startswith(prefix): skip_flag = True
 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
 		surface = item["text"] if "text" in item else item["surface"]
@@ -146,17 +142,16 @@ def make_json(ne_marked_dict, predict=False):
 		start = item["char_start"] if "char_start" in item else item["start"]
 		end = item["char_end"] if "char_end" in item else item["end"]
 		if all(list(map(is_not_korean, surface))): continue
-		
-		cs_form["entities"].append({
-			"surface": surface,
-			"candidates": candidates_old(surface),
-			"answer": keyword,
-			"start": start,
-			"end": end,
-			"ne_type": item["type"] if "type" in item else ""
-			})
-	return cs_form
 
+		cs_form["entities"].append({
+			"surface"   : surface,
+			"candidates": candidates_old(surface),
+			"answer"    : keyword,
+			"start"     : start,
+			"end"       : end,
+			"ne_type"   : item["type"] if "type" in item else ""
+		})
+	return cs_form
 
 def add_candidates(j):
 	for entity in j["entities"]:
@@ -175,22 +170,22 @@ def morph_split(morph_pos, links):
 	morph, pos = morph_pos
 	for link in links:
 		ne, en, sp, ep, _ = link
-		if sp <= pos < ep or pos <= sp < pos+len(morph):
+		if sp <= pos < ep or pos <= sp < pos + len(morph):
 			if pos < sp:
-				m1 = morph[:sp-pos]
-				m2 = morph[sp-pos:min(len(morph), ep-pos)] # 반[중국]적 과 같은 경우
-				m3 = morph[ep-pos:] if ep < pos+len(morph) else None
+				m1 = morph[:sp - pos]
+				m2 = morph[sp - pos:min(len(morph), ep - pos)]  # 반[중국]적 과 같은 경우
+				m3 = morph[ep - pos:] if ep < pos + len(morph) else None
 				result.append([m1, None])
 				result.append([m2, link])
 				if m3 is not None:
-					result += morph_split((m3, pos+len(m1)+len(m2)), links)
+					result += morph_split((m3, pos + len(m1) + len(m2)), links)
 				break
 			elif pos + len(morph) > ep:
 				# print(morph, "/", en)
-				m1 = morph[:ep-pos]
-				m2 = morph[ep-pos:]
+				m1 = morph[:ep - pos]
+				m2 = morph[ep - pos:]
 				result.append([m1, link])
-				result += morph_split((m2, pos+len(m1)), links)
+				result += morph_split((m2, pos + len(m1)), links)
 				break
 			else:
 				result.append([morph, link])
@@ -204,7 +199,7 @@ def get_context_words(text, pos, direction, maximum_context=30):
 	ind = pos
 	buf = ""
 	text = text.replace("\n", " ")
-	while len(result) < maximum_context and ind > 0 and ind < len(text)-1:
+	while len(result) < maximum_context and ind > 0 and ind < len(text) - 1:
 		ind += direction
 		if text[ind] == " ":
 			if len(buf) > 0:
@@ -237,9 +232,9 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 	print_flag = False
 # 	# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 # 	for entity in sentence["entities"]:
-		
+
 # 		redirected_entity = redirects[entity["answer"]] if entity["answer"] in redirects else entity["answer"]
-		
+
 # 		# if redirected_entity not in ent_form:
 # 		# 	redirected_entity = "NOT_IN_ENTITY_LIST"
 # 		# if "dark_entity" in entity:
@@ -249,7 +244,7 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 		# if redirected_entity not in ent_form and redirected_entity not in ["NOT_IN_CANDIDATE", "NOT_AN_ENTITY", "EMPTY_CANDIDATES"]:
 # 		# 	continue
 # 		links.append((entity["surface"], redirected_entity, entity["start"], entity["end"], tuple(entity["candidates"])))
-		
+
 # 	filter_entity = set([])
 # 	for i1 in links:
 # 		if i1 in filter_entity: continue
@@ -264,7 +259,7 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 	sent = sentence["text"]
 # 	for char in "   ":
 # 		sent.replace(char, " ")
-	
+
 # 	sent = RE_EMOJI.sub(r'', sent)
 # 	morphs = okt.morphs(sent)
 # 	inds = []
@@ -326,14 +321,12 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 	return sentence, conlls, tsvs
 
 
-
 # def prepare_sentence(sentence, form, predict):
 # 	try:
 # 		return generate_input(sentence, predict, form)
 # 	except:
 # 		import traceback
 # 		traceback.print_exc()
-
 
 
 # @TimeUtil.measure_time
@@ -343,9 +336,9 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 	cw_form = []
 # 	for sentence in sentences:
 # 		s = random.random()
-		
+
 # 		if filter_rate > s: continue
-		
+
 # 		try:
 # 			j, c, t = prepare_sentence(sentence, form, predict)
 # 			# conll = change_to_conll(sentence)
@@ -357,4 +350,3 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 		except Exception as e:
 # 			pass
 # 	return cw_form, conlls, tsvs
-

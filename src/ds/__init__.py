@@ -1,5 +1,5 @@
-from .Corpus import Corpus
 from .Cluster import Cluster, FakeCluster
+from .Corpus import Corpus
 from .Sentence import Sentence
 from .Vocabulary import Vocabulary
 

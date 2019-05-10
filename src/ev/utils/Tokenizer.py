@@ -1,5 +1,7 @@
 from pytorch_pretrained_bert import BertTokenizer
+
 tokenizer = BertTokenizer.from_pretrained('bert-base-multilingual-cased', do_lower_case=False)
+
 def bert_tokenizer(text):
 	orig_tokens = text
 	bert_tokens = []
@@ -9,7 +11,7 @@ def bert_tokenizer(text):
 		orig_to_tok_map.append(len(bert_tokens))
 		bert_tokens.extend(tokenizer.tokenize(orig_token))
 	bert_tokens.append("[SEP]")
-	
+
 	return orig_tokens, bert_tokens, orig_to_tok_map
 
 def bert_tokenize(text):
@@ -17,7 +19,6 @@ def bert_tokenize(text):
 	tokenized_text = bert_tokens
 	converted = tokenizer.convert_tokens_to_ids(tokenized_text)
 	return converted
-
 
 class Tokenizer():
 	def __init__(self, mode, w2i=None):

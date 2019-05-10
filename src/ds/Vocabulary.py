@@ -1,4 +1,4 @@
-class Vocabulary():
+class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface = surface
 		self.surface_ind = -1
@@ -13,7 +13,7 @@ class Vocabulary():
 
 		# reserved for entity validation
 		self.cluster = -1
-		self.error_type = -1 # -1: normal, 0: ER, 1: EL, 2: EC
+		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None
@@ -38,14 +38,14 @@ class Vocabulary():
 
 	def __hash__(self):
 		return hash((self.parent_sentence, self.char_ind))
-	
+
 	@property
 	def lctx(self):
 		return self.parent_sentence.tokens[:self.token_ind]
 
 	@property
 	def rctx(self):
-		return self.parent_sentence.tokens[self.token_ind+1:]
+		return self.parent_sentence.tokens[self.token_ind + 1:]
 
 	@property
 	def lctx_ent(self):
@@ -55,19 +55,17 @@ class Vocabulary():
 	def rctx_ent(self):
 		return [x for x in self.rctx if x.is_entity]
 
-
-
 	def to_json(self):
 		return {
-			"surface": self.surface,
-			"entity": self.entity,
-			"is_entity": self.is_entity,
-			"entity_in_kb": self.entity_in_kb,
+			"surface"        : self.surface,
+			"entity"         : self.entity,
+			"is_entity"      : self.is_entity,
+			"entity_in_kb"   : self.entity_in_kb,
 			"parent_sentence": self.parent_sentence.id,
-			"cluster": self.cluster.id if type(self.cluster) is not int else self.cluster,
-			"error_type": self.error_type,
-			"token_ind": self.token_ind,
-			"char_ind": self.char_ind
+			"cluster"        : self.cluster if type(self.cluster) is int else self.cluster.id,
+			"error_type"     : self.error_type,
+			"token_ind"      : self.token_ind,
+			"char_ind"       : self.char_ind
 		}
 
 	@classmethod

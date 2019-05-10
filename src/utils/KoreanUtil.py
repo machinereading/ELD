@@ -1,11 +1,16 @@
 import re
-cho = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
-jung = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅘ','ㅙ','ㅚ','ㅛ','ㅜ','ㅝ','ㅞ','ㅟ','ㅠ','ㅡ','ㅢ','ㅣ']
-jong = ['e','ㄱ','ㄲ','ㄳ','ㄴ','ㄵ','ㄶ','ㄷ','ㄹ','ㄺ','ㄻ','ㄼ','ㄽ','ㄾ','ㄿ','ㅀ','ㅁ','ㅂ','ㅄ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ']
-alpha = [chr(x) for x in range(ord('a'), ord('z')+1)] + [chr(x) for x in range(ord('A'), ord('Z')+1)] + [".", ",", ":"]
-decomposer = {"ㄳ": ["ㄱ","ㅅ"], "ㄵ": ["ㄴ","ㅈ"], "ㄶ": ["ㄴ", "ㅎ"], "ㄺ": ["ㄹ", "ㄱ"], "ㄻ": ["ㄹ", "ㅁ"], "ㄼ": ["ㄹ", "ㅂ"], "ㅀ": ["ㄹ","ㅎ"], "ㅄ": ["ㅂ","ㅅ"]}
 
-eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '다', '의', '에', '에서', '으로', '로', '까지', '와', '과', '는지', '는데']
+cho = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+jung = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ']
+jong = ['e', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ',
+        'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ']
+alpha = [chr(x) for x in range(ord('a'), ord('z') + 1)] + [chr(x) for x in range(ord('A'), ord('Z') + 1)] + [".", ",",
+                                                                                                             ":"]
+decomposer = {"ㄳ": ["ㄱ", "ㅅ"], "ㄵ": ["ㄴ", "ㅈ"], "ㄶ": ["ㄴ", "ㅎ"], "ㄺ": ["ㄹ", "ㄱ"], "ㄻ": ["ㄹ", "ㅁ"], "ㄼ": ["ㄹ", "ㅂ"],
+              "ㅀ": ["ㄹ", "ㅎ"], "ㅄ": ["ㅂ", "ㅅ"]}
+
+eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '다', '의', '에', '에서', '으로', '로', '까지', '와', '과', '는지', '는데', '만',
+        '도', '부터', '조차']
 eogan = ['하였', '했', '에서', '들']
 jamo_len = len(cho) + len(jung) + len(jong)
 
@@ -30,23 +35,21 @@ def decompose_sent(sentence, decompose=False):
 			result += i
 	return "".join(result)
 
-
-
 def char_to_elem(character, to_num=False, decompose=False, pad=True):
 	x = ord(character)
 	if not is_korean_character(character):
 		return character
 	x -= 0xAC00
 	result = []
-	result.append(x%len(jong) if to_num else jong[x % len(jong)])
+	result.append(x % len(jong) if to_num else jong[x % len(jong)])
 	x //= len(jong)
-	result.append(x%len(jung) if to_num else jung[x % len(jung)])
+	result.append(x % len(jung) if to_num else jung[x % len(jung)])
 	x //= len(jung)
-	result.append(x%len(cho) if to_num else cho[x % len(cho)])
+	result.append(x % len(cho) if to_num else cho[x % len(cho)])
 	result.reverse()
-	if decompose: # 이중받침 분해
+	if decompose:  # 이중받침 분해
 		if result[-1] in decomposer:
-			result = result[:-1]+decomposer[result[-1]]
+			result = result[:-1] + decomposer[result[-1]]
 	return result
 
 def char_to_elem_ind(character):
@@ -57,7 +60,8 @@ def char_to_elem_ind(character):
 	elems = char_to_elem(character, to_num=True)
 	if type(elems) is str:
 		# 한국어가 아님
-		return [alpha.index(elems)+len(cho)+len(jung)+len(jong) if elems in alpha else len(cho)+len(jung)+len(jong)+len(alpha)]
+		return [alpha.index(elems) + len(cho) + len(jung) + len(jong) if elems in alpha else len(cho) + len(jung) + len(
+			jong) + len(alpha)]
 	else:
 		cho_ind = elems[0]
 		jung_ind = elems[1] + len(cho)
@@ -142,17 +146,22 @@ def tokenize(sentence):
 		buf = []
 		for char in token:
 			# korean, non-korean, number, special characters
-			if is_korean_character(char): buf.append(0)
-			elif is_digit(char): buf.append(1)
-			elif 'a' <= char <= 'z' and 'A' <= char <= 'Z': buf.append(2) 
-			elif re.sub(r"[^ ㄱ-ㅎㅏ-ㅣ가-힣a-z-A-Z0-9]", "", char) == "": buf.append(3)
-			else: buf.append(4)
+			if is_korean_character(char):
+				buf.append(0)
+			elif is_digit(char):
+				buf.append(1)
+			elif 'a' <= char <= 'z' and 'A' <= char <= 'Z':
+				buf.append(2)
+			elif re.sub(r"[^ ㄱ-ㅎㅏ-ㅣ가-힣a-z-A-Z0-9]", "", char) == "":
+				buf.append(3)
+			else:
+				buf.append(4)
 		tt = []
 		word = ""
 		last = buf[0]
 		buf.append(-1)
 		for ind, i in enumerate(buf):
-			if i != last or ind == len(buf)-1:
+			if i != last or ind == len(buf) - 1:
 				# print(word)
 				if last == 0:
 
@@ -183,8 +192,8 @@ def tokenize(sentence):
 				break
 			word += token[ind]
 			last = i
-		result += tt[:]	
-	return result
+		result += tt[:]
+	return [x for x in result if x != ""]
 
 if __name__ == '__main__':
 	print(tokenize("123abc우리(집) 우리집에 왜 왔는지 잘 모르겠다."))

@@ -14,9 +14,9 @@ from tensorboardX import SummaryWriter
 import random
 import numpy as np
 
-class EC():
+class EC:
 	def __init__(self):
-		self.args = EC_Args()
+		self.args = ECArgs()
 		self.options = vars(self.args)
 		self.debug = True
 		random.seed(self.args.random_seed)

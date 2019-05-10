@@ -1,5 +1,5 @@
 from ...utils import AbstractArgument
-import argparse
+
 class ELArgs(AbstractArgument):
 	def __init__(self):
 		self.mode = "train"
@@ -32,11 +32,10 @@ class ELArgs(AbstractArgument):
 		self.word_embedding_path = 'data/el/embeddings/word_embeddings.npy'
 		self.snd_word_voca_path = 'data/el/embeddings/glove/dict_no_pos.word'
 		self.snd_word_embedding_path = 'data/el/embeddings/glove/word_embeddings.npy'
-		
+
 		self.entity_voca_path = 'data/el/embeddings/dict.entity'
 		self.entity_embedding_path = 'data/el/embeddings/entity_embeddings.npy'
 
 	@property
 	def model_path(self):
-		return "data/el/" + self.model_name
-	
+		return "models/el/" + self.model_name

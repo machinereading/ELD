@@ -1,11 +1,11 @@
 # import endpoint.
 # stores only global values
 # set attributes by calling setattr in main module
-from .utils import readfile
-
 import logging
 import re
 from datetime import datetime
+
+from .utils import readfile
 
 # logging config
 formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
@@ -15,7 +15,7 @@ logger.setLevel(logging.DEBUG)
 f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()
 
-# f.setLevel(logging.DEBUG)
+f.setLevel(logging.DEBUG)
 f.setFormatter(formatter)
 
 # c.setLevel(logging.INFO)
@@ -24,9 +24,6 @@ f.setFormatter(formatter)
 # logger.addHandler(c)
 logger.addHandler(f)
 logger.info("[START]")
-
-
-
 
 boolmap = {"True": True, "False": False}
 corpus_home = "corpus/"

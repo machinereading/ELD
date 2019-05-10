@@ -18,3 +18,5 @@ log/
 cloc-1.80.exe
 !scripts/*Train*
 !scripts/*Test*
+.pyc
+.idea/

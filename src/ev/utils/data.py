@@ -1,16 +1,15 @@
-from .Tokenizer import Tokenizer
-from ...ds import *
-from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch, KoreanUtil
-from ... import GlobalValues as gl
+import os
+import random
+import traceback
 
-import numpy as np
 import torch
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-import random
-import os
-import traceback
+from .Tokenizer import Tokenizer
+from ... import GlobalValues as gl
+from ...ds import *
+from ...utils import readfile, jsonload, jsondump, TimeUtil, split_to_batch
 
 class SentenceGenerator(Dataset):
 	def __init__(self, corpus):
@@ -21,13 +20,13 @@ class SentenceGenerator(Dataset):
 
 	def __getitem__(self, ind):
 		voca = self.corpus[ind]
-		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type+1
+		return voca.lctxw_ind, voca.rctxw_ind, voca.lctxe_ind, voca.rctxe_ind, voca.error_type + 1
 
 class ClusterGenerator(Dataset):
 	def __init__(self, corpus, for_train=False, filter_nik=False):
 		assert not (for_train and filter_nik)
 		self.corpus = corpus
-		
+
 		if for_train:
 			# add more labels if label is biased
 			l1 = [x for x in corpus.cluster_list if type(x) is Cluster]
@@ -47,7 +46,7 @@ class ClusterGenerator(Dataset):
 	def __getitem__(self, ind):
 		cluster = self.corpus.get_cluster_by_index(ind)
 		return cluster.vocab_tensors
-		
+
 class ClusterContextSetGenerator(Dataset):
 	def __init__(self, corpus):
 		self.corpus = corpus
@@ -55,20 +54,25 @@ class ClusterContextSetGenerator(Dataset):
 	def __len__(self):
 		return len(self.corpus.cluster)
 
-class DataModule():
+	def __getitem__(self, item):
+		pass
+
+class DataModule:
 	def __init__(self, mode, args):
 		gl.logger.info("Initializing EV DataModule")
 		# 0 for oov, 1 for out of range
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
 
-		w2i = {w: i for i, w in enumerate(readfile(args.word_embedding_path+".word"))} if self.make_word_tensor else None
+		w2i = {w: i for i, w in
+		       enumerate(readfile(args.word_embedding_path + ".word"))} if self.make_word_tensor else None
 		self.wt = Tokenizer(args.word_embedding_type, w2i)
-		self.wt_pad = len(w2i)+1
+		self.wt_pad = len(w2i) + 1
 
-		e2i = {e: i for i, e in enumerate(readfile(args.entity_embedding_path+".word"))} if self.make_entity_tensor else None
+		e2i = {e: i for i, e in
+		       enumerate(readfile(args.entity_embedding_path + ".word"))} if self.make_entity_tensor else None
 		self.et = Tokenizer(args.entity_embedding_type, e2i)
-		self.et_pad = len(e2i)+1
+		self.et_pad = len(e2i) + 1
 		self.chunk_size = args.chunk_size
 
 		self.kb = [x for x in readfile(args.kb)]
@@ -86,7 +90,7 @@ class DataModule():
 				self.data_load_path = args.data_load_path
 				corpus_path = args.data_load_path
 				try:
-					path = "/".join(corpus_path.split("/")[:-1])+"/"
+					path = "/".join(corpus_path.split("/")[:-1]) + "/"
 					file_prefix = corpus_path.split("/")[-1]
 					sentence = []
 					cluster = []
@@ -95,7 +99,7 @@ class DataModule():
 					for item in os.listdir(path):
 						if not item.startswith(file_prefix): continue
 						if "sentence" in item:
-							sentence += jsonload(path+item)
+							sentence += jsonload(path + item)
 					self.corpus = Corpus.from_json(sentence)
 				except FileNotFoundError:
 					traceback.print_exc()
@@ -109,7 +113,9 @@ class DataModule():
 				self.generate_data()
 			self.mark_kb(self.corpus)
 			self.generate_fake_cluster(self.corpus)
-			self.generate_cluster_vocab_tensors(self.corpus, max_voca_restriction=getattr(args, "max_voca_restriction", -1), max_jamo_restriction=getattr(args, "max_jamo_restriction", -1))
+			self.generate_cluster_vocab_tensors(self.corpus,
+			                                    max_voca_restriction=getattr(args, "max_voca_restriction", -1),
+			                                    max_jamo_restriction=getattr(args, "max_jamo_restriction", -1))
 
 	@TimeUtil.measure_time
 	def generate_data(self):
@@ -120,9 +126,9 @@ class DataModule():
 		# generate clusters
 
 		self.corpus = Corpus.load_corpus(self.data_path)
-		
+
 		# extract fake tokens
-		self.fake_tokens = []	
+		self.fake_tokens = []
 		for sentence in self.corpus:
 			self.extract_fake_tokens(sentence)
 		# distribute fake tokens into training cluster
@@ -172,11 +178,11 @@ class DataModule():
 				if token.entity not in entity_token_dict:
 					entity_token_dict[token.entity] = []
 				entity_token_dict[token.entity].append(token)
-			if len(entity_token_dict) < 2: continue # single cluster -> not a fake cluster
+			if len(entity_token_dict) < 2: continue  # single cluster -> not a fake cluster
 			lens = [len(x) for x in entity_token_dict.values()]
 			s = sum(lens)
 			m = max(lens)
-			if s - m < m // 3: continue # not enough invalid values to make fake cluster
+			if s - m < m // 3: continue  # not enough invalid values to make fake cluster
 			newc = FakeCluster(surface)
 			for token in tokens:
 				newc.add_elem(token)
@@ -194,25 +200,25 @@ class DataModule():
 
 	def save(self, path):
 		j = self.corpus.to_json()
-		
+
 		for i, item in enumerate(split_to_batch(j, 1000)):
-			jsondump(item, path+"_sentence_%d.json" % i)
+			jsondump(item, path + "_sentence_%d.json" % i)
 
 	@classmethod
 	def from_predefined_cluster(cls, corpus_path):
-		gen = DataGenerator(None, init=False)
-		path = "/".join(corpus_path.split("/")[:-1])+"/"
+		gen = cls(None, init=False)
+		path = "/".join(corpus_path.split("/")[:-1]) + "/"
 		file_prefix = corpus_path.split("/")[-1]
 		sentence = []
 		cluster = []
 		for item in os.listdir(path):
 			if not item.startswith(file_prefix): continue
 			if "sentence" in item:
-				sentence += jsonload(path+item)
+				sentence += jsonload(path + item)
 			elif "cluster" in item:
-				cluster += jsonload(path+item)
+				cluster += jsonload(path + item)
 		gen.corpus = Corpus.from_json({"sentence": sentence, "cluster": cluster})
-		
+
 		return gen
 
 	def mark_kb(self, corpus):
@@ -232,13 +238,15 @@ class DataModule():
 				vocab.lctxw_ind = [self.wt_pad for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind
 
 				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
-				vocab.rctxw_ind = ([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]
+				vocab.rctxw_ind = ([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[
+				                  ::-1]
 
 				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
 				vocab.lctxe_ind = [self.et_pad for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind
-				
+
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
-				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
+				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[
+				                  ::-1]
 				vocab.tagged = True
 
 		# add padding
@@ -247,7 +255,7 @@ class DataModule():
 		if max_voca_restriction is not None and max_voca_restriction > 0:
 			max_voca = max_voca_restriction
 		max_voca += self.chunk_size - max_voca % self.chunk_size if max_voca % self.chunk_size > 0 else 0
-		
+
 		max_jamo = max([x.max_jamo for x in corpus.cluster_list])
 		if max_jamo_restriction is not None and max_jamo_restriction > 0:
 			max_jamo = max_jamo_restriction
@@ -292,10 +300,11 @@ class DataModule():
 			cluster.cluster = cluster.cluster[:max_voca]
 			cluster.update_tensor(*[torch.tensor(x) for x in [jamo, wlctx, wrctx, elctx, erctx]])
 
-
 	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):
 		# for validation
 		if type(corpus) is not Corpus:
 			corpus = Corpus.load_corpus(corpus)
+			print(len(corpus))
+		self.mark_kb(corpus)
 		self.generate_cluster_vocab_tensors(corpus, max_jamo_restriction=max_jamo_restriction)
 		return corpus

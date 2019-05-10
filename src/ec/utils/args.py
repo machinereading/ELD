@@ -1,7 +1,10 @@
 import torch
 import os
 from datetime import datetime
-class EC_Args():
+
+from ..utils import AbstractArgument
+
+class ECArgs(AbstractArgument):
 	def __init__(self):
 		self.data_format = "set"
 		self.modelName = "np_lrlr_sd_lrlrdl"
@@ -19,7 +22,7 @@ class EC_Args():
 		self.margin = 0.5
 		self.epochs = 200
 		self.neg_sample_size = 20
-		self.neg_sample_method = "share_token" # one of ["complete_random", "share_token", "mixture"]
+		self.neg_sample_method = "share_token"  # one of ["complete_random", "share_token", "mixture"]
 
 		self.dropout = 0.3
 		self.early_stop = 100
@@ -31,7 +34,7 @@ class EC_Args():
 		self.device_id = 0
 		self.save_dir = "data/ec/"
 		self.load_model = ""
-		self.snapshot = "" # model path
+		self.snapshot = ""  # model path
 		self.tune_result_file = "tune_prefix"
 		self.remark = "ec"
 
@@ -52,7 +55,6 @@ class EC_Args():
 		# Model snapshot saving
 		current_time = datetime.now().strftime('%b%d_%H-%M-%S')
 		self.save_dir = os.path.join(self.save_dir, current_time)
-		
 
 		if self.max_K == -1:
 			self.max_K = None

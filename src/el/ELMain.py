@@ -1,6 +1,6 @@
 from .utils.data import DataModule
 from .utils.args import ELArgs
-from .utils.postprocess import merge_item
+from .utils.postprocess import *
 from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
 from .. import GlobalValues as gl
@@ -16,7 +16,7 @@ class EL():
 				self.args = ELArgs()
 			else:
 				try:
-					self.args = ELArgs.from_json("data/el/%s_args.json" % model_name)
+					self.args = ELArgs.from_json("model/el/%s_args.json" % model_name)
 				except FileNotFoundError:
 					gl.logger.critical("EL %s: No argument file exists!" % model_name)
 					import sys
@@ -30,9 +30,9 @@ class EL():
 			self.args.mode = mode
 			self.args.model_name = model_name
 			self.debug = False
-			
+
 			self.ranker = EDRanker(config=self.config)
-			jsondump(self.args.to_json(), "data/el/%s_args.json" % model_name)
+			jsondump(self.args.to_json(), "model/el/%s_args.json" % model_name)
 
 	def train(self, train_items, dev_items):
 		"""
@@ -50,13 +50,15 @@ class EL():
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		gl.logger.info("Start training")
-		self.ranker.train(train_data, [("dev", dev_data)], config = {'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
-
+		self.ranker.train(train_data, [("dev", dev_data)],
+		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
 
 	def predict(self, sentences, delete_candidate=True):
 		type_list = [type(x) for x in sentences]
-		assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all([x is Sentence for x in type_list])
+		assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
+				[x is Sentence for x in type_list])
 		batches = split_to_batch(sentences, 100)
+		result = []
 		for batch in batches:
 			j, conll_str, tsv_str = self.data.prepare(*batch)
 			# print(len(batch), len(j))
@@ -66,7 +68,11 @@ class EL():
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data_items)
 			e = D.make_result_dict(dataset, predictions)
-			yield merge_item(j, e, delete_candidate)
+
+			result += merge_item(j, e, delete_candidate)
+		if type(sentences[0]) is Sentence:
+			result = merge_item_with_corpus(sentences, result)
+		return result
 
 	def __call__(self, *sentences):
 		result = []
@@ -77,25 +83,24 @@ class EL():
 	@property
 	def config(self):
 		return {
-				'hid_dims': self.args.hid_dims,
-				'emb_dims': self.data.entity_embedding.shape[1],
-				'freeze_embs': True,
-				'tok_top_n': self.args.tok_top_n,
-				'margin': self.args.margin,
-				'word_voca': self.data.word_voca,
-				'entity_voca': self.data.entity_voca,
-				'word_embeddings': self.data.word_embedding,
-				'entity_embeddings': self.data.entity_embedding,
-				'snd_word_voca': self.data.snd_word_voca,
-				'snd_word_embeddings': self.data.snd_word_embedding,
-				'dr': self.args.dropout_rate,
-				'df': self.args.df,
-				'n_loops': self.args.n_loops,
-				'n_rels': self.args.n_rels,
-				'mulrel_type': self.args.mulrel_type,
-				'args': self.args
+			'hid_dims'           : self.args.hid_dims,
+			'emb_dims'           : self.data.entity_embedding.shape[1],
+			'freeze_embs'        : True,
+			'tok_top_n'          : self.args.tok_top_n,
+			'margin'             : self.args.margin,
+			'word_voca'          : self.data.word_voca,
+			'entity_voca'        : self.data.entity_voca,
+			'word_embeddings'    : self.data.word_embedding,
+			'entity_embeddings'  : self.data.entity_embedding,
+			'snd_word_voca'      : self.data.snd_word_voca,
+			'snd_word_embeddings': self.data.snd_word_embedding,
+			'dr'                 : self.args.dropout_rate,
+			'df'                 : self.args.df,
+			'n_loops'            : self.args.n_loops,
+			'n_rels'             : self.args.n_rels,
+			'mulrel_type'        : self.args.mulrel_type,
+			'args'               : self.args
 		}
-	
 
 	def reload_ranker(self):
 		self.args.mode = "train"
