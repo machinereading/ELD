@@ -89,6 +89,7 @@ class JointScorer(nn.Module):
 class EmbedScorer(nn.Module):
 	def __init__(self, args, jamo_input_dim, w_input_dim, e_input_dim):
 		super(EmbedScorer, self).__init__()
+		self.device = args.device
 		self.scorer = nn.Sequential(
 				nn.Dropout(),
 				nn.Linear(jamo_input_dim + (w_input_dim + e_input_dim) * 2, 100),
@@ -99,4 +100,7 @@ class EmbedScorer(nn.Module):
 		)
 
 	def forward(self, j, w, e):
-		return self.scorer(torch.cat((j, w, e), -1))
+		score = self.scorer(torch.cat((j, w, e), -1))
+		ones = torch.ones(score.size()).to(self.device)
+		zeros = torch.zeros(score.size()).to(self.device)
+		return torch.where(score > 0.5, ones, zeros)

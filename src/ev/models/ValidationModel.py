@@ -5,7 +5,6 @@ from tqdm import tqdm
 
 from .modules import ContextEmbedder, Transformer, Scorer
 from .modules.Embedding import Embedding
-from ... import GlobalValues as gl
 from ...utils import KoreanUtil
 
 class ValidationModel(nn.Module):
@@ -19,18 +18,17 @@ class ValidationModel(nn.Module):
 		self.chunk_size = args.chunk_size
 
 		self.we = Embedding.load_embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
-		self.ee = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
+		self.ee = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(
+				self.target_device)
 		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.char_embedding_dim).to(
-			self.target_device)
+				self.target_device)
 		self.we_dim = self.we.embedding_dim
 		self.ee_dim = self.ee.embedding_dim
 		self.ce_dim = args.char_embedding_dim
 
 		self.transformer_type = args.transformer
 
-		self.encode_sequence = args.encode_sequence
-
-		self.use_explicit_scorer = args.use_explicit_scorer
+		self.use_explicit_scorer = getattr(args, "use_explicit_scorer", False)
 		# sequential encoding
 		self.jamo_embedder = ContextEmbedder.CNNEmbedder(args.max_jamo, 2, 2)
 		self.cw_embedder = ContextEmbedder.BiContextEmbedder(args.er_model, self.we_dim, args.er_output_dim)
@@ -38,7 +36,7 @@ class ValidationModel(nn.Module):
 		args.jamo_embed_dim = (args.char_embedding_dim - 2) // 2 * 2
 
 		if self.use_explicit_scorer:
-			self.scorer = Scorer.EmbedScorer(args)
+			self.token_scorer = Scorer.EmbedScorer(args, args.jamo_embed_dim, args.er_output_dim, args.el_output_dim)
 
 		self.cluster_transformer = Transformer.get_transformer(args)
 		# final prediction layer
@@ -77,42 +75,41 @@ class ValidationModel(nn.Module):
 		# cluster_entity_lctx = torch.stack([x for x in cluster_entity_lctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
 		# cluster_entity_rctx = torch.stack([x for x in cluster_entity_rctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
 		jamo_index = nonzero_stack(jamo_index, jamo_size)
-		cluster_word_lctx = nonzero_stack(cluster_word_lctx, self.window_size)
-		cluster_word_rctx = nonzero_stack(cluster_word_rctx, self.window_size)
-		cluster_entity_lctx = nonzero_stack(cluster_entity_lctx, self.window_size)
-		cluster_entity_rctx = nonzero_stack(cluster_entity_rctx, self.window_size)
+		cwl = nonzero_stack(cluster_word_lctx, self.window_size)
+		cwr = nonzero_stack(cluster_word_rctx, self.window_size)
+		cel = nonzero_stack(cluster_entity_lctx, self.window_size)
+		cer = nonzero_stack(cluster_entity_rctx, self.window_size)
 
 		# print(size)
 		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size(), size.size()) # 100 * non-empty batch size * jamo size
-		assert jamo_index.size()[0] == cluster_word_lctx.size()[0] == cluster_word_rctx.size()[0] == \
-		       cluster_entity_lctx.size()[0] == cluster_entity_rctx.size()[0], "Size mismatch"
+		assert jamo_index.size()[0] == cwl.size()[0] == cwr.size()[0] == cel.size()[0] == cer.size()[0], "Size mismatch"
 		# assert torch.sum(size) == jamo.index.size()[0]
 		c_embedding = self.ce(jamo_index).view(-1, jamo_size,
 		                                       self.ce_dim)  # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
 		# bert attention mask?
-		wlctx = self.we(cluster_word_lctx.view(-1, self.window_size)).view(-1, self.window_size,
-		                                                                   self.we_dim)  # batch_size * max_vocab_size * window * embedding_size
-		wrctx = self.we(cluster_word_rctx.view(-1, self.window_size)).view(-1, self.window_size, self.we_dim)
-		elctx = self.ee(cluster_entity_lctx).view(-1, self.window_size, self.ee_dim)
-		erctx = self.ee(cluster_entity_rctx).view(-1, self.window_size, self.ee_dim)
+		# batch_size * max_vocab_size * window * embedding_size
+		wlctx = self.we(cwl).view(-1, self.window_size, self.we_dim)
+		wrctx = self.we(cwr).view(-1, self.window_size, self.we_dim)
+		elctx = self.ee(cel).view(-1, self.window_size, self.ee_dim)
+		erctx = self.ee(cer).view(-1, self.window_size, self.ee_dim)
 		# print(c_embedding.size(), wlctx.size(), elctx.size())
 
-		if self.encode_sequence:
-			c_embedding = self.jamo_embedder(c_embedding)
-			c_embedding = c_embedding.view(-1, self.chunk_size, c_embedding.size()[-1])
-			w_embedding = self.cw_embedder(wlctx, wrctx)  # (batch_size * max_vocab_size) * embedding size
-			# print(w_embedding.size())
-			w_embedding = w_embedding.view(-1, self.chunk_size, w_embedding.size()[
-				-1])  # batch_size * max_vocab_size * embedding size - 각각의 token마다 embedding dimension의 context embedding 하나씩 들고있음
-			# print(w_embedding.size())
-			e_embedding = self.ce_embedder(elctx, erctx)
-			e_embedding = e_embedding.view(-1, self.chunk_size, e_embedding.size()[-1])
-		else:
-			w_embedding = torch.cat([wlctx, wrctx], 2)
-			e_embedding = torch.cat([elctx, erctx], 2)
+		c_embedding = self.jamo_embedder(c_embedding)
+		w_embedding = self.cw_embedder(wlctx, wrctx)
+		e_embedding = self.ce_embedder(elctx, erctx)
 
-		cluster_representation = self.cluster_transformer(c_embedding, w_embedding,
-		                                                  e_embedding)  # batch size * cluster representation size
+		if self.use_explicit_scorer:
+			token_score = self.token_scorer(c_embedding, w_embedding, e_embedding) # n * chunk * 1
+			# print(token_score, c_embedding, token_score * c_embedding)
+			c_embedding *= token_score
+			w_embedding *= token_score
+			e_embedding *= token_score
+
+		c_embedding = c_embedding.view(-1, self.chunk_size, c_embedding.size()[-1])
+		w_embedding = w_embedding.view(-1, self.chunk_size, w_embedding.size()[-1])  # (batch_size * max_vocab_size) * embedding size
+		e_embedding = e_embedding.view(-1, self.chunk_size, e_embedding.size()[-1])
+
+		cluster_representation = self.cluster_transformer(c_embedding, w_embedding, e_embedding)  # batch size * cluster representation size
 		# print(cluster_representation)
 		# prediction - let's try simple FFNN this time
 		prediction = self.predict(cluster_representation)

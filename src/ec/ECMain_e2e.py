@@ -31,7 +31,7 @@ class EC:
 		dev_dataset = dataset[int(len(dataset) * 0.9):]
 		log_dir = self.config["log_dir"]
 		writer = tf.summary.FileWriter(log_dir, flush_secs=20)
-
+		print(len(train_dataset), len(dev_dataset))
 		max_f1 = 0
 
 		# tf_config = tf.ConfigProto(device_count = {'GPU': 1})

@@ -47,12 +47,12 @@ class EVArgs(AbstractArgument):
 		self.el_score_threshold = 0.5
 
 		# Validation model / transformer
-		self.use_explicit_scorer = False
+		self.use_explicit_scorer = True
 		self.transformer = "nn"
 		self.transform_dim = 200
 
 		self.channel = 3
-		self.use_stddev = False  # if transformer == "avg", concatenate standard deviation information on average vector
+		self.use_stddev = True  # if transformer == "avg", concatenate standard deviation information on average vector
 		# Train config
 		self.epoch = 20
 		self.lr = 1e-4
