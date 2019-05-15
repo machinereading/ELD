@@ -1,1 +1,1 @@
-from .ECMain_e2e import EC
+from .ECMain_torch import EC

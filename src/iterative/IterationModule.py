@@ -26,7 +26,7 @@ class IterationModule:
 					self.dev_corpus.append(j)
 		self.el_model_name = el_model_name
 		self.el_model = EL("test", el_model_name)
-		self.ec_model = EC(ec_model_name)
+		self.ec_model = EC("test", ec_model_name)
 		self.ev_model = EV("test", ev_model_name)
 		self.ent_cal = EmbeddingCalculator(self.ev_model.word_embedding, self.ev_model.entity_embedding)
 

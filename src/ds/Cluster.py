@@ -76,8 +76,7 @@ class Cluster():
 				self._rctx_entities.append(vocab.rctxe_ind)
 			self.has_tensor = True
 
-		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(
-				self), float(self._ev_label)
+		return self._jamo, self._lctx_words, self._rctx_words, self._lctx_entities, self._rctx_entities, len(self), float(self._ev_label)
 
 	def update_tensor(self, jamo, wlctx, wrctx, elctx, erctx):
 		self._jamo = jamo

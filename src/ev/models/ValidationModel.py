@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from .modules import ContextEmbedder, Transformer, Scorer
-from .modules.Embedding import Embedding
+from ...utils.Embedding import Embedding
 from ...utils import KoreanUtil
 
 class ValidationModel(nn.Module):

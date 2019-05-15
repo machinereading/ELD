@@ -18,7 +18,7 @@ class EV:
 			self.args = EVArgs(model_name) if config_file is None else EVArgs.from_config(config_file)
 		else:
 			try:
-				self.args = EVArgs.from_json("data/ev/%s_args.json" % model_name)
+				self.args = EVArgs.from_json("models/ev/%s_args.json" % model_name)
 			except FileNotFoundError:
 				gl.logger.critical("No argument file exists!")
 			except:
@@ -44,7 +44,7 @@ class EV:
 			self.sentence_train, self.sentence_dev = self.dataset.corpus.split_sentence_to_dev()
 			self.cluster_train, self.cluster_dev = self.dataset.corpus.split_cluster_to_dev()
 			self.args.max_jamo = self.dataset.corpus.max_jamo
-			jsondump(self.args.to_json(), "data/ev/%s_args.json" % model_name)
+			jsondump(self.args.to_json(), "models/ev/%s_args.json" % model_name)
 		# load / initialize model
 		if self.args.use_intracluster_scoring:
 			self.intra_cluster_model = JointScorerModel(self.args).to(self.args.device)
@@ -101,9 +101,11 @@ class EV:
 				# tp += [1 if x > 0.5 else 0 for x in pred]
 				# tl += [x.data for x in labels]
 				except:
-					import traceback
-					traceback.print_exc()
 					err_count += 1
+					if err_count > 10:
+						import traceback
+						traceback.print_exc()
+
 			if err_count > 0:
 				gl.logger.debug("Epoch %d error %d" % (epoch, err_count))
 			# gl.logger.info(tp[:10], tl[:10])

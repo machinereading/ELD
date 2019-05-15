@@ -10,10 +10,8 @@ def eval(module, corpus_dir):
 			j = json.load(f)
 			j["fileName"] = item.split(".")[0]
 			eval_target.append(j)
-	prediction = []
-	for item in module.predict(eval_target, delete_candidate=False):
-		prediction += item
-	jsondump(prediction, "debug/debug_prediction.json")
+	prediction = module.predict(eval_target, delete_candidate=False)
+	jsondump(prediction, "debug/el_debug_prediction.json")
 	correct_count = 0
 	dark_entity_correct_count = 0
 	dark_entity_count = 0
@@ -44,20 +42,21 @@ def eval(module, corpus_dir):
 				dark_entity_count += 1
 
 			entity["fileName"] = fname
-			if predict_entity not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
+			no_ent = ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]
+			if predict_entity not in no_ent:
 				p_target += 1
-			if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
+			if answer not in no_ent:
 				r_target += 1
 
-			if predict_entity == answer:
+			if predict_entity == answer and predict_entity not in no_ent:
 				correct_count += 1
 				correct_candidates[len(entity["candidates"])] += 1
 			elif predict_entity == "NOT_IN_CANDIDATE" and answer == "DARK_ENTITY":
-				correct_count += 1
-				correct_candidates[len(entity["candidates"])] += 1
+				# correct_count += 1
+				# correct_candidates[len(entity["candidates"])] += 1
 				dark_entity_correct_count += 1
 			else:
-				if answer not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE", "EMPTY_CANDIDATES", "DARK_ENTITY"]:
+				if answer not in no_ent:
 					wrong_candidates[len(entity["candidates"])] += 1
 					if answer in [x[0] for x in entity["candidates"]]:
 						wrong_count[0] += 1
@@ -95,8 +94,11 @@ def eval(module, corpus_dir):
 	print("Acc: %.2f%%" % (correct_count / entity_count * 100))
 	for i in range(len(wrong_list)):
 		print("Type %d Error: %d" % (i + 1, len(wrong_list[i])))
-	print("Dark entity detection rate: %.2f" % (dark_entity_correct_count / dark_entity_count * 100))
+	if dark_entity_count > 0:
+		print("Dark entity detection rate: %.2f" % (dark_entity_correct_count / dark_entity_count * 100))
+
 	# print("Correct candidates: ", correct_candidates / correct_count, "Wrong candidates: ", wrong_candidates / sum(wrong_count))
-	jsondump(candidate_lens, "candidate_lens.json")
-	jsondump(correct_candidates, "cocalen.json")
-	jsondump(wrong_candidates, "wrcalen.json")
+	jsondump(candidate_lens, "debug/candidate_lens.json")
+	jsondump(correct_candidates, "debug/cocalen.json")
+	jsondump(wrong_candidates, "debug/wrcalen.json")
+	jsondump(wrong_list, "debug/el_eval_result.json")

@@ -16,7 +16,7 @@ class EL():
 				self.args = ELArgs()
 			else:
 				try:
-					self.args = ELArgs.from_json("model/el/%s_args.json" % model_name)
+					self.args = ELArgs.from_json("models/el/%s_args.json" % model_name)
 				except FileNotFoundError:
 					gl.logger.critical("EL %s: No argument file exists!" % model_name)
 					import sys
@@ -32,7 +32,7 @@ class EL():
 			self.debug = False
 
 			self.ranker = EDRanker(config=self.config)
-			jsondump(self.args.to_json(), "model/el/%s_args.json" % model_name)
+			jsondump(self.args.to_json(), "models/el/%s_args.json" % model_name)
 
 	def train(self, train_items, dev_items):
 		"""
@@ -59,8 +59,11 @@ class EL():
 				[x is Sentence for x in type_list])
 		batches = split_to_batch(sentences, 100)
 		result = []
+		jj = []
+		ee = {}
 		for batch in batches:
 			j, conll_str, tsv_str = self.data.prepare(*batch)
+			jj += j
 			# print(len(batch), len(j))
 			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
 			data_items = self.ranker.get_data_items(dataset, predict=True)
@@ -68,10 +71,13 @@ class EL():
 			self.ranker.model._coh_ctx_vecs = []
 			predictions = self.ranker.predict(data_items)
 			e = D.make_result_dict(dataset, predictions)
-
+			for k, v in ee.items():
+				ee[k] = v
 			result += merge_item(j, e, delete_candidate)
 		if type(sentences[0]) is Sentence:
 			result = merge_item_with_corpus(sentences, result)
+		jsondump(jj, "debug/el_prepare.json")
+		jsondump(ee, "debug/el_result_dict.json")
 		return result
 
 	def __call__(self, *sentences):

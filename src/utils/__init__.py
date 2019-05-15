@@ -3,7 +3,7 @@ import pickle
 import socket
 
 from .AbstractArgument import AbstractArgument
-
+from .Embedding import Embedding
 # not used anymore - use tqdm instead
 def progress(curprog, total, size=10):
 	if curprog < 0 or total < 0 or size < 0:
@@ -65,6 +65,7 @@ def one_hot(i, total):
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
 def getETRI(text):
+	from .. import GlobalValues as gl
 	host = '143.248.135.146'
 	port = 33333
 

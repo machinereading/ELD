@@ -14,6 +14,7 @@ class Embedding(nn.Module):
 		self.embedding_type = embedding_type
 		self.w2i = None
 		self.embedding = None
+		self.embedding_dim = 0
 
 	def forward(self, word_batch, **kwargs):
 
@@ -36,7 +37,7 @@ class Embedding(nn.Module):
 			emb_list.append("elmo")
 
 		if embedding_type not in emb_list:
-			raise ValueError("Embedding type must be one of %s" % ", ".join(emb_list))
+			raise ValueError("Embedding type must be one of %s, input: %s" % (", ".join(emb_list), embedding_type))
 
 		embedding = cls(embedding_type)
 		if embedding_type == "glove":

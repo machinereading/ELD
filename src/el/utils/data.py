@@ -12,7 +12,7 @@ class DataModule:
 	def __init__(self, args):
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
-		self.surface_ent_dict = CandDict(pickleload(args.entity_dict_path), self.redirects)
+		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 		self.word_voca, self.word_embedding = U.load_voca_embs(args.word_voca_path, args.word_embedding_path)
 		self.snd_word_voca, self.snd_word_embedding = U.load_voca_embs(args.snd_word_voca_path,
 		                                                               args.snd_word_embedding_path)
@@ -114,6 +114,12 @@ class DataModule:
 					shorter = i1 if i1[3] - i1[2] <= i2[3] - i2[2] else i2
 					filter_entity.add(shorter)
 		links = list(filter(lambda x: x not in filter_entity, links))
+		rm = []
+		for entity in sentence["entities"]:
+			for f in filter_entity:
+				if entity["start"] == f[2] and entity["end"] == f[3]:
+					rm.append(entity)
+		sentence["entities"] = [x for x in sentence["entities"] if x not in rm]
 		links = sorted(links, key=lambda x: x[2])
 		sent = sentence["text"]
 		for char in "   ":
@@ -188,9 +194,7 @@ class DataModule:
 		for sentence in sentences:
 			# for sentence in tqdm(sentences, desc="Formatting input"):
 			s = random.random()
-
 			if filter_rate > s: continue
-
 			try:
 				j, c, t = self.generate_input(sentence, predict)
 				# conll = change_to_conll(sentence)
@@ -199,13 +203,14 @@ class DataModule:
 				conlls += c
 				conlls += [""]
 				tsvs += t
-			except Exception as e:
+			except Exception:
 				import traceback
 				traceback.print_exc()
 		return cw_form, conlls, tsvs
 
 class CandDict:
-	def __init__(self, init_dict, redirect_dict):
+	def __init__(self, kb, init_dict, redirect_dict):
+		self._kb = kb
 		self._dict = init_dict
 		self._redirects = redirect_dict
 		self._calc_dict = {}  # lazy property
@@ -222,6 +227,15 @@ class CandDict:
 	def generate_calc_dict(self):
 		self._calc_dict = {}
 		idx = 0
+		for ent in self._kb:
+			try:
+				s = sum(self._dict[ent])
+				if ent in self._dict[ent]:
+					self._calc_dict[ent][ent] += s // 5
+				else:
+					self._calc_dict[ent][ent] = max(s // 5, 1)
+			except:
+				self._dict[ent] = {ent: 1}
 		for m, e in self._dict.items():
 			x = list(e.values())
 			values = np.around(x / np.sum(x), 4)
@@ -234,6 +248,7 @@ class CandDict:
 	def __getitem__(self, item):
 		if not self._update_flag:
 			self.generate_calc_dict()
+
 		candidates = self._calc_dict[item] if item in self._calc_dict else {}
 		cand_list = []
 		for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):

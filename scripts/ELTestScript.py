@@ -8,7 +8,7 @@ import sys
 train_data_dir = ["corpus/crowdsourcing_processed/", "corpus/mta2_postprocessed/"]
 # train_data_dir = ["corpus/mta2_postprocessed/"]
 test_data_dir = "corpus/el_golden_postprocessed_marked/"
-
+# test_data_dir = "corpus/crowdsourcing_1903_formatted/"
 
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 

@@ -1,4 +1,4 @@
-from .utils.args import EC_Args
+from .utils.args_synsetmine import EC_Args
 from .utils.el_dataset_merger import generate_data_from_el_result
 from .synsetmine.model import SSPM
 from .synsetmine.dataloader import element_set

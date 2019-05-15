@@ -5,7 +5,7 @@ import sklearn.metrics as metrics
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .modules.Embedding import Embedding
+from src.utils.Embedding import Embedding
 from .modules.Scorer import *
 from ...utils import jsondump, TimeUtil
 

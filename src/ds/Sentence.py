@@ -45,7 +45,7 @@ class Sentence:
 				return item
 		return None
 
-	def add_ne(self, sin, ein, surface, entity=None):
+	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1):
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
 
@@ -71,6 +71,7 @@ class Sentence:
 			return [tok1, new_token, tok2]
 
 		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_ind=sin)
+		new_token.ec_cluster_id = cluster_id
 		new_token.is_entity = True
 		new_token.entity = entity
 		new_token.entity_in_kb = entity in gl.entity_id_map
@@ -103,7 +104,9 @@ class Sentence:
 		for entity in entities:
 			if entity["entity"] == "": continue
 			try:
-				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"])
+
+				cluster_id = entity["cluster"] if "cluster" in entity else -1
+				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id)
 			except:
 				error_count += 1
 		# if error_count > 0:

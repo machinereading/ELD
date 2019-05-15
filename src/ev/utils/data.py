@@ -238,15 +238,13 @@ class DataModule:
 				vocab.lctxw_ind = [self.wt_pad for _ in range(self.ctx_window_size - len(lctxw_ind))] + lctxw_ind
 
 				rctxw_ind = self.wt(vocab.rctx[:10])[:self.ctx_window_size]
-				vocab.rctxw_ind = ([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[
-				                  ::-1]
+				vocab.rctxw_ind = ([self.wt_pad for _ in range(self.ctx_window_size - len(rctxw_ind))] + rctxw_ind)[::-1]
 
 				lctxe_ind = self.et(vocab.lctx_ent[-10:])[-self.ctx_window_size:]
 				vocab.lctxe_ind = [self.et_pad for _ in range(self.ctx_window_size - len(lctxe_ind))] + lctxe_ind
 
 				rctxe_ind = self.et(vocab.rctx_ent[:10])[:self.ctx_window_size]
-				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[
-				                  ::-1]
+				vocab.rctxe_ind = ([self.et_pad for _ in range(self.ctx_window_size - len(rctxe_ind))] + rctxe_ind)[::-1]
 				vocab.tagged = True
 
 		# add padding

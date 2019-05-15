@@ -8,21 +8,21 @@ from ..utils import jsonload, TimeUtil
 
 class Corpus:
 	def __init__(self):
-		self.corpus = []  # list of sentence
+		self.sentences = []  # list of sentence
 		self.tagged_voca_lens = []
 		self.cluster = {}  # dict of str(entity form): Cluster
 		self.additional_cluster = []
 
 	def add_sentence(self, sentence):
-		self.corpus.append(sentence)
-		sentence.id = len(self.corpus)
+		self.sentences.append(sentence)
+		sentence.id = len(self.sentences)
 
 	def __iter__(self):
-		for item in self.corpus:
+		for item in self.sentences:
 			yield item
 
 	def __len__(self):
-		return len(self.corpus)
+		return len(self.sentences)
 
 	@property
 	def cluster_list(self):
@@ -44,7 +44,7 @@ class Corpus:
 		for l in self.tagged_voca_lens:
 			acclen += l
 			if acclen > ind:
-				return self.corpus[senind][ind - acclen]
+				return self.sentences[senind][ind - acclen]
 			senind += 1
 			accbuf += l
 		raise IndexError
@@ -56,7 +56,15 @@ class Corpus:
 	def load_corpus(cls, path):
 		# load from crowdsourcing form
 		if type(path) is str:
-			path = jsonload(path)
+			try:
+				path = jsonload(path)
+			except PermissionError or IsADirectoryError:
+				try:
+					import os
+					if path[-1] != "/": path += "/"
+					path = [jsonload(path+f) for f in os.listdir(path)]
+				except:
+					raise Exception("Data format error")
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
@@ -80,17 +88,17 @@ class Corpus:
 		return corpus
 
 	def to_json(self):
-		return [sent.to_json() for sent in self.corpus]
+		return [sent.to_json() for sent in self.sentences]
 
 	@classmethod
 	def from_json(cls, json):
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
-		for sentence in tqdm(json[:100], desc="Loading EV corpus"):  # limit data for runnablity
+		for sentence in tqdm(json, desc="Loading EV corpus"):  # limit data for runnablity
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
-				corpus.corpus.append(sentence)
+				corpus.sentences.append(sentence)
 			for token in sentence.entities:
 				if token.entity not in corpus.cluster:
 					corpus.cluster[token.entity] = Cluster(token.entity)
@@ -107,13 +115,11 @@ class Corpus:
 	def split_sentence_to_dev(self):
 		train = Corpus()
 		dev = Corpus()
-		for i, (sent, tlen) in enumerate(zip(self.corpus, self.tagged_voca_lens)):
+		for i, sent in enumerate(self.sentences):
 			if i % 10 == 0:
-				dev.corpus.append(sent)
-				dev.tagged_voca_lens.append(tlen)
+				dev.add_sentence(sent)
 			else:
-				train.corpus.append(sent)
-				train.tagged_voca_lens.append(tlen)
+				train.add_sentence(sent)
 		return train, dev
 
 	def split_cluster_to_dev(self):

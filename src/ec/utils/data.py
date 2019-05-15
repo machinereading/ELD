@@ -21,6 +21,7 @@ class DataModule:
 	def convert_data(self, data, cluster_doc_size=100):
 		"""
 		Converts input data into model input format(json)
+		:param cluster_doc_size: documents will be clusterd at maximum of cluster_doc_size
 		:param data: input data, el marked
 		:return: CR input format dictionary (modified form)
 		"""
@@ -33,13 +34,16 @@ class DataModule:
 		gl.logger.debug("# of nil entity: %d in %d documents" % (len(nil_entity), len(target_sentences)))
 		# clustering idea: integrate every sentence and find coreference sentence
 		# 일단 여기서 주변 문단과 잘 뭉쳤다고 가정
-		clustered_sentences = split_to_batch(nil_entity, cluster_doc_size)
+		clustered_sentences = split_to_batch([data[x] for x in target_sentences], cluster_doc_size)
 
 		modified_documents = [self._convert_cluster_into_input(c) for c in clustered_sentences]
-
-		conlls, etris = zip(*[self._make_coref_indices(mdoc, mode="test") for mdoc in modified_documents])
-		jsonlines = [self._make_jsonline(cs) for cs in conlls]
-		return jsonlines, etris
+		conlls = []
+		etris = []
+		for c, e in [self._make_coref_indices(mdoc, mode="test") for mdoc in modified_documents]:
+			conlls.append(c)
+			etris.append(e)
+		jsonlines = [self._make_jsonline(cs)[0] for cs in conlls]
+		return jsonlines, etris, conlls
 
 	def generate_training_data(self, data):
 		self.data_idx = 0
@@ -63,14 +67,16 @@ class DataModule:
 		# jsonlines = [self._make_jsonline(cs) for cs in conlls]
 		print(err_count)
 		print(len(jsonlines))
-		return jsonlines, etris
+		return jsonlines, etris, conlls
 
 	def _gather_nil_entity(self, corpus):
 		result = []
 		for i, sentence in enumerate(corpus):
 			sentence["entities"] = [x for x in sentence["entities"] if
 			                        x["entity"] in ["NOT_IN_CANDIDATE", "EMPTY_CANDIDATES"]]
-			if len(sentence["entities"]) > 0: result.append(sentence)
+			for e in sentence["entities"]:
+				e["parent_sentence_id"] = i
+				result.append(e)
 		return result
 
 	@TimeUtil.measure_time
@@ -686,15 +692,16 @@ class DataModule:
 								entities['en_modified'] == en_mention:
 							entities['predicted_coref_index'] = coref_num
 
-			PronounExchangedText = jline['ModifiedText']
-			for entities in jline['entities']:
-				entities['st_exchanged'] = entities['st_modified']
-				entities['en_exchanged'] = entities['en_modified']
+			# PronounExchangedText = jline['ModifiedText']
+			# for entities in jline['entities']:
+			# 	entities['st_exchanged'] = entities['st_modified']
+			# 	entities['en_exchanged'] = entities['en_modified']
+			#
+			# for entities in jline['entities']:
+			# 	if PronounExchangedText[entities['st_exchanged']:entities['en_exchanged']] != entities['surface']:
+			# 		PronounExchangedText = PronounExchangedText[:entities['st_exchanged']] + entities[
+			# 			'surface'] + PronounExchangedText[entities['en_exchanged']:]
+			# jline['PronounExchangedText'] = PronounExchangedText
 
-			for entities in jline['entities']:
-				if PronounExchangedText[entities['st_exchanged']:entities['en_exchanged']] != entities['surface']:
-					PronounExchangedText = PronounExchangedText[:entities['st_exchanged']] + entities[
-						'surface'] + PronounExchangedText[entities['en_exchanged']:]
-			jline['PronounExchangedText'] = PronounExchangedText
 			result.append(jline)
 		return result
