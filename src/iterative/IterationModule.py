@@ -14,35 +14,30 @@ class IterationModule:
 		gl.logger.info("Initializing IterationModule")
 		self.args = IterationArgs()
 
-		self.train_corpus = []
-		self.dev_corpus = []
 		c = 0
-		for d in self.args.train_data_dir:
-			for item in os.listdir(d):
-				j = jsonload(d + item)
-				if c % 10 != 0:
-					self.train_corpus.append(j)
-				else:
-					self.dev_corpus.append(j)
 		self.el_model_name = el_model_name
 		self.el_model = EL("test", el_model_name)
 		self.ec_model = EC("test", ec_model_name)
 		self.ev_model = EV("test", ev_model_name)
 		self.ent_cal = EmbeddingCalculator(self.ev_model.word_embedding, self.ev_model.entity_embedding)
 
-	def run(self, corpus_dir):
+	def run(self):
 		gl.logger.info("Running IterationModule")
 		gl.logger.debug("Loading corpus")
-		corpus = []
-		for item in os.listdir(corpus_dir):
-			corpus.append(jsonload(corpus_dir + item))
-		corpus = Corpus.load_corpus(corpus)
+		train_corpus = [jsonload(self.args.train_data_dir + item) for item in os.listdir(self.args.train_data_dir)]
+		validation_corpus = [jsonload(self.args.dev_data_dir + item) for item in os.listdir(self.args.dev_data_dir)]
+		test_corpus = [jsonload(self.args.test_data + item) for item in os.listdir(self.args.test_data)]
+		corpus = Corpus.load_corpus(validation_corpus)
 
+		gl.logger.debug("Linking corpus")
+		linked = self.el_model(corpus)
+		gl.logger.debug("Clustering corpus")
+		clustered = self.ec_model(linked)
 		gl.logger.debug("Validating corpus")
-		validated_corpus = self.ev_model(corpus)
+		validated = self.ev_model(clustered)
 
 		gl.logger.debug("Generating new embedding")
-		new_cluster = list(filter(lambda x: x.kb_uploadable, validated_corpus.cluster_list))
+		new_cluster = list(filter(lambda x: x.kb_uploadable, validated.cluster_list))
 		new_ents = []
 		new_embs = self.ent_cal.calculate_cluster_embedding(new_cluster)
 		for cluster in new_cluster:
@@ -62,16 +57,14 @@ class IterationModule:
 
 		# retrain ???
 		gl.logger.info("Retraining EL Module")
-		self.el_model.train(self.train_corpus, self.dev_corpus)
+		self.el_model.train(train_corpus, validation_corpus)
 
 		# retrain corpus ???
 
 		# run EL again
-		el_result = self.el_model(corpus)
+		el_result = self.el_model(test_corpus)
 
 		# evaluate
-		for item in el_result:
-			pass
-
-	def _run_ev(self, corpus):
-		return self.ev_model(corpus)
+		for sentence in el_result:
+			for token in sentence:
+				pass

@@ -29,7 +29,7 @@ class TimeHierarchy():
 			raise Exception("Time not measured properly: %s" % self.name)
 
 		# parent_total_time = self.parent.total_time if self.parent is not None else self.total_time
-		longest_name = max([len(x) for x in time_checker.keys()])
+		longest_name = max([len(x) for x in time_checker.keys()]) if len(time_checker) > 0 else 0
 		if self.parent is None:
 			self.total_time = time_millis() - self.start_time
 			total_time_len = len(convert_millis(self.total_time))

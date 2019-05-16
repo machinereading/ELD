@@ -20,3 +20,5 @@ cloc-1.80.exe
 !scripts/*Test*
 .pyc
 .idea/
+models/
+cloc.exe

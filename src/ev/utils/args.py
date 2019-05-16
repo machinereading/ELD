@@ -52,7 +52,7 @@ class EVArgs(AbstractArgument):
 		self.transform_dim = 200
 
 		self.channel = 3
-		self.use_stddev = False  # if transformer == "avg", concatenate standard deviation information on average vector
+		self.use_stddev = True  # if transformer == "avg", concatenate standard deviation information on average vector
 		# Train config
 		self.epoch = 20
 		self.lr = 1e-4

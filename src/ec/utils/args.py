@@ -1,7 +1,7 @@
 from ...utils import AbstractArgument
 
 class ECArgs(AbstractArgument):
-	def __init__(self, model_name):
+	def __init__(self, model_name=""):
 		self.model_name = model_name
 		self.data_path = "corpus/coref_formatted/"
 		self.attn_dim = 200
@@ -11,7 +11,9 @@ class ECArgs(AbstractArgument):
 		self.hidden_dim = 150
 		self.epoch = 100
 		self.eval_epoch = 5
-		self.batch_size = 64
+		self.batch_size = 128
+		self.use_dropout = True
+		self.max_precedent = 20
 		self.lr = 1e-4
 
 	@property

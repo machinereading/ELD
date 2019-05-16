@@ -54,9 +54,9 @@ class EL():
 		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
 
 	def predict(self, sentences, delete_candidate=True):
-		type_list = [type(x) for x in sentences]
-		assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
-				[x is Sentence for x in type_list])
+		# type_list = [type(x) for x in sentences]
+		# assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
+		# 		[x is Sentence for x in type_list])
 		batches = split_to_batch(sentences, 100)
 		result = []
 		jj = []
@@ -81,10 +81,7 @@ class EL():
 		return result
 
 	def __call__(self, *sentences):
-		result = []
-		for batch in self.predict(sentences):
-			result += batch
-		return result
+		return self.predict(sentences)
 
 	@property
 	def config(self):

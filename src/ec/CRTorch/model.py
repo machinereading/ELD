@@ -3,15 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .Attention import Attention
+from ..utils import ECArgs
 from ...utils import Embedding
 
 class CorefModel(nn.Module):
-	def __init__(self, args):
+	def __init__(self, args: ECArgs):
 		super(CorefModel, self).__init__()
 		self.attn_size = args.attn_dim
 		self.target_device = args.device
-		self.max_precedents = 20
+		self.max_precedents = args.max_precedent
 		self.word_embedding = Embedding.load_embedding(args.embedding_type, args.embedding_path).to(self.target_device)
+		self.use_dropout = args.use_dropout
+		if self.use_dropout:
+			self.dropout = nn.Dropout()
 		self.attention = Attention(self.attn_size).to(self.target_device)
 		self.lstm_encoder = nn.LSTM(self.word_embedding.embedding_dim, args.lstm_dim, batch_first=True).to(self.target_device)
 		self.mention_scorer = nn.Sequential(
@@ -20,8 +24,8 @@ class CorefModel(nn.Module):
 				nn.Linear(args.hidden_dim, args.hidden_dim),
 				nn.ReLU()
 		).to(self.target_device)
-		self.wm = nn.Parameter(torch.randn(args.hidden_dim)).to(self.target_device)
-		self.wa = nn.Parameter(torch.randn(args.hidden_dim)).to(self.target_device)
+		self.wm = nn.Parameter(torch.randn(args.hidden_dim, requires_grad=True)).to(self.target_device)
+		self.wa = nn.Parameter(torch.randn(args.hidden_dim, requires_grad=True)).to(self.target_device)
 		self.antecedent_scorer = nn.Sequential(
 				nn.Linear(self.attn_size * 3, args.hidden_dim),
 				nn.ReLU(),
@@ -39,6 +43,8 @@ class CorefModel(nn.Module):
 		batch_size = word_seq.size()[0]
 		word_size = word_seq.size()[1]
 		we = self.word_embedding(word_seq)
+		if self.use_dropout:
+			we = self.dropout(we)
 		# print(we.size())
 		span_representation, (h, c) = self.lstm_encoder(we)
 		span_representation.view(batch_size, word_size, -1)
@@ -51,10 +57,11 @@ class CorefModel(nn.Module):
 		# print(mention_score.size()) # batch * max word size
 		pairs, indicator = self.pair_generator(targets)
 		pair_score = self.antecedent_scorer(pairs)
-		pair_score = self.batch_dot_product(pair_score.transpose(0, 1), self.wa).transpose(0, 1)
+		pair_score = self.batch_dot_product(pair_score.transpose(0, 1), self.wa)
+		pair_score = pair_score.transpose(0, 1)
 
-		final_score, final_indicator = self.final_score(mention_score, pair_score, indicator)
-		return final_score, final_indicator
+		final_score = self.final_score(mention_score, pair_score, indicator)
+		return final_score
 
 	def batch_dot_product(self, score, mat):
 		_, ss1, ss2 = score.size()
@@ -93,28 +100,50 @@ class CorefModel(nn.Module):
 
 	def final_score(self, mention_score, pair_score, pair_indicator):
 		result = []  #
+		batch_size = mention_score.size()[0]
 		mention_score = mention_score.transpose(0, 1)
 		indicator = []
-		for i, ms in enumerate(mention_score):
-
-			zero = torch.zeros(ms.size()).to(self.target_device)  # 모든 batch에 대한 i, -1의 score
-			result.append(zero)
-			indicator.append((-1, i))
+		precedents = []
+		for i, ms in enumerate(mention_score):  # mention * batch
+			precedent = [torch.tensor([-float("Inf")] * batch_size).to(self.target_device) for _ in range(self.max_precedents)]
+			idx = 0
 			for score, (s, e) in zip(pair_score, pair_indicator):
 				if e != i: continue
-				result.append(mention_score[i] + mention_score[s] + score)
-				indicator.append((s, e))
-			# scores = torch.stack(scores).to(self.target_device).transpose(0, 1)  # [0, 0], [a, b], [c, d] -> [0, a, c], [0, b, d] -> batch * ith mention coreference score
-			#
-			# scores = F.sigmoid(scores)
-			# result.append(scores)
-		result = torch.stack(result).to(self.target_device)
-		result = F.sigmoid(result)
-		return result, indicator
+				precedent[idx] = mention_score[i] + mention_score[s] + score
+
+				idx += 1
+			precedent.append(torch.zeros(batch_size).to(self.target_device))
+			precedent = torch.stack(precedent)
+			precedents.append(precedent)
+		# zero = torch.zeros(ms.size()).to(self.target_device)  # 모든 batch에 대한 i, -1의 score
+		# result.append(zero)
+		# indicator.append((-1, i))
+		# for score, (s, e) in zip(pair_score, pair_indicator):
+		# 	if e != i: continue
+		# 	result.append(mention_score[i] + mention_score[s] + score)
+		# 	indicator.append((s, e))
+		precedents = torch.stack(precedents).to(self.target_device)  # mention * max_precedent * batch
+		precedents = precedents.transpose(1, 2)
+		precedents = precedents.transpose(0, 1)  # batch * mention * max_precedent
+		result = F.softmax(precedents)
+		return result
+
+	# scores = torch.stack(scores).to(self.target_device).transpose(0, 1)  # [0, 0], [a, b], [c, d] -> [0, a, c], [0, b, d] -> batch * ith mention coreference score
+	#
+	# scores = F.sigmoid(scores)
+	# result.append(scores)
+	# result = torch.stack(result).to(self.target_device)
+	# result = F.sigmoid(result)
+	# return result, indicator
 
 	def loss(self, prediction, indicator, label):
 		real_labels = self.get_real_labels(indicator, label)
 		return F.binary_cross_entropy(prediction, real_labels)
+
+	def loss_v2(self, precedent, precedent_label):
+		precedent = precedent.view(-1, self.max_precedents + 1)
+		precedent_label = precedent_label.view(-1, self.max_precedents + 1)
+		return F.multilabel_margin_loss(precedent, precedent_label)
 
 	def get_real_labels(self, indicator, label):
 		label = label.transpose(0, 1)
