@@ -41,8 +41,8 @@ class ECArgs(AbstractArgument):
 		if self.device_id == -1:
 			self.device = torch.device("cpu")
 		else:
-			os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
-			self.device = torch.device("cuda:0")
+			# os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
+			self.device = torch.device("cuda")
 
 		self.comment = ""
 		# if self.mode == "train":

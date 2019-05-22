@@ -4,9 +4,10 @@ konlpy
 numpy
 scikit-learn
 pandas
-tensorflow==1.12.0
 tensorboardX
 tensorflow_hub
 pyhocon
 h5py
 tqdm
+pytorch_pretrained_bert
+networkx

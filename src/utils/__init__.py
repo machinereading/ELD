@@ -39,8 +39,12 @@ def pickleload(fname):
 		result = pickle.load(f)
 	return result
 
+def pickledump(obj, fname):
+	with open(fname, "wb") as f:
+		pickle.dump(obj, f, protocol=pickle.HIGHEST_PROTOCOL)
+
 def split_to_batch(l, batch_size=100):
-	return [l[x * batch_size:x * batch_size + batch_size] for x in range(len(l) // batch_size + 1)]
+	return list(filter(lambda x: len(x) > 0, [l[x * batch_size:x * batch_size + batch_size] for x in range(len(l) // batch_size + 1)]))
 
 # result = []
 # temp = []

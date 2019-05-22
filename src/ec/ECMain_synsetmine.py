@@ -1,4 +1,4 @@
-from .utils.args_synsetmine import EC_Args
+from .utils.args_synsetmine import ECArgs
 from .utils.el_dataset_merger import generate_data_from_el_result
 from .synsetmine.model import SSPM
 from .synsetmine.dataloader import element_set
@@ -6,8 +6,8 @@ from .synsetmine import cluster_predict
 from .synsetmine import evaluator
 from .synsetmine.utils import save_model, load_model, generate_logger, load_embedding, load_raw_data, Results, Metrics
 
-from ..utils import readfile, TimeUtil
-
+from ..utils import readfile, TimeUtil, writefile
+from ..ds import Corpus
 from tqdm import tqdm
 import torch
 from tensorboardX import SummaryWriter
@@ -29,6 +29,7 @@ class EC:
 		torch.set_num_threads(1)
 		fi = "data/ec/ec_embedding.w2v"
 		embedding, index2word, word2index, vocab_size, embed_dim = load_embedding(fi)
+		print("EC vocab size: %d" % vocab_size)
 		# logger.info("Finish loading embedding: embed_dim = {}, vocab_size = {}".format(embed_dim, vocab_size))
 		self.options["embedding"] = embedding
 		self.options["index2word"] = index2word
@@ -223,24 +224,49 @@ class EC:
 		self.options["mode"] = "cluster_predict"
 		if type(corpus) is str:
 			f = readfile(corpus)
+		elif type(corpus) is Corpus:
+			f = []
+			for sentence in corpus:
+				for token in sentence.entities:
+					if token.entity == "NOT_IN_CANDIDATE":
+						f.append("c%d {'%s'}" % (len(f), token.surface))
 		else:
 			f = []
 			for line in corpus.readlines():
 				f.append(line.strip())
-
+		writefile(f, "data/ec/ec_input_iter.txt")
 		test_set = element_set.ElementSet("test_set", "set", self.options, f)
 		print(len(test_set.vocab))
 		model = SSPM(self.options)
 		model = model.to(self.options["device"])
-		model_path = "data/ec/Feb10_21-46-52/best_steps_55.pt"
+		model_path = "models/ec/Feb10_21-46-52/best_steps_55.pt"
 		model.load_state_dict(torch.load(model_path))
 		vocab = test_set.vocab
-		clusters = cluster_predict.set_generation(model, vocab, threshold=0.5, eid2ename=test_set.index2word)
+		clusters = cluster_predict.set_generation(model, vocab, threshold=0.4, eid2ename=test_set.index2word)
 		result = []
 		for cluster in clusters:
 			result.append([test_set.index2word[ele] for ele in cluster])
+		print(len(result))
+		writefile(["\t".join(x) for x in result], "data/ec/ec_result_iter.txt")
+
+		if type(corpus) is Corpus:
+			si_dict = {}
+			for i, item in enumerate(result):
+				for s in item:
+					si_dict[s] = i
+			for sentence in corpus:
+				for token in sentence.entities:
+					if token.entity == "NOT_IN_CANDIDATE":
+						if token.surface in si_dict:
+							token.ec_cluster = si_dict[token.surface]
+						else:
+							token.ec_cluster = len(si_dict)
+							si_dict[token.surface] = len(si_dict)
+			print(len(si_dict))
+			corpus.recluster()
+			print(len(corpus.cluster))
+			return corpus
 		return result
 
-	def __call__(self, el_result):
-		input_data = generate_data_from_el_result(el_result)
+	def __call__(self, input_data):
 		return self.cluster(input_data)

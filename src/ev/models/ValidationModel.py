@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from .modules import ContextEmbedder, Transformer, Scorer
-from ...utils.Embedding import Embedding
 from ...utils import KoreanUtil
+from ...utils.Embedding import Embedding
 
 class ValidationModel(nn.Module):
 	def __init__(self, args):
@@ -16,12 +16,10 @@ class ValidationModel(nn.Module):
 		self.window_size = args.ctx_window_size
 		self.target_device = args.device
 		self.chunk_size = args.chunk_size
-
+		print(self.target_device)
 		self.we = Embedding.load_embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
-		self.ee = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(
-				self.target_device)
-		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.char_embedding_dim).to(
-				self.target_device)
+		self.ee = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
+		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.char_embedding_dim).to(self.target_device)
 		self.we_dim = self.we.embedding_dim
 		self.ee_dim = self.ee.embedding_dim
 		self.ce_dim = args.char_embedding_dim
@@ -66,26 +64,23 @@ class ValidationModel(nn.Module):
 		# for item in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1):
 		# 	print(item.size(), torch.sum(item))
 		# print(torch.stack([x for x in torch.chunk(jamo_index.view(-1, self.chunk_size, jamo_size), chunks, dim=1) if torch.sum(x) != 0]).size())
-		nonzero_stack = lambda tensor, s: torch.stack(
-				tuple([x for x in tensor.view(-1, self.chunk_size, s) if torch.sum(x) != 0])).view(-1, s)
 
 		# jamo_index = torch.stack([x for x in jamo_index.view(-1, self.chunk_size, jamo_size) if torch.sum(x) != 0]).view(-1, jamo_size)
 		# cluster_word_lctx = torch.stack([x for x in cluster_word_lctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
 		# cluster_word_rctx = torch.stack([x for x in cluster_word_rctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
 		# cluster_entity_lctx = torch.stack([x for x in cluster_entity_lctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
 		# cluster_entity_rctx = torch.stack([x for x in cluster_entity_rctx.view(-1, self.chunk_size, self.window_size) if torch.sum(x) != 0]).view(-1, self.window_size)
-		jamo_index = nonzero_stack(jamo_index, jamo_size)
-		cwl = nonzero_stack(cluster_word_lctx, self.window_size)
-		cwr = nonzero_stack(cluster_word_rctx, self.window_size)
-		cel = nonzero_stack(cluster_entity_lctx, self.window_size)
-		cer = nonzero_stack(cluster_entity_rctx, self.window_size)
+		jamo_index = self.nonzero_stack(jamo_index, jamo_size)
+		cwl = self.nonzero_stack(cluster_word_lctx, self.window_size)
+		cwr = self.nonzero_stack(cluster_word_rctx, self.window_size)
+		cel = self.nonzero_stack(cluster_entity_lctx, self.window_size)
+		cer = self.nonzero_stack(cluster_entity_rctx, self.window_size)
 
 		# print(size)
-		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size(), size.size()) # 100 * non-empty batch size * jamo size
-		assert jamo_index.size()[0] == cwl.size()[0] == cwr.size()[0] == cel.size()[0] == cer.size()[0], "Size mismatch"
+		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_word_rctx.size(), cluster_entity_lctx.size(), cluster_entity_rctx.size(), size.size())  # 100 * non-empty batch size * jamo size
+		assert jamo_index.size()[0] == cwl.size()[0] == cwr.size()[0] == cel.size()[0] == cer.size()[0], "Size mismatch: %d, %d, %d, %d, %d" % (jamo_index.size()[0], cwl.size()[0], cwr.size()[0], cel.size()[0], cer.size()[0])
 		# assert torch.sum(size) == jamo.index.size()[0]
-		c_embedding = self.ce(jamo_index).view(-1, jamo_size,
-		                                       self.ce_dim)  # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
+		c_embedding = self.ce(jamo_index).view(-1, jamo_size, self.ce_dim)  # batch_size * max_vocab_size * max_jamo_size * jamo_embedding
 		# bert attention mask?
 		# batch_size * max_vocab_size * window * embedding_size
 		wlctx = self.we(cwl).view(-1, self.window_size, self.we_dim)
@@ -99,7 +94,7 @@ class ValidationModel(nn.Module):
 		e_embedding = self.ce_embedder(elctx, erctx)
 
 		if self.use_explicit_scorer:
-			token_score = self.token_scorer(c_embedding, w_embedding, e_embedding) # n * chunk * 1
+			token_score = self.token_scorer(c_embedding, w_embedding, e_embedding)  # n * chunk * 1
 			# print(token_score, c_embedding, token_score * c_embedding)
 			c_embedding *= token_score
 			w_embedding *= token_score
@@ -130,17 +125,23 @@ class ValidationModel(nn.Module):
 		for param in self.cluster_transformer:
 			param.requires_grad = False
 
-	def _split_with_pad(self, tensor, size):
-		tensor_size = tensor.size()
-		if size < self.chunk_size:
-			if tensor_size[0] < self.chunk_size:
-				yield torch.stack([tensor, torch.zeros([self.chunk_size - tensor_size[0], tensor_size[1]])])
-				return
-			yield tensor[:self.chunk_size, :]
-			return
-		slices = tensor_size[0] // self.chunk_size
-		for i in range(slices):
-			yield tensor[i * self.chunk_size:(i + 1) * self.chunk_size, :]
-		yield torch.stack([tensor[slices * self.chunk_size:, :],
-		                   torch.zeros([self.chunk_size - (size - slices * self.chunk_size), tensor_size[1]])])
-		return
+	# def _split_with_pad(self, tensor, size):
+	# 	tensor_size = tensor.size()
+	# 	if size < self.chunk_size:
+	# 		if tensor_size[0] < self.chunk_size:
+	# 			yield torch.stack([tensor, torch.zeros([self.chunk_size - tensor_size[0], tensor_size[1]])])
+	# 			return
+	# 		yield tensor[:self.chunk_size, :]
+	# 		return
+	# 	slices = tensor_size[0] // self.chunk_size
+	# 	for i in range(slices):
+	# 		yield tensor[i * self.chunk_size:(i + 1) * self.chunk_size, :]
+	# 	yield torch.stack([tensor[slices * self.chunk_size:, :],
+	# 	                   torch.zeros([self.chunk_size - (size - slices * self.chunk_size), tensor_size[1]])])
+	# 	return
+
+	def nonzero_stack(self, tensor, s):
+		try:
+			return torch.stack(tuple([x for x in tensor.view(-1, self.chunk_size, s) if torch.sum(x) != 0])).view(-1, s)
+		except:
+			return torch.zeros_like(tensor)

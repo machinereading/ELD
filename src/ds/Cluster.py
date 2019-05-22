@@ -43,7 +43,7 @@ class Cluster():
 	def to_json(self):
 		return {
 			"id"           : self.id,
-			"target_entity": self.target_entity,
+			"target_entity": self.id if type(self.target_entity) is Cluster else self.target_entity,
 			"cluster"      : [x.to_json() for x in self.cluster],
 			"kb_uploadable": self.kb_uploadable
 		}

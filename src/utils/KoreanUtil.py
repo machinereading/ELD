@@ -142,7 +142,7 @@ def stem_sentence(sentence):
 
 def tokenize(sentence):
 	result = []
-	for token in sentence.split():
+	for token in sentence.replace("\n", " ").split():
 		buf = []
 		for char in token:
 			# korean, non-korean, number, special characters

@@ -95,7 +95,7 @@ class Corpus:
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
-		for sentence in tqdm(json[:100], desc="Loading EV corpus"):  # limit data for runnablity
+		for sentence in tqdm(json, desc="Loading EV corpus"):  # limit data for runnablity
 			sentence = Sentence.from_json(sentence)
 			if len(sentence.entities) > 0:
 				corpus.sentences.append(sentence)
@@ -137,3 +137,12 @@ class Corpus:
 				train.additional_cluster.append(v)
 
 		return train, dev
+
+	def recluster(self):
+		self.cluster = {}
+		for sentence in self:
+			for token in sentence.entities:
+				if not hasattr(token, "ec_cluster"): continue
+				if token.ec_cluster not in self.cluster:
+					self.cluster[token.ec_cluster] = Cluster(str(token.ec_cluster))
+				self.cluster[token.ec_cluster].add_elem(token)

@@ -141,10 +141,9 @@ def set_generation(model, vocab, threshold=0.5, eid2ename=None, size_opt_clus=Fa
     if verbose:
         print("{}\t{}".format("vocab", [eid2ename[eid] for eid in vocab]))
 
-    if verbose:
-        g = tqdm(range(len(candidate_pool)), desc="Cluster prediction (aggressive one pass)...")
-    else:
-        g = range(len(candidate_pool))
+
+    g = tqdm(range(len(candidate_pool)), desc="Cluster prediction")
+
     for i in g:
         inst = candidate_pool[i]
         if i == 0:

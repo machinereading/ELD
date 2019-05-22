@@ -84,6 +84,7 @@ class DataModule:
 		self.fake_er_rate = args.fake_er_rate
 		self.fake_el_rate = args.fake_el_rate
 		self.fake_ec_rate = args.fake_ec_rate
+		self.fc_ratio = args.fake_cluster_rate
 		self.corpus = None
 		if mode == "train":
 			if args.data_load_path is not None:
@@ -162,8 +163,10 @@ class DataModule:
 		# generate fake cluster by adding same surface form entities
 		suf_tok_dict = {}
 		suf_tok_dict_nae = {}
+		naes = {}
 		for sentence in corpus:
 			for token in sentence:
+				if token.surface == "": continue
 				if token.is_entity:
 					if token.surface not in suf_tok_dict:
 						suf_tok_dict[token.surface] = []
@@ -172,9 +175,21 @@ class DataModule:
 					if token.surface not in suf_tok_dict_nae:
 						suf_tok_dict_nae[token.surface] = []
 					suf_tok_dict_nae[token.surface].append(token)
+				if token.entity == "NOT_AN_ENTITY":
+					if token.surface not in naes:
+						naes[token.surface] = []
+					naes[token.surface].append(token)
+		for surface, tokens in naes.items():
+			if surface == "": continue
+			newc = FakeCluster(surface + "_fake")
+			for token in tokens[:100]:
+				newc.add_elem(token)
+			corpus.additional_cluster.append(newc)
+			added_cluster_count += 1
+			if added_cluster_count > len(corpus.cluster) * self.fc_ratio: break
 		for surface, tokens in suf_tok_dict.items():
 			entity_token_dict = {}
-			for token in tokens:
+			for token in tokens[:100]:
 				if token.entity not in entity_token_dict:
 					entity_token_dict[token.entity] = []
 				entity_token_dict[token.entity].append(token)
@@ -183,19 +198,22 @@ class DataModule:
 			s = sum(lens)
 			m = max(lens)
 			if s - m < m // 3: continue  # not enough invalid values to make fake cluster
-			newc = FakeCluster(surface)
-			for token in tokens:
+			newc = FakeCluster(surface+"_fake")
+			for token in tokens[:100]:
 				newc.add_elem(token)
 			corpus.additional_cluster.append(newc)
 			added_cluster_count += 1
+			if added_cluster_count > len(corpus.cluster) * self.fc_ratio: break
+
 		# generate fake cluster with not_an_entity items
 		for surface, tokens in suf_tok_dict_nae.items():
 			if len(tokens) < 10: continue
-			newc = FakeCluster(surface)
-			for token in tokens:
+			newc = FakeCluster(surface+"_fake")
+			for token in tokens[:100]:
 				newc.add_elem(token)
 			corpus.additional_cluster.append(newc)
 			added_cluster_count += 1
+			if added_cluster_count > len(corpus.cluster) * self.fc_ratio: break
 		return corpus
 
 	def save(self, path):
@@ -231,6 +249,7 @@ class DataModule:
 	@TimeUtil.measure_time
 	def generate_cluster_vocab_tensors(self, corpus, max_voca_restriction=None, max_jamo_restriction=None):
 		gl.logger.info("Generating Vocab tensors...")
+		invalid_cluster = []
 		for cluster in tqdm(corpus.cluster_list, desc="Generating vocab tensors"):
 			for vocab in cluster:
 				if vocab.tagged: continue
@@ -279,6 +298,9 @@ class DataModule:
 
 			for item in jamo:
 				item += [0] * (max_jamo - len(item))
+			if len(jamo) == 0:
+				invalid_cluster.append(cluster)
+				continue
 			if len(jamo) < max_voca:
 				pad = max_voca - len(jamo)
 				jamo += [[0] * max_jamo] * pad
@@ -297,7 +319,9 @@ class DataModule:
 			assert len(jamo[0]) == max_jamo
 			cluster.cluster = cluster.cluster[:max_voca]
 			cluster.update_tensor(*[torch.tensor(x) for x in [jamo, wlctx, wrctx, elctx, erctx]])
-
+		print(len(invalid_cluster))
+		corpus.cluster = {k: v for k, v in corpus.cluster.items() if v not in invalid_cluster}
+		corpus.additional_cluster = [c for c in corpus.additional_cluster if c not in invalid_cluster]
 	def convert_cluster_to_tensor(self, corpus, max_jamo_restriction):
 		# for validation
 		if type(corpus) is not Corpus:

@@ -8,7 +8,7 @@ from ..utils import TimeUtil
 from ..utils import *
 from ..ds import Sentence
 
-class EL():
+class EL:
 	def __init__(self, mode="test", model_name="no_okt_ent_emb"):
 		gl.logger.info("Initializing EL Module")
 		with TimeUtil.TimeChecker("EL_init"):

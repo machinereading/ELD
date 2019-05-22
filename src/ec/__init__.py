@@ -1,1 +1,1 @@
-from .ECMain_torch import EC
+from .ECMain_synsetmine import EC

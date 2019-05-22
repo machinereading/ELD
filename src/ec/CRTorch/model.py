@@ -44,7 +44,7 @@ class CorefModel(nn.Module):
 		word_size = word_seq.size()[1]
 		we = self.word_embedding(word_seq)
 		if self.use_dropout:
-			we = self.dropout(we)
+			we = F.dropout(we)
 		# print(we.size())
 		span_representation, (h, c) = self.lstm_encoder(we)
 		span_representation.view(batch_size, word_size, -1)
@@ -54,6 +54,7 @@ class CorefModel(nn.Module):
 
 		mention_score = self.mention_scorer(targets)
 		mention_score = self.batch_dot_product(mention_score, self.wm)
+		F.dropout(mention_score)
 		# print(mention_score.size()) # batch * max word size
 		pairs, indicator = self.pair_generator(targets)
 		pair_score = self.antecedent_scorer(pairs)

@@ -56,8 +56,8 @@ class EC:
 		optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
 		best_f1 = 0
 		best_epoch = 0
-		avg_loss = 0
-		for epoch in tqdm(range(self.args.epoch), desc="Training..."):
+		tqdm_info = tqdm(range(self.args.epoch), desc="Training...")
+		for epoch in tqdm_info:
 			self.model.train()
 			for batch in train_dataloader:
 				word_tensor, index, cluster_info, entity_len, precedent_label = [x.to(self.args.device) for x in batch]
@@ -66,7 +66,7 @@ class EC:
 				loss = self.model.loss_v2(prediction, precedent_label)
 				loss.backward()
 				optimizer.step()
-				avg_loss += loss
+				tqdm_info.desc = "loss: %f" % loss
 			if epoch % self.args.eval_epoch == 0:
 				self.model.eval()
 				tp, fp, fn, tn = 0, 0, 0, 0
@@ -93,9 +93,7 @@ class EC:
 				p = tp / (tp + fp)
 				r = tp / (tp + fn)
 				f1 = 2 * p * r / (p + r)
-				gl.logger.info("Average loss: %.4f" % (avg_loss / self.args.eval_epoch))
 				gl.logger.info("F1: %.2f" % (f1 * 100))
-				avg_loss = 0
 				if best_f1 < f1:
 					best_f1 = f1
 					best_epoch = epoch
@@ -107,49 +105,51 @@ class EC:
 		print(type(corpus))
 		loader = data.DataLoader(CorefDataset(corpus), batch_size=self.args.batch_size)
 		clusters = []
-		for batch in loader:
-			word_tensor, index, _, entity_len, _ = [x.to(self.args.device) for x in batch]
-			# batch_size = word_tensor.size()[0]
-			prediction = self.model(word_tensor, index, entity_len)
-			cluster = self.precedent_to_cluster(prediction, entity_len)
-			clusters += cluster
-		for s, c in zip(corpus, clusters):
-			for t, tcinfo in zip(s.entities, c):
-				t.cluster = tcinfo
+		self.mode.eval()
+		with torch.no_grad():
+			for batch in loader:
+				word_tensor, index, _, entity_len, _ = [x.to(self.args.device) for x in batch]
+				# batch_size = word_tensor.size()[0]
+				prediction = self.model(word_tensor, index, entity_len)
+				cluster = self.precedent_to_cluster(prediction, entity_len)
+				clusters += cluster
+			for s, c in zip(corpus, clusters):
+				for t, tcinfo in zip(s.entities, c):
+					t.cluster = tcinfo
 		return corpus
 
 	def __call__(self, input_data):
 		return self.cluster(input_data)
 
-	def indicator_to_cluster_prediction(self, prediction, indicator, entity_len, cluster_id=None):
-		batch_size = prediction.size()[1]
-		cluster_id_modify_flag = False
-		if cluster_id is None:
-			cluster_id_modify_flag = True
-			cluster_id = [list(range(i)) for i in entity_len]
-		prediction_ent = [
-			[
-				[-1 for _ in range(entity_len[i])]
-				 for _ in range(entity_len[i])
-			]
-			for i in range(batch_size)]  # batch * entity * entity
-		for p, (si, ei) in zip(prediction, indicator):
-			for idx, pi in enumerate(p):  # 각각의 prediction, indicator
-				if si == -1:
-					si = ei
-				if ei >= len(prediction_ent[idx]): continue
-				prediction_ent[idx][ei][si] = pi
-		# get max idx
-		cluster_result = []
-		for p, c in zip(prediction_ent, cluster_id):
-			precede_list = []
-			for i, ent_prob in enumerate(p):
-				max_idx = ent_prob.index(max(ent_prob))
-				precede_list.append(c[max_idx])
-				if cluster_id_modify_flag:
-					c[i] = c[max_idx]
-			cluster_result.append(precede_list)
-		return cluster_result
+	# def indicator_to_cluster_prediction(self, prediction, indicator, entity_len, cluster_id=None):
+	# 	batch_size = prediction.size()[1]
+	# 	cluster_id_modify_flag = False
+	# 	if cluster_id is None:
+	# 		cluster_id_modify_flag = True
+	# 		cluster_id = [list(range(i)) for i in entity_len]
+	# 	prediction_ent = [
+	# 		[
+	# 			[-1 for _ in range(entity_len[i])]
+	# 			 for _ in range(entity_len[i])
+	# 		]
+	# 		for i in range(batch_size)]  # batch * entity * entity
+	# 	for p, (si, ei) in zip(prediction, indicator):
+	# 		for idx, pi in enumerate(p):  # 각각의 prediction, indicator
+	# 			if si == -1:
+	# 				si = ei
+	# 			if ei >= len(prediction_ent[idx]): continue
+	# 			prediction_ent[idx][ei][si] = pi
+	# 	# get max idx
+	# 	cluster_result = []
+	# 	for p, c in zip(prediction_ent, cluster_id):
+	# 		precede_list = []
+	# 		for i, ent_prob in enumerate(p):
+	# 			max_idx = ent_prob.index(max(ent_prob))
+	# 			precede_list.append(c[max_idx])
+	# 			if cluster_id_modify_flag:
+	# 				c[i] = c[max_idx]
+	# 		cluster_result.append(precede_list)
+	# 	return cluster_result
 
 	def precedent_to_cluster(self, precedent, size):
 		"""
@@ -169,3 +169,22 @@ class EC:
 					target = max(i - self.args.max_precedent, 0) + prec
 				result[idx][i] = result[idx][target]
 		return result
+
+
+class SurfaceBasedClusterModel:
+	def __call__(self, input_data):
+		surface_ind_dict = {}
+		i = 0
+		for item in input_data:
+			for entity in item.entities:
+				if entity.entity != "NOT_IN_CANDIDATE":
+					del entity.cluster
+					continue
+				i += 1
+				surface = entity.surface.replace(" ", "_")
+				if surface not in surface_ind_dict:
+					surface_ind_dict[surface] = len(surface_ind_dict)
+				entity.cluster = surface_ind_dict[surface]
+		input_data.recluster()
+		print(i)
+		return input_data
