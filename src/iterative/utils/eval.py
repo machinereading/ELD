@@ -82,6 +82,7 @@ def evaluate(iter_el_result, label):
 				marked_entity = ne.entity
 			if marked_entity == nic:
 				marked_entity = nae
+			ne.entity = marked_entity
 			if marked_entity != nae:
 				if tagged:
 					gold_only["P"] += 1

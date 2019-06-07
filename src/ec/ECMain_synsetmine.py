@@ -1,22 +1,24 @@
-from .utils.args_synsetmine import ECArgs
-from .utils.el_dataset_merger import generate_data_from_el_result
-from .synsetmine.model import SSPM
-from .synsetmine.dataloader import element_set
-from .synsetmine import cluster_predict
-from .synsetmine import evaluator
-from .synsetmine.utils import save_model, load_model, generate_logger, load_embedding, load_raw_data, Results, Metrics
+import random
 
-from ..utils import readfile, TimeUtil, writefile
-from ..ds import Corpus
-from tqdm import tqdm
+import numpy as np
 import torch
 from tensorboardX import SummaryWriter
-import random
-import numpy as np
+from tqdm import tqdm
+
+from .synsetmine import cluster_predict, evaluator
+from .synsetmine.dataloader import element_set
+from .synsetmine.model import SSPM
+from .synsetmine.utils import save_model, load_model, generate_logger, load_embedding, Results, Metrics
+from .utils.args_synsetmine import ECArgs
+from ..ds import Corpus
+from ..utils import readfile, TimeUtil, writefile
+from .. import GlobalValues as gl
 
 class EC:
-	def __init__(self):
+	def __init__(self, mode):
+		gl.logger.info("Initializing EC Module")
 		self.args = ECArgs()
+		self.args.mode = mode
 		self.options = vars(self.args)
 		self.debug = True
 		random.seed(self.args.random_seed)
@@ -29,12 +31,14 @@ class EC:
 		torch.set_num_threads(1)
 		fi = "data/ec/ec_embedding.w2v"
 		embedding, index2word, word2index, vocab_size, embed_dim = load_embedding(fi)
-		print("EC vocab size: %d" % vocab_size)
+		gl.logger.debug("EC vocab size: %d" % vocab_size)
 		# logger.info("Finish loading embedding: embed_dim = {}, vocab_size = {}".format(embed_dim, vocab_size))
 		self.options["embedding"] = embedding
 		self.options["index2word"] = index2word
 		self.options["word2index"] = word2index
 		self.options["vocabSize"] = vocab_size
+		self.options["device"] = self.args.device
+		self.mode = mode
 
 	def train(self, train_corpus, dev_corpus=None):
 		self.args.mode = "train"
@@ -45,7 +49,7 @@ class EC:
 			f = []
 			for line in train_corpus.readlines():
 				f.append(line.strip())
-		
+
 		random.shuffle(f)
 		with TimeUtil.TimeChecker("Train set generation"):
 			train_set = element_set.ElementSet("train_set", self.options["data_format"], self.options, f)
@@ -59,7 +63,7 @@ class EC:
 			dev_set = element_set.ElementSet("dev_set", self.options["data_format"], self.options, df)
 		else:
 			dev_set = None
-		train_results = Results("log/ec/log.txt") # does it need to write on something?
+		train_results = Results("log/ec/log.txt")  # does it need to write on something?
 		options = self.options
 		if self.debug:
 			# Add TensorBoard Writer
@@ -94,9 +98,9 @@ class EC:
 			epoch_fn = 0
 			epoch_tp = 0
 			for train_batch in train_set.get_train_batch(max_set_size=options["max_set_size"],
-														 neg_sample_size=options["neg_sample_size"],
-														 neg_sample_method=options["neg_sample_method"],
-														 batch_size=options["batch_size"]):
+			                                             neg_sample_size=options["neg_sample_size"],
+			                                             neg_sample_method=options["neg_sample_method"],
+			                                             batch_size=options["batch_size"]):
 				train_batch["data_format"] = "sip"
 				optimizer.zero_grad()
 				cur_loss, tn, fp, fn, tp = model.train_step(train_batch)
@@ -110,7 +114,7 @@ class EC:
 				epoch_samples += (tn + fp + fn + tp)
 
 				epoch_precision, epoch_recall, epoch_f1 = evaluator.calculate_precision_recall_f1(tp=epoch_tp, fp=epoch_fp,
-																								  fn=epoch_fn)
+				                                                                                  fn=epoch_fn)
 			epoch_accuracy = 1.0 * (epoch_tp + epoch_tn) / epoch_samples
 			loss /= epoch_samples
 			my_logger.info("    train/loss (per instance): {}".format(loss))
@@ -139,7 +143,7 @@ class EC:
 				# clustering evaluation
 				vocab = dev_set.vocab
 				cls_pred = cluster_predict.set_generation(model, vocab, size_opt_clus=options["size_opt_clus"],
-														  max_K=options["max_K"])
+				                                          max_K=options["max_K"])
 				cls_true = dev_set.positive_sets
 				metrics_cls = evaluator.evaluate_clustering(cls_pred, cls_true)
 				tb_writer.add_scalar('val-cluster/ARI', metrics_cls["ARI"], epoch)
@@ -171,7 +175,7 @@ class EC:
 
 			if epoch - last_step > options["early_stop"]:
 				print("Early stop by {} steps, best {}: {}, best step: {}".format(epoch, early_stop_metric_name,
-																				  best_early_stop_metric, last_step))
+				                                                                  best_early_stop_metric, last_step))
 				break
 
 			train_set._shuffle()
@@ -189,7 +193,7 @@ class EC:
 		my_logger.info("=== Clustering Metrics ===")
 		vocab = dev_set.vocab
 		cls_pred = cluster_predict.set_generation(model, vocab, size_opt_clus=options["size_opt_clus"],
-												  max_K=options["max_K"])
+		                                          max_K=options["max_K"])
 		cls_true = dev_set.positive_sets
 		metrics_cls = evaluator.evaluate_clustering(cls_pred, cls_true)
 		for metric in metrics_cls:
@@ -211,8 +215,8 @@ class EC:
 		results.add("inst-f1", metrics_cls["pair_f1"])
 
 		interested_hyperparameters = ["modelName", "dataset", "data_format", "pretrained_embedding", "embedSize",
-									  "node_hiddenSize", "combine_hiddenSize", "batch_size", "neg_sample_size", "lr",
-									  "dropout", "early_stop", "random_seed", "save_dir"]
+		                              "node_hiddenSize", "combine_hiddenSize", "batch_size", "neg_sample_size", "lr",
+		                              "dropout", "early_stop", "random_seed", "save_dir"]
 		hyperparameters = {}
 		for hyperparameter_name in interested_hyperparameters:
 			hyperparameters[hyperparameter_name] = options[hyperparameter_name]
@@ -236,20 +240,25 @@ class EC:
 				f.append(line.strip())
 		writefile(f, "data/ec/ec_input_iter.txt")
 		test_set = element_set.ElementSet("test_set", "set", self.options, f)
-		print(len(test_set.vocab))
+		# print(len(test_set.vocab))
 		model = SSPM(self.options)
 		model = model.to(self.options["device"])
 		model_path = "models/ec/Feb10_21-46-52/best_steps_55.pt"
-		model.load_state_dict(torch.load(model_path))
+		if self.mode == "demo":
+
+			model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
+		else:
+			model.load_state_dict(torch.load(model_path))
 		vocab = test_set.vocab
 		clusters = cluster_predict.set_generation(model, vocab, threshold=0.4, eid2ename=test_set.index2word)
 		result = []
 		for cluster in clusters:
 			result.append([test_set.index2word[ele] for ele in cluster])
-		print(len(result))
+		# print(len(result))
 		writefile(["\t".join(x) for x in result], "data/ec/ec_result_iter.txt")
 
 		if type(corpus) is Corpus:
+			print("CORPUS RECLUSTERING")
 			si_dict = {}
 			for i, item in enumerate(result):
 				for s in item:
@@ -262,9 +271,12 @@ class EC:
 						else:
 							token.ec_cluster = len(si_dict)
 							si_dict[token.surface] = len(si_dict)
-			print(len(si_dict))
+			# print(len(si_dict))
+			print(len(corpus.cluster))
+
 			corpus.recluster()
 			print(len(corpus.cluster))
+
 			return corpus
 		return result
 

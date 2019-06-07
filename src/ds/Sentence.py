@@ -8,6 +8,7 @@ class Sentence:
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]
 		self.tagged_tokens = []
 		self.id = -1
+		self.title = ""
 		lastind = 0
 		self._vocab_tensors = None
 
@@ -45,7 +46,7 @@ class Sentence:
 				return item
 		return None
 
-	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1):
+	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1, ne_type=None):
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
 
@@ -75,6 +76,7 @@ class Sentence:
 		new_token.is_entity = True
 		new_token.entity = entity
 		new_token.entity_in_kb = entity in gl.entity_id_map
+		new_token.ne_type = ne_type
 		new_token_list = []
 		for token in self.tokens:
 			new_token_list += split_token(new_token, token)
@@ -104,10 +106,11 @@ class Sentence:
 		for entity in entities:
 			if entity["entity"] == "": continue
 			try:
-
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
-				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id)
+				sentence.add_ne(entity["start"], entity["end"], entity["surface"] if "surface" in entity else entity["text"], entity["entity"], cluster_id, entity["dataType"])
 			except:
+				import traceback
+				traceback.print_exc()
 				error_count += 1
 		# if error_count > 0:
 		# print(error_count, len(entities))

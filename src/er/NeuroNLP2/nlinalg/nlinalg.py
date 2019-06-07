@@ -14,7 +14,6 @@ def logdet(x):
     Returns: log determinant of x
 
     """
-    # TODO for pytorch 2.0.4, use inside potrf for variable.
     print(torch.log(torch.eig(x.data)[0]))
     print(x)
     u_chol = x.potrf()

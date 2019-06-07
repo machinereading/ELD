@@ -172,7 +172,6 @@ def StackedRNN(inners, num_layers, lstm=False):
     total_layers = num_layers * num_directions
 
     def reverse_skip_connection(skip_connect):
-        # TODO reverse skip connection for bidirectional rnn.
         return skip_connect
 
     def forward(input, skip_connect, hidden, cells, mask):

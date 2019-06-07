@@ -6,7 +6,7 @@ from .vocabulary import Vocabulary
 import json
 
 
-def load(path, model_class, suffix=''):
+def load(path, model_class, mode, suffix=''):
     with io.open(path + '.config', 'r', encoding='utf8') as f:
         config = json.load(f)
 
@@ -21,10 +21,15 @@ def load(path, model_class, suffix=''):
         snd_word_voca = Vocabulary()
         snd_word_voca.__dict__ = config['snd_word_voca']
         config['snd_word_voca'] = snd_word_voca
-
+    config["device"] = "cpu" if mode == "demo" else "cuda"
     model = model_class(config)
     # model.load_state_dict(torch.load(path + '.state_dict' + suffix, map_location={'cuda:0':'cuda:1'}))
-    model.load_state_dict(torch.load(path + '.state_dict' + suffix))
+    if mode == "demo":
+        print("Load model with demo mode")
+        model.load_state_dict(torch.load(path + '.state_dict' + suffix, map_location=lambda storage, loc: storage))
+    else:
+        print("Load model with demo mode")
+        model.load_state_dict(torch.load(path + '.state_dict' + suffix))
     return model
 
 

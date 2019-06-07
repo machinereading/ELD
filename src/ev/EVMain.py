@@ -9,9 +9,11 @@ from .utils.data import DataModule, ClusterGenerator
 from .. import GlobalValues as gl
 from ..ds import FakeCluster
 from ..utils import jsondump
+import sys
 
 class EV:
 	def __init__(self, mode, model_name, config_file=None):
+		gl.logger.info("Initializing EV Module")
 		# initialize arguments
 		self.mode = mode
 		if mode == "train":
@@ -21,13 +23,15 @@ class EV:
 				self.args = EVArgs.from_json("models/ev/%s_args.json" % model_name)
 			except FileNotFoundError:
 				gl.logger.critical("No argument file exists!")
+				sys.exit(1)
 			except:
 				gl.logger.critical("Error on loading argument file")
 				import traceback
 				traceback.print_exc()
+				sys.exit(1)
 		# self.args = EVArgs() if config_file is None else EVArgs.from_config(config_file)
 
-		if torch.cuda.is_available():
+		if torch.cuda.is_available() and mode != "demo":
 			self.args.device = "cuda"
 		else:
 			self.args.device = "cpu"
@@ -148,9 +152,12 @@ class EV:
 	def validate(self, corpus):
 		# entity set to tensor
 		# assert type(corpus) is list or type(corpus) is Corpus
-		print("MAX BEFORE: %d" % max([len(x) for x in corpus.cluster_list]))
-		corpus = self.dataset.generate_fake_cluster(corpus)
-		print("MAX AFTER: %d" % max([len(x) for x in corpus.cluster_list]))
+		gl.logger.debug("Entities to validate: %d" % len(corpus.cluster_list))
+		if len(corpus.cluster_list) == 0:
+			return corpus
+		# print("MAX BEFORE: %d" % max([len(x) for x in corpus.cluster_list]))
+		# corpus = self.dataset.generate_fake_cluster(corpus)
+		# print("MAX AFTER: %d" % max([len(x) for x in corpus.cluster_list]))
 
 		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=self.args.max_jamo)
 		batch_size = 4

@@ -28,6 +28,7 @@ class MulRelRanker(LocalCtxAttRanker):
         self.n_loops = config['n_loops']
         self.n_rels = config['n_rels']
         self.dr = config['dr']
+        self.target_device = config["device"]
         self.ew_hid_dims = self.emb_dims
 
         self.max_dist = 1000
@@ -122,7 +123,7 @@ class MulRelRanker(LocalCtxAttRanker):
             ent_vecs = self._entity_vecs
         else:
             ent_vecs = self.entity_embeddings(entity_ids)
-            local_ent_scores = Variable(torch.zeros(n_ments, n_cands).cuda(), requires_grad=False)
+            local_ent_scores = Variable(torch.zeros(n_ments, n_cands).to(self.target_device), requires_grad=False)
 
         # compute context vectors
         ltok_vecs = self.snd_word_embeddings(self.s_ltoken_ids) * self.s_ltoken_mask.view(n_ments, -1, 1)
@@ -137,20 +138,20 @@ class MulRelRanker(LocalCtxAttRanker):
             ent_vecs = torch.cat([ent_vecs, self.pad_ent_emb.view(1, 1, -1).repeat(1, n_cands, 1)], dim=0)
             tmp = torch.zeros(1, n_cands)
             tmp[0, 0] = 1
-            tmp = Variable(tmp.cuda())
+            tmp = Variable(tmp.to(self.target_device))
             entity_mask = torch.cat([entity_mask, tmp], dim=0)
             p_e_m = torch.cat([p_e_m, tmp], dim=0)
             local_ent_scores = torch.cat([local_ent_scores,
-                                          Variable(torch.zeros(1, n_cands).cuda(), requires_grad=False)],
+                                          Variable(torch.zeros(1, n_cands).to(self.target_device), requires_grad=False)],
                                          dim=0)
             n_ments += 1
 
             if self.oracle:
-                tmp = Variable(torch.zeros(1, 1).cuda().long())
+                tmp = Variable(torch.zeros(1, 1).to(self.target_device).long())
                 gold = torch.cat([gold, tmp], dim=0)
 
         if self.use_local_only:
-            inputs = torch.cat([Variable(torch.zeros(n_ments * n_cands, 1).cuda()),
+            inputs = torch.cat([Variable(torch.zeros(n_ments * n_cands, 1).to(self.target_device)),
                                 local_ent_scores.view(n_ments * n_cands, -1),
                                 torch.log(p_e_m + 1e-20).view(n_ments * n_cands, -1)], dim=1)
             scores = self.score_combine(inputs).view(n_ments, n_cands)
@@ -161,7 +162,7 @@ class MulRelRanker(LocalCtxAttRanker):
 
         else:
             # distance - to consider only neighbor mentions
-            ment_pos = torch.arange(0, n_ments).long().cuda()
+            ment_pos = torch.arange(0, n_ments).long().to(self.target_device)
             dist = (ment_pos.view(n_ments, 1) - ment_pos.view(1, n_ments)).abs()
             dist.masked_fill_(dist == 1, -1)
             dist.masked_fill_((dist > 1) & (dist <= self.max_dist), -1)
@@ -176,8 +177,8 @@ class MulRelRanker(LocalCtxAttRanker):
             rel_ctx_vecs = m1_ctx_vecs.view(1, n_ments, -1) * self.ew_embs.view(n_rels, 1, -1)
             rel_ctx_ctx_scores = torch.matmul(rel_ctx_vecs, m2_ctx_vecs.view(1, n_ments, -1).permute(0, 2, 1))  # n_rels x n_ments x n_ments
 
-            rel_ctx_ctx_scores = rel_ctx_ctx_scores.add_((1 - Variable(dist.float().cuda())).mul_(-1e10))
-            eye = Variable(torch.eye(n_ments).cuda()).view(1, n_ments, n_ments)
+            rel_ctx_ctx_scores = rel_ctx_ctx_scores.add_((1 - Variable(dist.float().to(self.target_device))).mul_(-1e10))
+            eye = Variable(torch.eye(n_ments).to(self.target_device)).view(1, n_ments, n_ments)
             rel_ctx_ctx_scores.add_(eye.mul_(-1e10))
             rel_ctx_ctx_scores.mul_(1 / np.sqrt(self.ew_hid_dims))  # scaling proposed by "attention is all you need"
 
@@ -232,10 +233,10 @@ class MulRelRanker(LocalCtxAttRanker):
 
             if gold is None:
                 # LBP
-                prev_msgs = Variable(torch.zeros(n_ments, n_cands, n_ments).cuda())
+                prev_msgs = Variable(torch.zeros(n_ments, n_cands, n_ments).to(self.target_device))
 
                 for _ in range(self.n_loops):
-                    mask = 1 - Variable(torch.eye(n_ments).cuda())
+                    mask = 1 - Variable(torch.eye(n_ments).to(self.target_device))
                     ent_ent_votes = ent_ent_scores + local_ent_scores * 1 + \
                                     torch.sum(prev_msgs.view(1, n_ments, n_cands, n_ments) *
                                               mask.view(n_ments, 1, 1, n_ments), dim=3)\
@@ -246,11 +247,11 @@ class MulRelRanker(LocalCtxAttRanker):
                     prev_msgs = msgs
 
                 # compute marginal belief
-                mask = 1 - Variable(torch.eye(n_ments).cuda())
+                mask = 1 - Variable(torch.eye(n_ments).to(self.target_device))
                 ent_scores = local_ent_scores * 1 + torch.sum(msgs * mask.view(n_ments, 1, n_ments), dim=2)
                 ent_scores = F.softmax(ent_scores, dim=1)
             else:
-                onehot_gold = Variable(torch.zeros(n_ments, n_cands).cuda()).scatter_(1, gold, 1)
+                onehot_gold = Variable(torch.zeros(n_ments, n_cands).to(self.target_device)).scatter_(1, gold, 1)
                 ent_scores = torch.sum(torch.sum(ent_ent_scores * onehot_gold, dim=3), dim=2)
 
         # combine with p_e_m

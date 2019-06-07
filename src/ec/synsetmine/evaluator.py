@@ -159,7 +159,6 @@ def evaluate_set_instance_prediction(model, dataset):
     set_size = []
 
     # the following max_set_size and batch_size number need to be set such that one test batch can fit GPU memory
-    # TODO: make this value dynamtically changeable
     max_set_size = 100
     # batch_size = int(len(dataset.sip_triplets) / 20)
     for test_batch in dataset.get_test_batch(max_set_size=50, batch_size=100):

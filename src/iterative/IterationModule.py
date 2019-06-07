@@ -19,7 +19,7 @@ class IterationModule:
 		self.args.ev_model_name = ev_model_name
 		self.el_model_name = el_model_name
 		self.el_model = EL("test", el_model_name)
-		self.ec_model = EC()
+		self.ec_model = EC("test")
 		# self.ec_model = EC("test", ec_model_name)
 		# self.ec_model = SurfaceBasedClusterModel()
 		if ev_model_name in ev_redirection:

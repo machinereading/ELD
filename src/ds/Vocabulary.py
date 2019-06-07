@@ -67,6 +67,20 @@ class Vocabulary:
 			"token_ind"      : self.token_ind,
 			"char_ind"       : self.char_ind
 		}
+	@property
+	def demo_form(self):
+		if self.entity in [None, "NOT_IN_CANDIDATES", "NOT_AN_ENTITY"]: return None
+		return {
+			"text": self.surface,
+			"start_offset": self.char_ind,
+			"end_offset": self.char_ind + len(self.surface),
+			"ne_type": self.ne_type,
+			"type": [],
+			"score": 0,
+			"confidence": 0,
+			"uri": "http://kbox.kaist.ac.kr/resource/" + self.entity,
+			"en_entity": None
+		}
 
 	@classmethod
 	def from_json(cls, json):

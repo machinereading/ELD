@@ -38,11 +38,11 @@ class ECArgs(AbstractArgument):
 		self.tune_result_file = "tune_prefix"
 		self.remark = "ec"
 
-		if self.device_id == -1:
-			self.device = torch.device("cpu")
-		else:
-			# os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
-			self.device = torch.device("cuda")
+		# if self.device_id == -1:
+		# 	self.device = torch.device("cpu")
+		# else:
+		# 	# os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
+		# 	self.device = torch.device("cuda")
 
 		self.comment = ""
 		# if self.mode == "train":
@@ -60,3 +60,10 @@ class ECArgs(AbstractArgument):
 			self.max_K = None
 
 		self.size_opt_clus = (self.size_opt_clus == 1)
+
+	@property
+	def device(self):
+		if self.device_id == -1 or self.mode == "demo":
+			return torch.device("cpu")
+		else:
+			return torch.device("cuda")

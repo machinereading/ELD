@@ -49,6 +49,18 @@ class Corpus:
 			accbuf += l
 		raise IndexError
 
+	@property
+	def all_tokens(self):
+		for s in self:
+			for token in s:
+				yield token
+
+	@property
+	def all_entities(self):
+		for s in self:
+			for token in s.entities:
+				yield token
+
 	def get_cluster_by_index(self, ind):
 		return self.cluster_list[ind]
 

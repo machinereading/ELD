@@ -43,6 +43,7 @@ def merge_item_with_corpus(sentences, result_dict):
 			target_voca = s.find_token_by_index(entity["start"])
 			if target_voca is not None:
 				target_voca.entity = entity["entity"]
+				target_voca.ne_type = entity["dataType"]
 	return sentences
 
 if __name__ == '__main__':

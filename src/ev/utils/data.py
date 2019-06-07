@@ -60,6 +60,7 @@ class ClusterContextSetGenerator(Dataset):
 class DataModule:
 	def __init__(self, mode, args):
 		gl.logger.info("Initializing EV DataModule")
+		self.mode = mode
 		# 0 for oov, 1 for out of range
 		self.make_word_tensor = args.word_embedding_type == "glove"
 		self.make_entity_tensor = args.entity_embedding_type == "glove"
@@ -327,6 +328,7 @@ class DataModule:
 		if type(corpus) is not Corpus:
 			corpus = Corpus.load_corpus(corpus)
 			print(len(corpus))
-		self.mark_kb(corpus)
+		if self.mode != "demo":
+			self.mark_kb(corpus)
 		self.generate_cluster_vocab_tensors(corpus, max_jamo_restriction=max_jamo_restriction)
 		return corpus

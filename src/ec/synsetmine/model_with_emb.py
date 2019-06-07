@@ -52,7 +52,6 @@ class SSPM2(nn.Module):
 		elif params['loss_fn'] == "self_margin_rank_bce":
 			self.criterion = nn.BCEWithLogitsLoss()
 
-		# TODO: avoid the following self.params = params
 		self.params = params
 		# transfer parameters to self, therefore we have self.modelName
 		for key, val in self.params.items():

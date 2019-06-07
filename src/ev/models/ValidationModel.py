@@ -16,7 +16,6 @@ class ValidationModel(nn.Module):
 		self.window_size = args.ctx_window_size
 		self.target_device = args.device
 		self.chunk_size = args.chunk_size
-		print(self.target_device)
 		self.we = Embedding.load_embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
 		self.ee = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
 		self.ce = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.char_embedding_dim).to(self.target_device)

@@ -1,13 +1,13 @@
-from .utils.data import DataModule
-from .utils.args import ELArgs
-from .utils.postprocess import *
-from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
+from .mulrel_nel.ed_ranker import EDRanker
+from .utils.args import ELArgs
+from .utils.data import DataModule
+from .utils.postprocess import *
 from .. import GlobalValues as gl
-from ..utils import TimeUtil
-from ..utils import *
 from ..ds import Sentence
-
+from ..utils import *
+from ..utils import TimeUtil
+import torch
 class EL:
 	def __init__(self, mode="test", model_name="no_okt_ent_emb"):
 		gl.logger.info("Initializing EL Module")
@@ -30,7 +30,7 @@ class EL:
 			self.args.mode = mode
 			self.args.model_name = model_name
 			self.debug = False
-
+			self.target_device = "cuda" if torch.cuda.is_available() and mode != "demo" else "cpu"
 			self.ranker = EDRanker(config=self.config)
 			jsondump(self.args.to_json(), "models/el/%s_args.json" % model_name)
 
@@ -76,8 +76,9 @@ class EL:
 			result += merge_item(j, e, delete_candidate)
 		if type(sentences[0]) is Sentence:
 			result = merge_item_with_corpus(sentences, result)
-		jsondump(jj, "debug/el_prepare.json")
-		jsondump(ee, "debug/el_result_dict.json")
+		if self.debug:
+			jsondump(jj, "debug/el_prepare.json")
+			jsondump(ee, "debug/el_result_dict.json")
 		return result
 
 	def __call__(self, *sentences):
@@ -102,7 +103,8 @@ class EL:
 			'n_loops'            : self.args.n_loops,
 			'n_rels'             : self.args.n_rels,
 			'mulrel_type'        : self.args.mulrel_type,
-			'args'               : self.args
+			'args'               : self.args,
+			'device'             : self.target_device
 		}
 
 	def reload_ranker(self):

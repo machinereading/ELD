@@ -102,7 +102,7 @@ class ElementSet(object):
                 self.positive_sets.append(sorted([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls]))  # sorting for reproducibility
                 self.vocab.extend([self.word2index[ele] if ele in self.word2index else self.word2index["PADDING_IDX"] for ele in cls])
                 # need to handle out-of-vocabulary words
-        self.avg_set_size = 1.0 * set_size_sum / len(self.positive_sets)
+        self.avg_set_size = 1.0 * set_size_sum / len(self.positive_sets) if len(self.positive_sets) > 0 else 0
         self.vocab = sorted(list(set(self.vocab)))  # sorting for reproducibility
 
     def _initialize_sip_format(self, raw_set_instance_strings):
