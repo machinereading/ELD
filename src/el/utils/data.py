@@ -44,8 +44,7 @@ class DataModule:
 
 	def make_json(self, ne_marked_dict, predict=False):
 		cs_form = {}
-		cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict[
-			"text"]
+		cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
 		cs_form["entities"] = []
 		cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in
 		                              range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict[
@@ -80,12 +79,14 @@ class DataModule:
 			})
 		return cs_form
 
+	def preprocess_dict(self, d):
+		return datafunc.find_ne_pos({"sentence": d})
+
 	def generate_input(self, sentence, predict=False):
-		preprocess = {str: datafunc.mark_ne, Sentence: self.sentence_to_json, dict: lambda x: x}
+		preprocess = {str: datafunc.mark_ne, Sentence: self.sentence_to_json, dict: lambda x: x, list: self.preprocess_dict}
 		sentence = self.make_json(preprocess[type(sentence)](sentence), predict=predict)
 
 		# at this point, sentence should be in Crowdsourcing form
-		result = []
 		links = []
 		print_flag = False
 		# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))

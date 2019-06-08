@@ -238,6 +238,8 @@ class EC:
 			f = []
 			for line in corpus.readlines():
 				f.append(line.strip())
+		if len(f) == 0:
+			return corpus
 		writefile(f, "data/ec/ec_input_iter.txt")
 		test_set = element_set.ElementSet("test_set", "set", self.options, f)
 		# print(len(test_set.vocab))

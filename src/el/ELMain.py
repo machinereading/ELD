@@ -79,6 +79,7 @@ class EL:
 		if self.debug:
 			jsondump(jj, "debug/el_prepare.json")
 			jsondump(ee, "debug/el_result_dict.json")
+		# print(len(result))
 		return result
 
 	def __call__(self, *sentences):

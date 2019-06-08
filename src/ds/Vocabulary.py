@@ -75,7 +75,7 @@ class Vocabulary:
 			"start_offset": self.char_ind,
 			"end_offset": self.char_ind + len(self.surface),
 			"ne_type": self.ne_type,
-			"type": [],
+			"type": list(self.type),
 			"score": 0,
 			"confidence": 0,
 			"uri": "http://kbox.kaist.ac.kr/resource/" + self.entity,
