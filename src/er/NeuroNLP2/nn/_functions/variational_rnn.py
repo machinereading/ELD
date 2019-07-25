@@ -1,7 +1,7 @@
 __author__ = 'max'
 
 import torch
-from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
+# from torch.nn._functions.thnn import rnnFusedPointwise as fusedBackend
 from torch.nn import functional as F
 
 

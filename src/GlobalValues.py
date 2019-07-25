@@ -11,7 +11,7 @@ from .utils import readfile
 formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger("DefaultLogger")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.CRITICAL)
 f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()
 

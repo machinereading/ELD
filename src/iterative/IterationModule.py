@@ -57,7 +57,7 @@ class IterationModule:
 
 		gl.logger.debug("Validating corpus")
 		validated = self.ev_model(clustered)
-		jsondump([x.to_json() for x in clustered.cluster_list], "data/iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
+		jsondump([x.to_json() for x in validated.cluster_list], "data/iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
 
 		gl.logger.debug("Generating new embedding")
 		new_cluster = list(filter(lambda x: x.kb_uploadable, validated.cluster_list))
@@ -95,5 +95,14 @@ class IterationModule:
 		# except Exception as e:
 		# 	print("Error dumping pickle", e)
 		jsondump(test_corpus.to_json(), "data/iterative_result_%s_with_fake.json" % self.args.ev_model_name)
-		eval_result = eval.evaluate(test_corpus, answer)
+		eval_result, eval_detail, cluster_mapping_info = eval.evaluate(test_corpus, answer)
+		for i, v in cluster_mapping_info.items():
+			for item in new_cluster:
+				try:
+					if int(item.target_entity) == i:
+						item["target_entity"] = v
+				except:
+					pass
+		jsondump([x.to_json() for x in new_cluster], "data/iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
 		jsondump(eval_result, "data/iterative_score_%s_with_fake_final.json" % self.args.ev_model_name)
+		jsondump(eval_detail, "data/iterative_el_result_%s_with_fake.json" % self.args.ev_model_name)

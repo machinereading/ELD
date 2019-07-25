@@ -1,5 +1,5 @@
 
-class ER_Args():
+class ERArgs:
 	def __init__(self):
 		self.mode = "LSTM"
 		self.num_epochs = 100

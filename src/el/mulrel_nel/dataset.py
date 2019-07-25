@@ -60,9 +60,12 @@ def read_tsv_from_str(texts):
         rctx = comps[4]
 
         if comps[6] != 'EMPTYCAND':
-            cands = [c.split(',') for c in comps[6:-2]]
-            # print(cands)
-            cands = [(','.join(c[2:]).replace('"', '%22').replace(' ', '_'), float(c[1])) for c in cands]
+            try:
+                cands = [c.split(',') for c in comps[6:-2]]
+                # print(cands)
+                cands = [(','.join(c[2:]).replace('"', '%22').replace(' ', '_'), float(c[1])) for c in cands]
+            except:
+                cands = []
         else:
             cands = []
 
@@ -167,7 +170,6 @@ def generate_dataset_from_str(conll_str, tsv_str):
     dataset = read_tsv_from_str(tsv_str)
     dataset = read_conll_from_str(dataset, conll_str)
     return dataset
-
 def find_coref(ment, mentlist, person_names):
     cur_m = ment['mention'].lower()
     coref = []

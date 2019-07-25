@@ -82,8 +82,11 @@ class DataModule:
 
 	def generate_input(self, sentence, predict=False):
 		preprocess = {str: datafunc.mark_ne, Sentence: self.sentence_to_json, dict: lambda x: x}
-		sentence = self.make_json(preprocess[type(sentence)](sentence), predict=predict)
 
+		sentence = self.make_json(preprocess[type(sentence)](sentence), predict=predict)
+		# fname = sentence["fileName"]
+		# sentence = self.make_json(datafunc.mark_ne(sentence["text"]), predict=predict)
+		# sentence["fileName"] = fname
 		# at this point, sentence should be in Crowdsourcing form
 		result = []
 		links = []
@@ -151,7 +154,7 @@ class DataModule:
 				bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
 				ne, en, sp, ep, cand = link
 				last_link = link
-				assert m in ne, "%s, %s, %s" % (sentence, m, ne)
+				assert m in ne
 				conlls.append([m, bi, ne, en, "%s%s" % (datafunc.dbpedia_prefix, en), "000", "000"])
 				if bi == "B":
 					added.append(link)
@@ -206,6 +209,7 @@ class DataModule:
 			except Exception:
 				import traceback
 				traceback.print_exc()
+				cw_form.append({})
 		return cw_form, conlls, tsvs
 
 class CandDict:

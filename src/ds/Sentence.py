@@ -39,6 +39,10 @@ class Sentence:
 	def not_in_kb_entities(self):
 		return [x for x in self.tokens if x.is_entity and not x.entity_in_kb]
 
+	@property
+	def kb_entities(self):
+		return [x for x in self.tokens if x.is_entity and x.entity_in_kb]
+
 	def find_token_by_index(self, ind):
 		for item in self.tokens:
 			if item.char_ind == ind:
@@ -78,8 +82,7 @@ class Sentence:
 		new_token_list = []
 		for token in self.tokens:
 			new_token_list += split_token(new_token, token)
-			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[
-			                                                                                          :-1]
+			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[:-1]
 		for i, token in enumerate(new_token_list):
 			token.token_ind = i
 
