@@ -71,17 +71,13 @@ def one_hot(i, total):
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
 def getETRI(text):
-	if text == "":
-		return None
 	from .. import GlobalValues as gl
 	host = '143.248.135.146'
-	port = 44444
 
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		clientSocket.connect(ADDR)
-	except Exception:
 		gl.logger.warning("ETRI connection failed")
 		return None
 	try:
@@ -95,7 +91,6 @@ def getETRI(text):
 		result = json.loads(buffer.decode(encoding='utf-8'))
 		return result
 
-	except Exception:
 		gl.logger.warning("ETRI connection lost")
 		return None
 	finally:
