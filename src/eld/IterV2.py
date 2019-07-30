@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-from .models import Transformer
+from .modules import Transformer
 from .utils import ELDArgs
 
 class ELDMain:
