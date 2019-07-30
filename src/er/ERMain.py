@@ -1,4 +1,4 @@
-from .utils.args import ER_Args
+from .utils.args import ERArgs
 from .utils.data import sentence2conll
 from .NeuroNLP2.io import get_logger, conll03_data, CoNLL03Writer
 from .NeuroNLP2.models import BiRecurrentConvCRF, BiVarRecurrentConvCRF
@@ -27,9 +27,9 @@ def evaluate(output_file, model_name, epoch):
 		f1 = float(fields[3].split(":")[1].strip())
 	return acc, precision, recall, f1
 
-class ER():
+class ER:
 	def __init__(self, model_name):
-		self.args = ER_Args()
+		self.args = ERArgs()
 		self.model_name = model_name
 		self.use_gpu = torch.cuda.is_available()
 		self.embedd_dict, self.embedd_dim = utils.load_embedding_dict(self.args.embedding, self.args.embedding_dict)

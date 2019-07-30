@@ -3,6 +3,7 @@
 # set attributes by calling setattr in main module
 import logging
 import re
+import os
 from datetime import datetime
 
 from .utils import readfile
@@ -11,7 +12,8 @@ from .utils import readfile
 formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger("DefaultLogger")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.CRITICAL)
+if not os.path.isdir("log"): os.mkdir("log")
 f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()
 

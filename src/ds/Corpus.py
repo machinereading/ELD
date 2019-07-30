@@ -5,7 +5,7 @@ from tqdm import tqdm
 from .Cluster import Cluster
 from .Sentence import Sentence
 from ..utils import jsonload, TimeUtil
-
+from typing import Iterator
 class Corpus:
 	def __init__(self):
 		self.sentences = []  # list of sentence
@@ -17,7 +17,7 @@ class Corpus:
 		self.sentences.append(sentence)
 		sentence.id = len(self.sentences)
 
-	def __iter__(self):
+	def __iter__(self) -> Iterator[Sentence]:
 		for item in self.sentences:
 			yield item
 

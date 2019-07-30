@@ -1,6 +1,9 @@
 import json
+import os
 import pickle
 import socket
+from multiprocessing.pool import Pool
+import multiprocessing
 
 from .AbstractArgument import AbstractArgument
 from .Embedding import Embedding
@@ -19,12 +22,11 @@ def jsonload(fname):
 	with open(fname, encoding="UTF8") as f:
 		return json.load(f)
 
-def jsondump(obj, fname, split=0):
+def jsondump(obj, fname):
 	with open(fname, "w", encoding="UTF8") as f:
 		json.dump(obj, f, ensure_ascii=False, indent="\t")
 
 def readfile(fname):
-	result = []
 	with open(fname, encoding="UTF8") as f:
 		for line in f.readlines():
 			yield line.strip()
@@ -69,15 +71,17 @@ def one_hot(i, total):
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
 def getETRI(text):
+	if text == "":
+		return None
 	from .. import GlobalValues as gl
 	host = '143.248.135.146'
-	port = 33333
+	port = 44444
 
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		clientSocket.connect(ADDR)
-	except Exception as e:
+	except Exception:
 		gl.logger.warning("ETRI connection failed")
 		return None
 	try:
@@ -91,6 +95,21 @@ def getETRI(text):
 		result = json.loads(buffer.decode(encoding='utf-8'))
 		return result
 
-	except Exception as e:
+	except Exception:
 		gl.logger.warning("ETRI connection lost")
 		return None
+	finally:
+		clientSocket.close()
+
+def dictload(k, d, default=0):
+	return d[k] if k in d else default
+
+def work_in_thread(fn, iterable, workers=multiprocessing.cpu_count() - 1):
+	with Pool(workers) as p:
+		result = p.map(fn, iterable)
+	return result
+
+def diriter(path):
+	for p, d, f in os.walk(path):
+		for ff in f:
+			yield "/".join([p, ff])

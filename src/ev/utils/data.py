@@ -104,7 +104,7 @@ class DataModule:
 					self.corpus = Corpus.from_json(sentence)
 				except FileNotFoundError:
 					traceback.print_exc()
-				except:
+				except Exception:
 					traceback.print_exc()
 					import sys
 					sys.exit(1)

@@ -23,3 +23,5 @@ cloc-1.80.exe
 models/
 cloc.exe
 src/demo/
+datastat/
+kb_ref/

@@ -18,7 +18,7 @@ from random import shuffle
 import torch.optim as optim
 
 from pprint import pprint
-
+from tqdm import tqdm
 # from konlpy.tag import Okt
 
 # okt = Okt()
@@ -299,7 +299,7 @@ class EDRanker:
         is_counting = False
         eval_after_n_epochs = self.args.eval_after_n_epochs
         with TimeUtil.TimeChecker("EL_Train"):
-            for e in range(config['n_epochs']):
+            for e in tqdm(range(config['n_epochs'])):
                 shuffle(train_dataset)
 
                 total_loss = 0

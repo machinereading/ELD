@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.utils.rnn as rnn
 import torch.nn.functional as F
 
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
@@ -12,6 +13,7 @@ class BiContextEmbedder(nn.Module):
 		self.rctx_model = module[model.lower()](input_size=input_dim, hidden_size=output_dim, batch_first=True, bidirectional=False)
 
 	def forward(self, lctx, rctx):
+		lctx = rnn.pad_packed_sequence( )
 		lctx_emb, _ = self.lctx_model(lctx)
 		rctx_emb, _ = self.rctx_model(rctx)
 		# return F.relu(lctx_emb), F.relu(rctx_emb)
@@ -28,3 +30,10 @@ class CNNEmbedder(nn.Module):
 	def forward(self, input_tensor):
 		emb = self.emb(input_tensor)
 		return emb.view(input_tensor.size()[0], -1)
+
+class SelfAttentionEmbedder(nn.Module):
+	def __init__(self):
+		super(SelfAttentionEmbedder, self).__init__()
+
+	def forward(self):
+		pass
