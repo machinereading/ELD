@@ -57,11 +57,12 @@ class EL:
 		# type_list = [type(x) for x in sentences]
 		# assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
 		# 		[x is Sentence for x in type_list])
-		batches = split_to_batch(sentences, 100)
+		batches = split_to_batch(sentences, 200)
 		result = []
 		jj = []
 		ee = {}
 		for batch in batches:
+			if len(batch) == 0: continue
 			j, conll_str, tsv_str = self.data.prepare(*batch)
 			jj += j
 			# print(len(batch), len(j))
@@ -78,6 +79,7 @@ class EL:
 			result = merge_item_with_corpus(sentences, result)
 		jsondump(jj, "debug/el_prepare.json")
 		jsondump(ee, "debug/el_result_dict.json")
+		print(len(sentences), len(result))
 		return result
 
 	def __call__(self, *sentences):

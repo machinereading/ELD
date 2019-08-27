@@ -1,7 +1,7 @@
 from .Vocabulary import Vocabulary
 from ..utils import KoreanUtil
 
-class Cluster():
+class Cluster:
 	def __init__(self, target_entity):
 		self.cluster = []
 		self.target_entity = target_entity
@@ -50,9 +50,8 @@ class Cluster():
 
 	@classmethod
 	def from_json(cls, json):
-		c = cls()
+		c = cls(json["target_entity"])
 		c.id = json["id"]
-		c.target_entity = json["target_entity"]
 		for item in json["cluster"]:
 			v = Vocabulary.from_json(item)
 			assert v.cluster == c.id

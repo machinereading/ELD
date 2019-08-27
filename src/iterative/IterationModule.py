@@ -68,7 +68,7 @@ class IterationModule:
 			for cluster in new_cluster:
 				new_ents.append(cluster.target_entity)
 				for token in cluster:
-					self.el_model.data.surface_ent_dict.add_instance(token.surface, cluster.target_entity)
+					self.el_model.data.surface_ent_dict.add_instance(token.surface, cluster.target_entity+"_")
 
 			# update entity embedding
 			gl.logger.debug("Updating entity embedding")

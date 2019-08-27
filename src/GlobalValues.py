@@ -12,7 +12,7 @@ from .utils import readfile
 formatter = logging.Formatter('%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger("DefaultLogger")
-logger.setLevel(logging.CRITICAL)
+logger.setLevel(logging.DEBUG)
 if not os.path.isdir("log"): os.mkdir("log")
 f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()

@@ -4,7 +4,7 @@ import math
 
 from ...utils.Buffer import Buffer
 
-class CandidateDict():
+class CandidateDict:
 	def __init__(self):
 		self.surface_dict = {}
 		self.entity_set = {}

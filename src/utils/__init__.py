@@ -19,8 +19,11 @@ def printfunc(s):
 
 # useful macros
 def jsonload(fname):
-	with open(fname, encoding="UTF8") as f:
-		return json.load(f)
+	try:
+		with open(fname, encoding="UTF8") as f:
+			j = json.load(f)
+		return j
+	except: return None
 
 def jsondump(obj, fname):
 	with open(fname, "w", encoding="UTF8") as f:
@@ -71,29 +74,37 @@ def one_hot(i, total):
 inv_dict = lambda x: {v: k for k, v in x.items()}
 
 def getETRI(text):
-	if text == "": return None
 	from .. import GlobalValues as gl
+	if text == "":
+		gl.logger.info("ETRI input with blank string")
+		return None
 	host = '143.248.135.146'
 	port = 44444
 	ADDR = (host, port)
 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	try:
 		clientSocket.connect(ADDR)
+	except KeyboardInterrupt:
+		return None
 	except Exception:
-		gl.logger.warning("ETRI connection failed")
+		gl.logger.critical("ETRI connection failed")
 		return None
 	try:
 		clientSocket.sendall(str.encode(text))
 		buffer = bytearray()
 		while True:
-			data = clientSocket.recv(1024)
+			data = clientSocket.recv(4096)
 			if not data:
 				break
 			buffer.extend(data)
 		result = json.loads(buffer.decode(encoding='utf-8'))
+		gl.logger.debug("ETRI run success")
 		return result
+	except KeyboardInterrupt:
+		return None
 	except Exception:
-		gl.logger.warning("ETRI connection lost")
+		gl.logger.critical("ETRI connection lost")
+		gl.logger.debug(text[:30])
 		return None
 	finally:
 		clientSocket.close()
