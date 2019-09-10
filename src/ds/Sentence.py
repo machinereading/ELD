@@ -106,7 +106,7 @@ class Sentence:
 		# if len(entities) > 1000:
 		# 	print(cw_form["fileName"])
 		for entity in entities:
-			if entity["entity"] == "": continue
+			if "entity" not in entity or entity["entity"] == "": continue
 			try:
 
 				cluster_id = entity["cluster"] if "cluster" in entity else -1

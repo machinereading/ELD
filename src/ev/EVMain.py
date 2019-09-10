@@ -9,6 +9,7 @@ from .utils.data import DataModule, ClusterGenerator
 from .. import GlobalValues as gl
 from ..ds import FakeCluster
 from ..utils import jsondump
+import traceback
 
 class EV:
 	def __init__(self, mode, model_name, config_file=None):
@@ -148,9 +149,7 @@ class EV:
 	def validate(self, corpus):
 		# entity set to tensor
 		# assert type(corpus) is list or type(corpus) is Corpus
-		print("MAX BEFORE: %d" % max([len(x) for x in corpus.cluster_list]))
-		corpus = self.dataset.generate_fake_cluster(corpus)
-		print("MAX AFTER: %d" % max([len(x) for x in corpus.cluster_list]))
+
 
 		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=self.args.max_jamo)
 		batch_size = 4
@@ -159,6 +158,7 @@ class EV:
 		# validate tensor
 		preds = []
 		error_count = 0
+		error_print_flag = False
 		# for item in corpus:
 		self.validation_model.eval()
 		with torch.no_grad():
@@ -176,12 +176,16 @@ class EV:
 						pi += s
 					preds += scores
 				except:
+					if not error_print_flag:
+						traceback.print_exc()
+						error_print_flag = True
 					preds += [0 for _ in range(self.batch_size)]
 					error_count += self.batch_size
 		# mark
 		for cluster, prediction in zip(corpus.cluster_list, preds):
+			cluster.upload_confidence = prediction
 			cluster.kb_uploadable = bool(prediction > 0.5)
-		print(error_count)
+		gl.logger.info("Error count: %d" % error_count)
 		return corpus
 
 	def __call__(self, corpus):

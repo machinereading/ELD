@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from src.eld.utils import ELDArgs
 from src.utils import KoreanUtil
 from . import BiContextEmbedding, CNNEmbedding
 
 # entity context emb + relation emb --> transE emb
 class Transformer(nn.Module):
-	def __init__(self, args):
+	def __init__(self, args: ELDArgs):
 		super(Transformer, self).__init__()
 
 		self.use_character_embedding = args.use_character_embedding
