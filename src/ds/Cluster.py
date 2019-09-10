@@ -41,12 +41,17 @@ class Cluster():
 		return len(self.cluster)
 
 	def to_json(self):
-		return {
+		d = {
 			"id"           : self.id,
 			"target_entity": self.id if type(self.target_entity) is Cluster else self.target_entity,
 			"cluster"      : [x.to_json() for x in self.cluster],
 			"kb_uploadable": self.kb_uploadable
 		}
+		try:
+			d["prediction"] = self.prediction
+		except:
+			pass
+		return d
 
 	@classmethod
 	def from_json(cls, json):

@@ -262,9 +262,7 @@ class EC:
 						else:
 							token.ec_cluster = len(si_dict)
 							si_dict[token.surface] = len(si_dict)
-			print(len(si_dict))
 			corpus.recluster()
-			print(len(corpus.cluster))
 			return corpus
 		return result
 

@@ -1,5 +1,4 @@
 import operator
-
 from sklearn.metrics.cluster import adjusted_rand_score
 
 f1 = lambda p, r: 2 * p * r / (p + r) if p + r > 0 else 0
@@ -55,6 +54,7 @@ def evaluate(iter_el_result, label):
 					total_dark += 1
 					if marked_entity != nic and "_fake" not in marked_entity:
 						found_entity += 1
+				pass
 
 	# register clusters with majority voting
 	ide = {}

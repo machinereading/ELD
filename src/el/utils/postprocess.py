@@ -42,7 +42,7 @@ def merge_item_with_corpus(sentences, result_dict):
 		for entity in r["entities"]:
 			target_voca = s.find_token_by_index(entity["start"])
 			if target_voca is not None:
-				target_voca.entity = entity["entity"]
+				target_voca.entity = entity["entity"] if "entity" in entity else "NOT_IN_CANDIDATE"
 	return sentences
 
 if __name__ == '__main__':
