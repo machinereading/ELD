@@ -87,7 +87,6 @@ def find_ne_pos(j):
 	j["NE"] = []
 	try:
 		for v in j["sentence"]:
-			sentence = v["text"]
 			for ne in v["NE"]:
 				morph_start = find_in_wsd(v["morp"], ne["begin"])
 				# morph_end = find_in_wsd(v["WSD"],ne["end"])

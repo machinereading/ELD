@@ -11,9 +11,10 @@ class ELDMain:
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
 		self.entity_embedding = torch.zeros().cuda()
+		self.entity_embedding_dim = self.entity_embedding[0].size()[-1]
 		self.map_threshold = 0.5
 
-		self.transformer = Transformer()
+		self.transformer = Transformer(self.args)
 
 	def train(self):
 		tqdmloop = tqdm(range(1, self.args.epochs + 1))
@@ -28,7 +29,13 @@ class ELDMain:
 		pred_embedding = self.transformer(data)
 		pred_embedding.repeat(len(self.entity_index))
 		cos_sim = F.cosine_similarity(pred_embedding, self.entity_embedding)
-		if cos_sim.max() > self.map_threshold: return self.i2e[cos_sim.argmax(dim=-1).cpu().data]
+		if cos_sim.max() > self.map_threshold:
+			target_ind = cos_sim.argmax(dim=-1).cpu().data
+			target = self.i2e[target_ind]
+			if self.args.modify_entity_embedding:
+				pred_embedding *= self.args.modify_entity_embedding_weight
+				self.entity_embedding += torch.stack([torch.zeros(self.entity_embedding_dim) for _ in range(target_ind - 1)] + [pred_embedding] + [torch.zeros(self.entity_embedding_dim) for _ in range(len(self.i2e) - target_ind - 1)])
+			return target
 		if register:
 			register_form = self.register_new_entity(data, pred_embedding)
 			return register_form

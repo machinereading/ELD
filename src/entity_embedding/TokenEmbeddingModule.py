@@ -36,9 +36,7 @@ class TokenEmbeddingModule(nn.Module):
 	def forward(self, j, lctx, rctx):
 		j_embedding = self.jamo_embedding(j)
 		lctx_w_embedding = self.word_embedding(lctx)
-		rctx_w_embedding = self.word_embedding(rctx)
 
-		j_encoded = self.jamo_encoder(j_embedding)
 		context_encoded, _ = self.context_lstm(lctx_w_embedding)
 
 

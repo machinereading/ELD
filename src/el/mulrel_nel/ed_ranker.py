@@ -81,7 +81,6 @@ class EDRanker:
                             for m in content]
                 rctx_ids = [m['context'][1][:min(len(m['context'][1]), self.args.prerank_ctx_window // 2)]
                             for m in content]
-                ment_ids = [[] for m in content]
                 token_ids = [l + m + r if len(l) + len(r) > 0 else [self.prerank_model.word_voca.unk_id]
                              for l, m, r in zip(lctx_ids, ment_ids, rctx_ids)]
 
@@ -361,7 +360,6 @@ class EDRanker:
                     for di, (dname, data) in enumerate(dev_datasets):
                         predictions = self.predict(data)
                         f1 = D.eval(org_dev_datasets[di][1], predictions)
-                        prediction_raw = D.make_result_dict(org_dev_datasets[di][1], predictions)
                         # jsondump(prediction_raw, "%s_eval_%d.json" % (self.args.model_path.split("/")[-1], e+1))
                         print(dname, utils.tokgreen('micro F1: ' + str(f1)))
 

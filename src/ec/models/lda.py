@@ -15,7 +15,6 @@ class LDA():
 		self.model.save("data/ec/lda")
 
 	def calculate_frequency(self, corpus):
-		word_idx = {}
 		wc = {}
 		result = []
 		for sent in corpus:

@@ -459,8 +459,6 @@ def calc_loss(network, word, char, pos, heads, stacked_heads, children, sibling,
     err_type_leaf = loss_type_leaf.data[0] * num_leaf
     err_type_non_leaf = loss_type_non_leaf.data[0] * num_non_leaf
 
-    err_cov = loss_cov.data[0] * (num_leaf + num_non_leaf)
-
     err_arc = err_arc_leaf + err_arc_non_leaf
     err_type = err_type_leaf + err_type_non_leaf
 

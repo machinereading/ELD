@@ -47,7 +47,6 @@ class DataModule:
 
 def cw2conll(cw_data):
 	text = cw_data["text"]
-	result = []
 	ent = sorted(cw_data["entities"], key=lambda x: x["start"])
 	for entity in ent:
 		text = text[:entity["start"]] + "<" + text[entity["start"]:entity["end"]] + ">" + text[entity["end"]:]
@@ -68,7 +67,6 @@ def cw2conll(cw_data):
 				token += ">"
 
 			# print(token)
-			token_buf = []
 			if token[0] == "<":
 				token_flag = True
 				if ">" in token:

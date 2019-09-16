@@ -39,7 +39,6 @@ def train():
     checkpoint = torch.load('../model/pytorch/entity_embedding/ent_emb_checkpoint_09.ckpt')
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
     loss = checkpoint['loss']
     model.train()
 

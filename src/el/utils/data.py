@@ -90,9 +90,7 @@ class DataModule:
 		# sentence = self.make_json(datafunc.mark_ne(sentence["text"]), predict=predict)
 		# sentence["fileName"] = fname
 		# at this point, sentence should be in Crowdsourcing form
-		result = []
 		links = []
-		print_flag = False
 		# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 		for entity in sentence["entities"]:
 			redirected_entity = self.redirects[entity["answer"]] if entity["answer"] in self.redirects else entity[
@@ -268,3 +266,6 @@ class CandDict:
 				score, id = cand_score
 				cand_list.append((cand_name, id, score))
 		return cand_list
+
+	def __contains__(self, item):
+		return len(self[item]) == 0

@@ -58,20 +58,13 @@ def calculate_km_matching_score(weight_nm):
     n = max(x, y)
     NONE = -1e6
     INF = 1e9
-    weight = [[NONE for j in range(n + 1)] for i in range(n + 1)]
     for i in range(x):
         for j in range(y):
             weight[i + 1][j + 1] = weight_nm[i][j]
-    lx = [0. for i in range(n + 1)]
-    ly = [0. for i in range(n + 1)]
-    match = [-1 for i in range(n + 1)]
     for i in range(1, n + 1):
         for j in range(1, n + 1):
             lx[i] = max(lx[i], weight[i][j])
     for root in range(1, n + 1):
-        vy = [False for i in range(n + 1)]
-        slack = [INF for i in range(n + 1)]
-        pre = [0 for i in range(n + 1)]
         py = 0
         match[0] = root
         while True:
@@ -160,7 +153,6 @@ def evaluate_set_instance_prediction(model, dataset):
 
     # the following max_set_size and batch_size number need to be set such that one test batch can fit GPU memory
     # TODO: make this value dynamtically changeable
-    max_set_size = 100
     # batch_size = int(len(dataset.sip_triplets) / 20)
     for test_batch in dataset.get_test_batch(max_set_size=50, batch_size=100):
         # log set size for set-size-wise error analysis
