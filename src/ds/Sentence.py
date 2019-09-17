@@ -108,7 +108,6 @@ class Sentence:
 		for entity in entities:
 			if "entity" not in entity or entity["entity"] == "": continue
 			try:
-
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
 				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id)
 			except:

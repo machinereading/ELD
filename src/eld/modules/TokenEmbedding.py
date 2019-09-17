@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ...utils import KoreanUtil
-from . import BiContextEmbedding, CNNEmbedding
-
+from . import BiContextEmbedding, CNNEmbedding, ELDArgs
 
 class TokenEmbeddingModule(nn.Module):
-	def __init__(self, args: EmbeddingArgs):
+	def __init__(self, args: ELDArgs):
 		super(TokenEmbeddingModule, self).__init__()
 		self.kb = None
 		self.window_size = args.ctx_window_size

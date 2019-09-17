@@ -15,6 +15,8 @@ class Vocabulary:
 		self.cluster = -1
 		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
 
+		# reserved for ELD
+
 		# some properties that will be initialized later
 		self.lctxw_ind = None
 		self.rctxw_ind = None

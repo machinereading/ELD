@@ -60,7 +60,7 @@ class ECScorer(nn.Module):
 
 		# avg embedding shape = [batch size * (word embedding size + entity embedding size)]
 		# make average embedding to [batch size * token size * (word embedding size + entity embedding size)]
-		return F.relu(er_score * ec_score * torch.exp(F.cosine_similarity(cat, cluster_avg_emb)))
+		# return F.relu(er_score * ec_score * torch.exp(F.cosine_similarity(cat, cluster_avg_emb)))
 
 class JointScorer(nn.Module):
 	def __init__(self, args, er_input_dim, el_input_dim):

@@ -1,13 +1,13 @@
 from sklearn.metrics import f1_score
 
-from src.el.utils.data import CandDict
-from src.eld.utils import ELDArgs
-from src.utils import readfile, pickleload
+from ...el.utils.data import CandDict
+from ..utils import ELDArgs
+from ...utils import readfile, pickleload
 from ...ds import Corpus
-
+from . import DataModule
 class Evaluator:
-	def __init__(self, args: ELDArgs):
-		self.ent_list = [x for x in readfile(args.ent_list_path)]
+	def __init__(self, args: ELDArgs, data: DataModule):
+		self.ent_list = data.ent_list
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 

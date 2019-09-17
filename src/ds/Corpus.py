@@ -146,3 +146,13 @@ class Corpus:
 				if token.ec_cluster not in self.cluster:
 					self.cluster[token.ec_cluster] = Cluster(str(token.ec_cluster))
 				self.cluster[token.ec_cluster].add_elem(token)
+
+	def token_iter(self):
+		for sent in self:
+			for token in sent:
+				yield token
+
+	def entity_iter(self):
+		for sent in self:
+			for ent in sent.entities:
+				yield ent

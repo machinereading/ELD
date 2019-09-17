@@ -1,12 +1,12 @@
 from ...utils import AbstractArgument
-
+from ... import GlobalValues as gl
 class ELDArgs(AbstractArgument):
-	def __init__(self):
+	def __init__(self, model_name: str):
+		self.model_name = model_name
 
 		# training config
-
-
-		self.corpus_dir = None
+		self.train_corpus_dir = None
+		self.dev_corpus_dir = None
 		self.epochs = 100
 		self.eval_per_epoch = 5
 
@@ -41,4 +41,14 @@ class ELDArgs(AbstractArgument):
 
 		# if entity has different embedding, modify entity embedding (to average)
 		self.modify_entity_embedding = False
-		self.modify_entity_embedding_weight = 0.1 # weight on new entity
+		self.modify_entity_embedding_weight = 0.1  # weight on new entity
+
+		# evaluation config
+		self.corpus_dir = None
+
+		# run config
+		self.use_relation_candidates = False
+
+	@property
+	def model_path(self):
+		return "models/eld/" + self.model_name

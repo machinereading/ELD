@@ -2,15 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from src.eld.utils import ELDArgs
-from src.utils import KoreanUtil
 from . import BiContextEmbedding, CNNEmbedding
+from ..utils import ELDArgs
+from ...utils import KoreanUtil
 
 # entity context emb + relation emb --> transE emb
 class Transformer(nn.Module):
 	def __init__(self, args: ELDArgs):
 		super(Transformer, self).__init__()
-
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding
 		self.ee_flag = args.use_entity_context_embedding
@@ -44,17 +43,18 @@ class Transformer(nn.Module):
 			self.relation_embedding = CNNEmbedding(1, 1, 1)
 
 		seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
-			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
-		                                                                                                                                                                                                    nn.Dropout()]
+			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
+				nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
+				nn.Dropout()]
 		self.transformer = nn.Sequential(*seq)
 
-	def forward(self, *, character_batch=None, word_context_batch=None, entity_context_batch=None, relation_batch=None, type_batch=None):
+	def forward(self, character_batch=None, word_context_batch=None, entity_context_batch=None, relation_batch=None, type_batch=None):
 		# flag and batch match
-		assert not (self.ce_flag ^ character_batch)
-		assert not (self.we_flag ^ word_context_batch)
-		assert not (self.ee_flag ^ entity_context_batch)
-		assert not (self.re_flag ^ relation_batch)
-		assert not (self.te_flag ^ type_batch)
+		assert not (self.ce_flag ^ (character_batch is not None))
+		assert not (self.we_flag ^ (word_context_batch is not None))
+		assert not (self.ee_flag ^ (entity_context_batch is not None))
+		assert not (self.re_flag ^ (relation_batch is not None))
+		assert not (self.te_flag ^ (type_batch is not None))
 		mid_features = []
 
 		if self.ce_flag:

@@ -11,5 +11,5 @@ class Entity:
 		if self._tensor is not None:
 			return self._tensor
 		else:
-			...
+			... # TODO calculate tensor
 

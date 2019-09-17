@@ -5,22 +5,27 @@ from src.el.utils.data import CandDict
 from .args import ELDArgs
 from ...ds import *
 from ...utils import readfile, pickleload
-from ...el.utils import CandidateDict
-
+from copy import deepcopy
+from typing import List
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
 		self.corpus = corpus
-		self.max_token_len = max(map(len, self.corpus))
+		self.max_character_len_in_character = max(map(len, self.corpus.token_iter()))
+		self.max_token_len_in_sentence = max(map(len, self.corpus))
 
 	def __getitem__(self, index):
+		# return ce, we, ee, re, te, lab
+		target = self.corpus[index]
+
+
 		pass
 
 	def __len__(self):
-		pass
+		return len([x for x in self.corpus.entity_iter()])
 
 class DataModule:
-	def __init__(self, args: ELDArgs, corpus_dir):  # TODO
-		self.corpus = Corpus.load_corpus(corpus_dir)
+	def __init__(self, mode: str, args: ELDArgs):  # TODO
+
 		# index 0: not in dictionary
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding
@@ -30,6 +35,13 @@ class DataModule:
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+
+		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
+		self.i2e = {v: k for k, v in self.e2i.items()}
+		ee = np.load(args.entity_embedding_file)
+		self.entity_embedding = np.stack([np.zeros(ee.shape[-1]), *ee])
+		args.ee_dim = ee.shape[-1]
+
 		if self.ce_flag:
 			self.c2i = {w: i + 1 for i, w in enumerate(readfile(args.character_file))}
 			ce = np.load(args.character_embedding_file)
@@ -40,11 +52,6 @@ class DataModule:
 			we = np.load(args.word_embedding_file)
 			self.word_embedding = np.stack([np.zeros(we.shape[-1]), *we])
 			args.we_dim = we.shape[-1]
-		if self.ee_flag:
-			self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
-			ee = np.load(args.entity_embedding_file)
-			self.entity_embedding = np.stack([np.zeros(ee.shape[-1]), *ee])
-			args.ee_dim = ee.shape[-1]
 		if self.re_flag:
 			self.r2i = {w: i + 1 for i, w in enumerate(readfile(args.relation_file))}
 			re = np.load(args.relation_embedding_file)
@@ -56,6 +63,11 @@ class DataModule:
 			self.type_embedding = np.stack([np.zeros(te.shape[-1]), *te])
 			args.te_dim = te.shape[-1]
 
+		if mode == "train":
+			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
+			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
+		else:
+			self.corpus = Corpus.load_corpus(args.corpus_dir)
 	def generate_tensor(self):
 		for sentence in self.corpus:
 			for token in sentence:
@@ -70,3 +82,18 @@ class DataModule:
 				if self.te_flag:
 					token.type_embedding = None
 
+	def postprocess(self, corpus: Corpus, entity_label: List, make_copy=False) -> Corpus:
+		"""
+		corpus와 entity label을 받아서 corpus 내의 entity로 판명난 것들에 대해 entity명 및 타입 부여
+		:param corpus: corpus
+		:param entity_label: list of int
+		:param make_copy: True일 경우 corpus를 deepcopy해서 복사본을 만듬. 원본이 필요한 경우 사용
+		:return: entity가 표시된 corpus
+		"""
+
+		if make_copy:
+			corpus = deepcopy(corpus)
+		for entity, label in zip(corpus.entity_iter(), entity_label):
+			target_entity = self.i2e[label] if label > 0 else "_" + entity.surface.replace(" ", "_")
+			entity.entity = target_entity
+		return corpus
