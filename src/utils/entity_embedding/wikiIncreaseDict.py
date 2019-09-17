@@ -96,9 +96,9 @@ def main():
             entity_dict = increase_entity_dict()
 
         try:
-            calc_dict = pickle.load(open('../data/wiki/large_entity_calc.pickle', 'rb'))
+	        pass
         except FileNotFoundError:
-            calc_dict = increase_calc_dict(entity_dict)
+	        pass
 
         add_unk(entity_dict)
     elif args.mode == "pre":

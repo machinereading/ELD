@@ -649,7 +649,6 @@ def select_model(params):
 
 def select_context_embedding(param):
     name = param["context_embedder"]
-    out_size = param["context_embedding_dim"]
     if name == "rnn":
         context_embedder = nn.LSTM(input_size=300, hidden_size=256, batch_first=True, dropout=0.4)
     

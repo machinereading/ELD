@@ -94,7 +94,6 @@ class DataModule:
 					path = "/".join(corpus_path.split("/")[:-1]) + "/"
 					file_prefix = corpus_path.split("/")[-1]
 					sentence = []
-					cluster = []
 					if len(os.listdir(path)) == 0:
 						raise FileNotFoundError("No save file in dir %s" % corpus_path)
 					for item in os.listdir(path):
@@ -158,7 +157,6 @@ class DataModule:
 		# call after corpus and cluster is generated
 		assert corpus is not None
 		gl.logger.info("Generating fake clusters")
-		dark_entity_len = len(list(filter(lambda x: not x.is_in_kb, corpus.cluster_list)))
 		added_cluster_count = 0
 		# generate fake cluster by adding same surface form entities
 		suf_tok_dict = {}

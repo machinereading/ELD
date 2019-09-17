@@ -15,5 +15,3 @@ def bert_tokenizer(text):
 def bert_tokenize(text):
 	orig_tokens, bert_tokens, orig_to_tok_map = bert_tokenizer(text)
 	tokenized_text = bert_tokens
-	converted = tokenizer.convert_tokens_to_idx(tokenized_text)
-	

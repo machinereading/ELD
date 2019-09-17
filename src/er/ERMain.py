@@ -45,8 +45,7 @@ class ER:
 		data_train = conll03_data.read_data_to_variable(train_corpus_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=self.use_gpu)
 		data_dev = conll03_data.read_data_to_variable(dev_corpus_path, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=self.use_gpu, volatile=True)
 		writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
-		
-		word_table = self.construct_word_embedding_table(word_alphabet)
+
 		char_dim = self.args.char_dim
 		window = 3
 		num_layers = self.args.num_layers
@@ -63,14 +62,6 @@ class ER:
 		optim = SGD(self.network.parameters(), lr=lr, momentum=0.9, weight_decay=self.args.gamma, nesterov=True)
 		num_batches = num_data // self.args.batch_size + 1
 		dev_f1 = 0.0
-		dev_acc = 0.0
-		dev_precision = 0.0
-		dev_recall = 0.0
-		test_f1 = 0.0
-		test_acc = 0.0
-		test_precision = 0.0
-		test_recall = 0.0
-		best_epoch = 0
 		with TimeUtil.TimeChecker("NER Training"):
 			for epoch in tqdm(range(self.args.num_epochs), desc="NER Training", initial=self.start_epoch):
 				train_err = 0.
@@ -108,7 +99,6 @@ class ER:
 		writer = CoNLL03Writer(word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet)
 		self.network.eval()
 		conll_form = sentence2conll(sentence)
-		data = conll03_data.read_data_to_variable(conll_form, word_alphabet, char_alphabet, pos_alphabet, chunk_alphabet, ner_alphabet, use_gpu=self.use_gpu, volatile=True)
 		preds, _ = self.network.decode(word, char, target=labels, mask=masks, leading_symbolic=conll03_data.NUM_SYMBOLIC_TAGS)
 		writer.write(word.data.cpu().numpy(), pos.data.cpu().numpy(), chunk.data.cpu().numpy(), preds.cpu().numpy(), labels.data.cpu().numpy(), lengths.cpu().numpy())
 		writer.close()

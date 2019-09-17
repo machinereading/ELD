@@ -14,9 +14,7 @@ class ThreeScorerModel(nn.Module):
 		super(ThreeScorerModel, self).__init__()
 		self.target_device = args.device
 		we = np.load(args.word_embedding_path + ".npy")
-		we = np.vstack([np.zeros([2, we.shape[1]]), we])
 		ee = np.load(args.entity_embedding_path + ".npy")
-		ee = np.vstack([np.zeros([2, ee.shape[1]]), ee])
 		self.word_embedding = Embedding.load_embedding(args.word_embedding_type, args.word_embedding_path).to(self.target_device)
 		self.entity_embedding = Embedding.load_embedding(args.entity_embedding_type, args.entity_embedding_path).to(self.target_device)
 		# self.word_embedding = nn.Embedding.from_pretrained(torch.FloatTensor(we)).to(self.target_device)
@@ -73,7 +71,6 @@ class ThreeScorerModel(nn.Module):
 		er_score = F.relu(self.er_scorer(wctx) - self.er_score_threshold) + self.er_score_threshold
 		el_score = F.relu(self.el_scorer(ectx) - self.el_score_threshold) + self.er_score_threshold
 		ec_score = self.ec_scorer(er_score, el_score, wctx, ectx)
-		new_cluster = ec_score * 0
 		final_score = self.cluster_scorer(torch.FloatTensor([er_score, el_score, ec_score]))
 		# final_score = F.sigmoid(final_score)
 		# removed because binary_cross_entropy_with_logits applies sigmoid
@@ -94,7 +91,6 @@ class ThreeScorerModel(nn.Module):
 			er_optimizer = torch.optim.Adam(self.er_scorer.parameters())
 			el_optimizer = torch.optim.Adam(self.el_scorer.parameters())
 			for epoch in tqdm(range(1, self.pretrain_epoch + 1), desc="Pretraining"):
-				dev_batch = []
 				for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in train_dataloader:
 					lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type = lctxw_ind.to(
 						self.target_device), rctxw_ind.to(self.target_device), lctxe_ind.to(
@@ -233,7 +229,6 @@ class JointScorerModel(nn.Module):
 				if epoch % 5 == 0:
 					label = []
 					pred = []
-					toks = []
 					self.scorer.eval()
 					with torch.no_grad():
 						for lctxw_ind, rctxw_ind, lctxe_ind, rctxe_ind, error_type in dev_dataloader:

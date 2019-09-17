@@ -6,7 +6,9 @@ from ..ds import *
 from ..ec import EC
 from ..el import EL
 from ..ev import EV, EVAll, EVRandom, EVNone
-from ..utils import jsonload, jsondump, pickleload, pickledump
+from ..utils import jsonload, jsondump, diriter, pickleload, pickledump
+import torch
+import os
 
 class IterationModule:
 	# EV --> EL Rerun model
@@ -35,29 +37,42 @@ class IterationModule:
 		gl.logger.info("Running IterationModule")
 		gl.logger.debug("Loading corpus")
 
-		train_corpus = [jsonload(d + item) for d in self.args.train_data_dir for item in os.listdir(d)]
-		validation_corpus = [jsonload(item) for item in self.args.validation_data]
+		validation_corpus = [jsonload(item) for item in diriter(self.args.validation_data_dir)]
 		for item in validation_corpus:
 			item["entities"] = list(filter(lambda x: x["dataType"] not in ["DATE", "TIME", "JOB"], item["entities"]))
-		answer = jsonload(self.args.test_data)
+		answer = [jsonload(item) for item in diriter(self.args.test_data_dir)]
 		test_corpus = Corpus.load_corpus(answer)
+		# if os.path.isfile(self.args.cluster_pickle):
+		# 	gl.logger.info("Loading cluster data")
+		# 	clustered = pickleload(self.args.cluster_pickle)
+		# else:
+		gl.logger.info("No cluster data")
 
 		corpus = Corpus.load_corpus(validation_corpus)
-
 		gl.logger.debug("Linking corpus")
 		self.el_model(*corpus)
-		jsondump(corpus.to_json(), "data/iteration_link_result_with_fake.json")
+		jsondump(corpus.to_json(), "data/namu_iteration_link_result_with_fake.json")
 		gl.logger.debug("Not linked entities: %d" % sum([len([x for x in y.entities if x.entity == "NOT_IN_CANDIDATE"]) for y in corpus]))
 
 		gl.logger.debug("Clustering corpus")
 		clustered = self.ec_model(corpus)
-		print(clustered == corpus)
+		del self.ec_model
+		torch.cuda.empty_cache()
+		# print(clustered == corpus)
 		gl.logger.debug("Generated clusters: %d" % len(clustered.cluster))
-		jsondump([x.to_json() for x in clustered.cluster_list], "data/iteration_cluster_result_with_fake.json")
+		jsondump([x.to_json() for x in clustered.cluster_list], "data/namu_iteration_cluster_result_with_fake.json")
+		# pickledump(corpus, self.args.cluster_pickle)
 
 		gl.logger.debug("Validating corpus")
+		if self.args.put_fake_cluster:
+			gl.logger.debug("Generating fake cluster")
+			print("MAX BEFORE: %d" % max([len(x) for x in clustered.cluster_list]))
+			clustered = self.ev_model.dataset.generate_fake_cluster(clustered)
+			print("MAX AFTER: %d" % max([len(x) for x in clustered.cluster_list]))
 		validated = self.ev_model(clustered)
-		jsondump([x.to_json() for x in validated.cluster_list], "data/iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
+		del self.ev_model
+		torch.cuda.empty_cache()
+		jsondump([x.to_json() for x in validated.cluster_list], "data/namu_iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
 
 		gl.logger.debug("Generating new embedding")
 		new_cluster = list(filter(lambda x: x.kb_uploadable, validated.cluster_list))
@@ -94,7 +109,7 @@ class IterationModule:
 		# 	pickledump(test_corpus, "data/iterative_result_%s_with_fake.pkl" % self.args.ev_model_name)
 		# except Exception as e:
 		# 	print("Error dumping pickle", e)
-		jsondump(test_corpus.to_json(), "data/iterative_result_%s_with_fake.json" % self.args.ev_model_name)
+		jsondump(test_corpus.to_json(), "data/namu_iterative_result_%s_with_fake.json" % self.args.ev_model_name)
 		eval_result, eval_detail, cluster_mapping_info = eval.evaluate(test_corpus, answer)
 		for i, v in cluster_mapping_info.items():
 			for item in new_cluster:
@@ -103,6 +118,6 @@ class IterationModule:
 						item["target_entity"] = v
 				except:
 					pass
-		jsondump([x.to_json() for x in new_cluster], "data/iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
-		jsondump(eval_result, "data/iterative_score_%s_with_fake_final.json" % self.args.ev_model_name)
-		jsondump(eval_detail, "data/iterative_el_result_%s_with_fake.json" % self.args.ev_model_name)
+		jsondump([x.to_json() for x in new_cluster], "data/namu_iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
+		jsondump(eval_result, "data/namu_iterative_score_%s_with_fake_final.json" % self.args.ev_model_name)
+		jsondump(eval_detail, "data/namu_iterative_el_result_%s_with_fake.json" % self.args.ev_model_name)

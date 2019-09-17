@@ -15,7 +15,6 @@ def eval(module, corpus_dir):
 	correct_count = 0
 	dark_entity_correct_count = 0
 	dark_entity_count = 0
-	dark_entity_wrong_list = {}
 	error_count = 0
 	r_target = 0
 	p_target = 0

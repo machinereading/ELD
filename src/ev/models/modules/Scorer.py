@@ -55,7 +55,6 @@ class ECScorer(nn.Module):
 		# [er_emb, el_emb] --> token embedding
 		we = self.wctx2emb(er_emb)
 		ee = self.ectx2emb(el_emb)
-		cluster_size = ee.shape[1]
 		cat = torch.cat([we, ee])
 		cluster_avg_emb = cat.mean(1)  # how to ignore zero padding??
 

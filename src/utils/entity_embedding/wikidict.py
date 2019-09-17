@@ -109,7 +109,6 @@ def main():
         calc_dict = pickle.load(open('data/wiki/wiki_entity_calc.pickle', 'rb'))
     except FileNotFoundError:
         calc_dict = make_calc_dict(entity_dict)
-    count_dict = make_count_dict(entity_dict)
     keyword = 'E_(상수)'
     print(sorted(calc_dict[keyword].items(), key=lambda x: x[1][0], reverse=True))
 

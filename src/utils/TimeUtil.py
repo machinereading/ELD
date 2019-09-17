@@ -82,7 +82,7 @@ def out():
 	current_running_item = current_running_item.parent
 
 def reset_time():
-	time_checker = {}
+	pass
 
 def measure_time(fn):
 	@functools.wraps(fn)

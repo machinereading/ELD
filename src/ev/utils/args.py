@@ -26,7 +26,7 @@ class EVArgs(AbstractArgument):
 		self.ctx_window_size = 5  # context window size of token
 		self.filter_data_tokens = True
 
-		self.batch_size = 64  # training batch size
+		self.batch_size = 32  # training batch size
 		self.max_voca_restriction = 400  # restrict max vocabulary size in cluster. this reduces GPU memory usage
 		self.force_pretrain = True
 		self.pretrain_epoch = 20

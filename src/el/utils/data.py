@@ -43,6 +43,8 @@ class DataModule:
 		}
 
 	def make_json(self, ne_marked_dict, predict=False):
+		if ne_marked_dict is None:
+			return None
 		cs_form = {}
 		cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict[
 			"text"]
@@ -88,9 +90,7 @@ class DataModule:
 		# sentence = self.make_json(datafunc.mark_ne(sentence["text"]), predict=predict)
 		# sentence["fileName"] = fname
 		# at this point, sentence should be in Crowdsourcing form
-		result = []
 		links = []
-		print_flag = False
 		# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 		for entity in sentence["entities"]:
 			redirected_entity = self.redirects[entity["answer"]] if entity["answer"] in self.redirects else entity[
@@ -145,6 +145,7 @@ class DataModule:
 		last_link = None
 		added = []
 		for morph, pos in zip(morphs, inds):
+			error_flag = False
 			for m, link in datafunc.morph_split((morph, pos), links):
 				if link is None:  # if train mode, skip if candidate set is empty
 					conlls.append(m)
@@ -154,6 +155,10 @@ class DataModule:
 				bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
 				ne, en, sp, ep, cand = link
 				last_link = link
+				if m not in ne or error_flag:
+					conlls.append(m)
+					error_flag = True
+					continue
 				assert m in ne
 				conlls.append([m, bi, ne, en, "%s%s" % (datafunc.dbpedia_prefix, en), "000", "000"])
 				if bi == "B":
@@ -261,3 +266,6 @@ class CandDict:
 				score, id = cand_score
 				cand_list.append((cand_name, id, score))
 		return cand_list
+
+	def __contains__(self, item):
+		return len(self[item]) == 0

@@ -1,7 +1,7 @@
 from .Vocabulary import Vocabulary
 from ..utils import KoreanUtil
 
-class Cluster():
+class Cluster:
 	def __init__(self, target_entity):
 		self.cluster = []
 		self.target_entity = target_entity
@@ -41,18 +41,22 @@ class Cluster():
 		return len(self.cluster)
 
 	def to_json(self):
-		return {
+		d = {
 			"id"           : self.id,
 			"target_entity": self.id if type(self.target_entity) is Cluster else self.target_entity,
 			"cluster"      : [x.to_json() for x in self.cluster],
 			"kb_uploadable": self.kb_uploadable
 		}
+		try:
+			d["prediction"] = self.prediction
+		except:
+			pass
+		return d
 
 	@classmethod
 	def from_json(cls, json):
-		c = cls()
+		c = cls(json["target_entity"])
 		c.id = json["id"]
-		c.target_entity = json["target_entity"]
 		for item in json["cluster"]:
 			v = Vocabulary.from_json(item)
 			assert v.cluster == c.id

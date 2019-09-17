@@ -45,18 +45,18 @@ def evaluate(iter_el_result, label):
 				id_to_entity_map[cluster_id][l["entity"]] += 1
 				cluster_assigned += 1
 			except:
-				# marked_entity = ne.entity
-				# correct_entity = l["manual_entity"] if "manual_entity" in l else l["entity"]
-				# if marked_entity != nae:
-				# 	el_count["P"] += 1
-				# 	if marked_entity == correct_entity:
-				# 		el_count["TP"] += 1
-				# if correct_entity != nae:
-				# 	el_count["R"] += 1
-				# if "dark_entity" in l and l["dark_entity"]:
-				# 	total_dark += 1
-				# 	if marked_entity != nic and "_fake" not in marked_entity:
-				# 		found_entity += 1
+				marked_entity = ne.entity
+				correct_entity = l["manual_entity"] if "manual_entity" in l else l["entity"]
+				if marked_entity != nae:
+					el_count["P"] += 1
+					if marked_entity == correct_entity:
+						el_count["TP"] += 1
+				if correct_entity != nae:
+					el_count["R"] += 1
+				if "dark_entity" in l and l["dark_entity"]:
+					total_dark += 1
+					if marked_entity != nic and "_fake" not in marked_entity:
+						found_entity += 1
 				pass
 
 	# register clusters with majority voting
@@ -67,6 +67,7 @@ def evaluate(iter_el_result, label):
 
 	for sentence, ls in zip(iter_el_result, label):
 		for l in ls["entities"]:
+			if l["dataType"] != "namu": continue
 			for e in sentence.entities:
 				if e.char_ind == l["start"] and e.surface == l["surface"]:
 					ne = e

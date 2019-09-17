@@ -81,7 +81,6 @@ def make_all():
                             co_occur_dict[title] = count
                         for tag in tags:
                             try:
-                                count = unigram_dict[tag]
                                 unigram_dict[tag] += 1
                             except KeyError:
                                 unigram_dict[tag] = 1     
@@ -122,7 +121,6 @@ def make_small():
                             co_occur_dict[title] = count
                         for tag in tags:
                             try:
-                                count = unigram_dict[tag]
                                 unigram_dict[tag] += 1
                             except KeyError:
                                 unigram_dict[tag] = 1     
@@ -182,13 +180,11 @@ def make_unigram():
                     text_list = text.split('</doc>')
                     for text in text_list[:-1]:
                         parsed = text.split('">')
-                        title = parsed[0].split('title="')[-1].replace(' ', '_')
                         desc = strip_e(''.join(parsed[1].split("  ")[1:-2]))
                         tags = list(filter(lambda x: x[1] not in ['Punctuation', 'Josa', 'Suffix'], okt.pos(desc)))
                         tags = ['/'.join(tag) for tag in tags]
                         for tag in tags:
                             try:
-                                count = unigram_dict[tag]
                                 unigram_dict[tag] += 1
                             except KeyError:
                                 unigram_dict[tag] = 1

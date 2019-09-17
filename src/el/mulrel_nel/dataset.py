@@ -128,11 +128,9 @@ def read_conll_from_str(data, texts):
         content[0]['conll_doc'] = conll_doc
         cur_conll_m_id = 0
         conll_m_id_buf = 0
-        check = 0
         errorous_mentions = []
         for m in content:
             mention = m['mention']
-            gold = m['gold']
             # if "candidates" not in m:
             #     print(m)
             while True:
@@ -227,17 +225,7 @@ def eval(testset, system_pred):
 
 
 def make_result_dict(testset, system_pred):
-    gold = []
-    pred = []
-    mention = []
-    cand_length = []
-
-    true_pos = 0
-    true_pos_2 = 0
-    pred_num = 0
-    gold_num = 0
-    result = []
-    result = {}
+	result = {}
     for doc_name, pred in system_pred.items():
         # print(doc_name)
         result[doc_name.split()[0]] = []
