@@ -2,7 +2,9 @@ from ...utils import AbstractArgument
 from ... import GlobalValues as gl
 class ELDArgs(AbstractArgument):
 	def __init__(self, model_name: str):
+
 		self.model_name = model_name
+		self.device = "cuda"
 
 		# training config
 		self.train_corpus_dir = None
@@ -16,6 +18,13 @@ class ELDArgs(AbstractArgument):
 		self.use_entity_context_embedding = True
 		self.use_relation_embedding = True
 		self.use_type_embedding = True
+		self.context_window_size = 5
+
+		self.character_encoder = None
+		self.word_encoder = None
+		self.entity_encoder = None
+		self.relation_encoder = None
+		self.type_encoder = None
 
 		# data path config
 		self.character_file = None
@@ -32,7 +41,7 @@ class ELDArgs(AbstractArgument):
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
 
-		# dummy
+		# values that will be modified in runtime
 		self.ce_dim = 0
 		self.we_dim = 0
 		self.ee_dim = 0

@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 from src.el.utils.data import CandDict
@@ -11,20 +12,56 @@ class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
 		self.corpus = corpus
 		self.max_character_len_in_character = max(map(len, self.corpus.token_iter()))
-		self.max_token_len_in_sentence = max(map(len, self.corpus))
+		# self.max_token_len_in_sentence = max(map(len, self.corpus))
+		self.device = args.device
+		self.window_size = args.context_window_size
+		self.ce_dim = args.ce_dim
+		self.we_dim = args.we_dim
+		self.ee_dim = args.ee_dim
+
+		self.ce_flag = args.use_character_embedding
+		self.we_flag = args.use_word_context_embedding
+		self.ee_flag = args.use_entity_context_embedding
+		self.re_flag = args.use_relation_embedding
+		self.te_flag = args.use_type_embedding
 
 	def __getitem__(self, index):
-		# return ce, we, ee, re, te, lab
+		# return ce, cl, lcwe, lcwl, rcwe, rcwl, lcee, lcel, rcee, rcel, re, rl, te, tl, lab
+		# entity에 대한 주변 단어? -> we와 ee는 context, te는 자기 type,
+		pad = lambda tensor, dim, pad_size, tensor_length: torch.stack([*tensor] + [torch.zeros(dim) for _ in range(pad_size - tensor_length)])
 		target = self.corpus[index]
 
+		ce, lwe, rwe, lee, ree, re, te, lab = target.tensor
+		cl = lwl = rwl = lel = rel = rl = tl = 0
+		if self.ce_flag:
+			cl = ce.size()[0]
+			ce = pad(ce, self.ce_dim, self.max_character_len_in_character, cl)
+		if self.we_flag:
+			lwe = lwe[-self.window_size:]
+			rwe = rwe[:self.window_size]
+			lwl = lwe.size()[0]
+			rwl = rwe.size()[0]
+			lwe = pad(lwe, self.we_dim, self.window_size, lwl)
+			rwe = pad(rwe, self.we_dim, self.window_size, rwl)
+		if self.ee_flag:
+			lee = lee[-self.window_size:]
+			ree = ree[:self.window_size]
+			lel = lee.size()[0]
+			rel = ree.size()[0]
+			lee = pad(lee, self.ee_dim, self.window_size, lel)
+			ree = pad(ree, self.ee_dim, self.window_size, rel)
+		if self.re_flag:
+			rl = re.shape()[0]
+		if self.te_flag:
+			tl = te.shape()[0]
 
-		pass
+		return ce, cl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, lab
 
 	def __len__(self):
 		return len([x for x in self.corpus.entity_iter()])
 
 class DataModule:
-	def __init__(self, mode: str, args: ELDArgs):  # TODO
+	def __init__(self, mode: str, args: ELDArgs):
 
 		# index 0: not in dictionary
 		self.ce_flag = args.use_character_embedding
@@ -40,43 +77,46 @@ class DataModule:
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = np.stack([np.zeros(ee.shape[-1]), *ee])
-		args.ee_dim = ee.shape[-1]
-
+		self.ee_dim = args.ee_dim = ee.shape[-1]
+		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
 		if self.ce_flag:
 			self.c2i = {w: i + 1 for i, w in enumerate(readfile(args.character_file))}
 			ce = np.load(args.character_embedding_file)
 			self.character_embedding = np.stack([np.zeros(ce.shape[-1]), *ce])
-			args.ce_dim = ce.shape[-1]
+			self.ce_dim = args.ce_dim = ce.shape[-1]
 		if self.we_flag:
 			self.w2i = {w: i + 1 for i, w in enumerate(readfile(args.word_file))}
 			we = np.load(args.word_embedding_file)
 			self.word_embedding = np.stack([np.zeros(we.shape[-1]), *we])
-			args.we_dim = we.shape[-1]
+			self.we_dim = args.we_dim = we.shape[-1]
 		if self.re_flag:
 			self.r2i = {w: i + 1 for i, w in enumerate(readfile(args.relation_file))}
 			re = np.load(args.relation_embedding_file)
 			self.relation_embedding = np.stack([np.zeros(re.shape[-1]), *re])
-			args.re_dim = re.shape[-1]
+			self.re_dim = args.re_dim = re.shape[-1]
 		if self.te_flag:
 			self.t2i = {w: i + 1 for i, w in enumerate(readfile(args.type_file))}
 			te = np.load(args.type_embedding_file)
 			self.type_embedding = np.stack([np.zeros(te.shape[-1]), *te])
-			args.te_dim = te.shape[-1]
+			self.te_dim = args.te_dim = te.shape[-1]
 
 		if mode == "train":
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
 			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
+			self.initialize_vocabulary_tensor()
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
-	def generate_tensor(self):
+
+
+	def initialize_vocabulary_tensor(self):
 		for sentence in self.corpus:
 			for token in sentence:
 				if self.ce_flag:
-					token.char_embedding = None
+					token.char_embedding = np.stack(self.character_embedding[self.c2i[x] if x in self.c2i else 0] for x in token.jamo)
 				if self.we_flag:
-					token.word_embedding = self.word_embedding[self.w2i[token.surface]] if token.surface in self.w2i else np.zeros(100, np.float)
+					token.word_embedding = self.word_embedding[self.w2i[token.surface]] if token.surface in self.w2i else np.zeros(self.we_dim, np.float)
 				if self.ee_flag:
-					token.entity_embedding = self.entity_embedding[token.entity] if token.is_entity and token.entity in self.e2i else np.zeros(100, np.float)
+					token.entity_embedding = self.entity_embedding[token.entity] if token.is_entity and token.entity in self.e2i else np.zeros(self.ee_dim, np.float)
 				if self.re_flag:
 					token.relation_embedding = None
 				if self.te_flag:

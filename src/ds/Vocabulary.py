@@ -1,3 +1,5 @@
+import torch
+from ..utils.KoreanUtil import char_to_jamo
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface = surface
@@ -11,11 +13,18 @@ class Vocabulary:
 		self.token_ind = token_ind
 		self.parent_sentence = parent_sentence
 
-		# reserved for entity validation
+		# reserved for EV
 		self.cluster = -1
 		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
 
 		# reserved for ELD
+		self.char_embedding = torch.zeros(1)
+		self.word_embedding = torch.zeros(1) # embedding of self.surface
+		self.entity_embedding = torch.zeros(1) # embedding of self.entity
+		self.relation_embedding = torch.zeros(1)
+		self.type_embedding = torch.zeros(1)
+		self.eld_tensor_initialized = False
+		self.entity_label = None # entity id?
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None
@@ -80,3 +89,24 @@ class Vocabulary:
 		if voca.is_entity and voca.entity_in_kb:
 			voca.error_type = 1
 		return voca
+
+	# reserved for eld
+	@property
+	def tensor(self):
+		"""
+		tensor input of eld module
+		:return: character embedding, left word embedding, right word embedding, left entity embedding, right entity embedding, relation embedding, type embedding
+		"""
+		return self.char_embedding, \
+		       torch.stack([x.word_embedding for x in self.lctx]), \
+		       torch.stack([x.word_embedding for x in self.rctx]), \
+		       torch.stack([x.entity_embedding for x in self.lctx_ent]),\
+		       torch.stack([x.entity_embedding for x in self.rctx_ent]), \
+		       self.relation_embedding, \
+		       self.type_embedding,\
+		       self.entity_label
+
+
+	@property
+	def jamo(self):
+		return char_to_jamo(self.surface)

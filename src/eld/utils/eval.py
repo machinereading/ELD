@@ -13,24 +13,42 @@ class Evaluator:
 
 	def evaluate(self, gold: Corpus, pred: Corpus):
 		# in-kb items
+		in_tp = 0
 		in_gold = 0
+		in_pred = 0
 
 		# out-kb items = dark entities
+		out_tp = 0
 		out_gold = 0
+		out_pred = 0
 
 		# items that have no surface information
+		no_surface_tp = 0
 		no_surface_gold = 0
+		no_surface_pred = 0
 
-		for gs, ps in zip(gold, pred):
-			for gt, pt in zip(gs, ps):
-				# in-kb items
-				if gt.entity_in_kb:
-					in_gold += 1
+		for gt, pt in zip(gold.entity_iter(), pred.entity_iter()):
+			# in-kb items
+			correct = gt.entity == pt.entity
+			predicted = pt.entity not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE"]
+			if gt.entity_in_kb:
+				in_gold += 1
+				if predicted:
+					in_pred += 1
+					if correct:
+						in_tp += 1
+			# out-kb items
+			else:
+				out_gold += 1
+				if predicted:
+					out_pred += 1
+					if correct:
+						out_tp += 1
+			if gt.surface not in self.surface_ent_dict:
+				no_surface_gold += 1
+				if predicted:
+					no_surface_pred += 1
+					if correct:
+						no_surface_tp += 1
 
-				# out-kb items
-				else:
-					out_gold += 1
-
-				if gt.surface not in self.surface_ent_dict:
-					no_surface_gold += 1
-
+		return (in_tp, in_pred, in_gold), (out_tp, out_pred, out_gold), (no_surface_tp, no_surface_pred, no_surface_gold)

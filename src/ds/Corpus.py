@@ -2,8 +2,7 @@ import logging
 
 from tqdm import tqdm
 
-from .Cluster import Cluster
-from .Sentence import Sentence
+from . import Cluster, Sentence, Vocabulary
 from ..utils import jsonload, TimeUtil
 from typing import Iterator
 class Corpus:
@@ -37,7 +36,7 @@ class Corpus:
 		return max([x.max_jamo for x in self.cluster_list])
 
 	@TimeUtil.measure_time
-	def __getitem__(self, ind):
+	def __getitem__(self, ind) -> Vocabulary:
 		acclen = 0
 		accbuf = 0
 		senind = 0

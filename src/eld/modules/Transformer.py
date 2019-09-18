@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import BiContextEmbedding, CNNEmbedding
+from . import BiContextEncoder, CNNEncoder
 from ..utils import ELDArgs
 from ...utils import KoreanUtil
 
@@ -30,17 +30,16 @@ class Transformer(nn.Module):
 		self.transformer_input_dim = 0
 		if self.ce_flag:
 			self.transformer_input_dim += self.character_embedding_dim
-			self.cv = nn.Embedding(KoreanUtil.jamo_len + len(KoreanUtil.alpha) + 1, args.ce_dim)
 			self.character_embedding = nn.Conv1d(1, 1, 1)
 		if self.we_flag:
 			self.transformer_input_dim += self.word_context_embedding_output_dim
-			self.word_context_embedding = BiContextEmbedding("LSTM", 0, self.word_context_embedding_output_dim)
+			self.word_context_embedding = BiContextEncoder("LSTM", args.we_dim, self.word_context_embedding_output_dim)
 		if self.ee_flag:
 			self.transformer_input_dim += self.entity_context_embedding_output_dim
-			self.entity_context_embedding = BiContextEmbedding("LSTM", 0, self.entity_context_embedding_output_dim)
+			self.entity_context_embedding = BiContextEncoder("LSTM", args.ee_dim, self.entity_context_embedding_output_dim)
 		if self.re_flag:
 			self.transformer_input_dim += self.relation_embedding_output_dim
-			self.relation_embedding = CNNEmbedding(1, 1, 1)
+			self.relation_embedding = CNNEncoder(1, 1, 1)
 
 		seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
 			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
@@ -48,21 +47,21 @@ class Transformer(nn.Module):
 				nn.Dropout()]
 		self.transformer = nn.Sequential(*seq)
 
-	def forward(self, character_batch=None, word_context_batch=None, entity_context_batch=None, relation_batch=None, type_batch=None):
-		# flag and batch match
-		assert not (self.ce_flag ^ (character_batch is not None))
-		assert not (self.we_flag ^ (word_context_batch is not None))
-		assert not (self.ee_flag ^ (entity_context_batch is not None))
-		assert not (self.re_flag ^ (relation_batch is not None))
-		assert not (self.te_flag ^ (type_batch is not None))
+	def forward(self, character_batch, character_len,
+	            left_word_context_batch, left_word_context_len,
+	            right_word_context_batch, right_word_context_len,
+	            left_entity_context_batch, left_entity_context_len,
+	            right_entity_context_batch, right_entity_context_len,
+	            relation_batch, relation_len,
+	            type_batch, type_len):
 		mid_features = []
 
 		if self.ce_flag:
 			mid_features.append(self.character_embedding(character_batch))
 		if self.we_flag:
-			mid_features.append(self.word_context_embedding(word_context_batch))
+			mid_features.append(self.word_context_embedding(left_word_context_batch))
 		if self.ee_flag:
-			mid_features.append(self.entity_context_embedding(entity_context_batch))
+			mid_features.append(self.entity_context_embedding(left_entity_context_batch))
 		if self.re_flag:
 			mid_features.append(self.relation_embedding(relation_batch))
 

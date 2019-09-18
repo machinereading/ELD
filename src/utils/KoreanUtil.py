@@ -28,14 +28,14 @@ def decompose_sent(sentence, decompose=False):
 		print(sentence, "is not string")
 	result = []
 	for char in sentence:
-		i = char_to_elem(char, decompose=decompose)
+		i = char_to_jamo(char, decompose=decompose)
 		if type(i) is str:
 			result.append(i)
 		else:
 			result += i
 	return "".join(result)
 
-def char_to_elem(character, to_num=False, decompose=False, pad=True):
+def char_to_jamo(character, to_num=False, decompose=False):
 	x = ord(character)
 	if not is_korean_character(character):
 		return character
@@ -57,7 +57,7 @@ def char_to_elem_ind(character):
 	# 한글 자모
 	# 영어 알파벳(대소문자 구분)
 	# 일부 특수문자? (.,:)
-	elems = char_to_elem(character, to_num=True)
+	elems = char_to_jamo(character, to_num=True)
 	if type(elems) is str:
 		# 한국어가 아님
 		return [alpha.index(elems) + len(cho) + len(jung) + len(jong) if elems in alpha else len(cho) + len(jung) + len(

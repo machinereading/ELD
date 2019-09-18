@@ -138,6 +138,7 @@ class Sentence:
 			vocab.parent_sentence = sentence
 		return sentence
 
+	# used for ev, iterative
 	@property
 	def vocab_tensors(self):
 		if self._vocab_tensors is None:

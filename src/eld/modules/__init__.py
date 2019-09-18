@@ -1,3 +1,2 @@
-from .ContextEmbedding import *
-from .TokenEmbedding import *
+from .ContextEncoder import *
 from .Transformer import *
