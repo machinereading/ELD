@@ -62,3 +62,4 @@ class SelfAttentionEncoder(nn.Module):
 	def forward(self, hidden_state, attention_mask, head_mask=None):
 		return self.encoder(hidden_state, attention_mask, head_mask)
 
+encoder = {"RNN": BiContextEncoder, "CNN": CNNEncoder, "SelfAttention": SelfAttentionEncoder}

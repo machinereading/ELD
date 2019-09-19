@@ -4,42 +4,42 @@ import torch.nn.functional as F
 
 from . import BiContextEncoder, CNNEncoder
 from ..utils import ELDArgs
-from ...utils import KoreanUtil
 
 # entity context emb + relation emb --> transE emb
-class Transformer(nn.Module):
-	def __init__(self, args: ELDArgs):
-		super(Transformer, self).__init__()
-		self.ce_flag = args.use_character_embedding
-		self.we_flag = args.use_word_context_embedding
-		self.ee_flag = args.use_entity_context_embedding
-		self.re_flag = args.use_relation_embedding
-		self.te_flag = args.use_type_embedding
+class SeparateEncoderBasedTransformer(nn.Module):
+	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
+	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
+	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
+	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
+		super(SeparateEncoderBasedTransformer, self).__init__()
+		self.ce_flag = use_character_embedding
+		self.we_flag = use_word_context_embedding
+		self.ee_flag = use_entity_context_embedding
+		self.re_flag = use_relation_embedding
+		self.te_flag = use_type_embedding
 		assert self.ce_flag or self.we_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
 
 		self.transformer_layer = 1
-
-		self.character_embedding_dim = 50
-		self.word_context_embedding_output_dim = 100
-		self.entity_context_embedding_output_dim = 100
-		self.relation_embedding_output_dim = 100
 
 		self.transformer_hidden_dim = 100
 		self.transformer_output_dim = 250
 
 		self.transformer_input_dim = 0
 		if self.ce_flag:
-			self.transformer_input_dim += self.character_embedding_dim
+			self.transformer_input_dim += character_encoding_dim
 			self.character_embedding = nn.Conv1d(1, 1, 1)
 		if self.we_flag:
-			self.transformer_input_dim += self.word_context_embedding_output_dim
-			self.word_context_embedding = BiContextEncoder("LSTM", args.we_dim, self.word_context_embedding_output_dim)
+			self.transformer_input_dim += word_encoding_dim
+			self.word_context_embedding = BiContextEncoder("LSTM", word_embedding_dim, word_encoding_dim)
 		if self.ee_flag:
-			self.transformer_input_dim += self.entity_context_embedding_output_dim
-			self.entity_context_embedding = BiContextEncoder("LSTM", args.ee_dim, self.entity_context_embedding_output_dim)
+			self.transformer_input_dim += entity_encoding_dim
+			self.entity_context_embedding = BiContextEncoder("LSTM", entity_embedding_dim, entity_encoding_dim)
 		if self.re_flag:
-			self.transformer_input_dim += self.relation_embedding_output_dim
+			self.transformer_input_dim += relation_encoding_dim
 			self.relation_embedding = CNNEncoder(1, 1, 1)
+		if self.te_flag:
+			self.transformer_input_dim += type_encoding_dim
+			# self.tra
 
 		seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
 			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
@@ -70,5 +70,13 @@ class Transformer(nn.Module):
 		ffnn_output = self.transformer(ffnn_input)
 		return ffnn_output
 
+	# noinspection PyMethodMayBeStatic
 	def loss(self, pred, label):
 		return F.mse_loss(pred, label)
+
+class JointTransformer(nn.Module):
+	def __init__(self, args: ELDArgs):
+		super(JointTransformer, self).__init__()
+
+	def forward(self, *input):
+		pass

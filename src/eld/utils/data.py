@@ -62,7 +62,6 @@ class ELDDataset(Dataset):
 
 class DataModule:
 	def __init__(self, mode: str, args: ELDArgs):
-
 		# index 0: not in dictionary
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding
@@ -103,13 +102,21 @@ class DataModule:
 		if mode == "train":
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
 			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
-			self.initialize_vocabulary_tensor()
+
+			self.initialize_vocabulary_tensor(self.train_corpus)
+			self.initialize_vocabulary_tensor(self.dev_corpus)
+
+			self.train_dataset = ELDDataset(self.train_corpus, args)
+			self.dev_dataset = ELDDataset(self.dev_corpus, args)
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
+			self.initialize_vocabulary_tensor(self.corpus)
+			self.test_dataset = ELDDataset(self.corpus, args)
 
 
-	def initialize_vocabulary_tensor(self):
-		for sentence in self.corpus:
+
+	def initialize_vocabulary_tensor(self, corpus: Corpus):
+		for sentence in corpus:
 			for token in sentence:
 				if self.ce_flag:
 					token.char_embedding = np.stack(self.character_embedding[self.c2i[x] if x in self.c2i else 0] for x in token.jamo)

@@ -155,3 +155,4 @@ class Corpus:
 		for sent in self:
 			for ent in sent.entities:
 				yield ent
+

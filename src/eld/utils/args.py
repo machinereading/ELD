@@ -1,5 +1,4 @@
 from ...utils import AbstractArgument
-from ... import GlobalValues as gl
 class ELDArgs(AbstractArgument):
 	def __init__(self, model_name: str):
 
@@ -13,6 +12,8 @@ class ELDArgs(AbstractArgument):
 		self.eval_per_epoch = 5
 
 		# transformer config
+		self.encoder_mode = "joint" # one of "joint" or "separate"
+
 		self.use_character_embedding = True
 		self.use_word_context_embedding = True
 		self.use_entity_context_embedding = True
