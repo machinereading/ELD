@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 from .modules import SeparateEncoderBasedTransformer
 from .utils import ELDArgs, DataModule, Evaluator
+from ..utils import jsondump
 from .. import GlobalValues as gl
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
@@ -28,6 +29,8 @@ class ELDMain:
 
 		self.transformer = SeparateEncoderBasedTransformer(self.args)
 
+		jsondump(self.args.to_json(), "models/eld/%s_args.json")
+		gl.logger.info("ELD Model load complete")
 
 
 	def train(self):
