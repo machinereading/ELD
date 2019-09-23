@@ -1,13 +1,15 @@
+from copy import deepcopy
+from typing import List
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.el.utils.data import CandDict
 from .args import ELDArgs
 from ...ds import *
-from ...utils import readfile, pickleload
-from copy import deepcopy
-from typing import List
+from ...el.utils.data import CandDict
+from ...utils import readfile, pickleload, KoreanUtil
+import math
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
 		self.corpus = corpus
@@ -79,10 +81,9 @@ class DataModule:
 		self.ee_dim = args.ee_dim = ee.shape[-1]
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
 		if self.ce_flag:
-			self.c2i = {w: i + 1 for i, w in enumerate(readfile(args.character_file))}
-			ce = np.load(args.character_embedding_file)
-			self.character_embedding = np.stack([np.zeros(ce.shape[-1]), *ce])
-			self.ce_dim = args.ce_dim = ce.shape[-1]
+			self.c2i = {w: i + 1 for i, w in enumerate({KoreanUtil.cho + KoreanUtil.jung + KoreanUtil.jong})}
+			self.character_embedding = torch.nn.embedding(len(self.c2i), args.ce_dim, padding_idx=0, max_norm=math.sqrt(3 / args.ce_dim))
+			self.ce_dim = args.ce_dim
 		if self.we_flag:
 			self.w2i = {w: i + 1 for i, w in enumerate(readfile(args.word_file))}
 			we = np.load(args.word_embedding_file)
@@ -112,8 +113,6 @@ class DataModule:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
 			self.test_dataset = ELDDataset(self.corpus, args)
-
-
 
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		for sentence in corpus:

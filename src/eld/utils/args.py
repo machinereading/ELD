@@ -28,8 +28,6 @@ class ELDArgs(AbstractArgument):
 		self.type_encoder = None
 
 		# data path config
-		self.character_file = None
-		self.character_embedding_file = None
 		self.word_file = None
 		self.word_embedding_file = None
 		self.entity_file = None

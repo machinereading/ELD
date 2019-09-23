@@ -13,6 +13,9 @@ eomi = ['은', '는', '이', '가', '을', '를', '의', '이다', '하다', '�
         '도', '부터', '조차']
 eogan = ['하였', '했', '에서', '들']
 jamo_len = len(cho) + len(jung) + len(jong)
+alphabets = [chr(x) for x in range(ord('a'), ord('z'))] + [chr(x) for x in range(ord('A'), ord('Z'))]
+digits = [str(x) for x in range(10)]
+parenthesis = [x for x in "{}[]()<>"]
 
 def is_korean_character(char):
 	return 0xAC00 <= ord(char) <= 0xD7A3
