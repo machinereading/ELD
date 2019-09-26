@@ -48,8 +48,8 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
 				nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
 				nn.Dropout()]
-		self.transformer = nn.Sequential(*seq)
-
+		# self.transformer = nn.Sequential(*seq)
+		self.transformer = SelfAttentionEncoder(512, 4, 8)
 	def forward(self, character_batch, character_len,
 	            left_word_context_batch, left_word_context_len,
 	            right_word_context_batch, right_word_context_len,
@@ -80,8 +80,19 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		return F.mse_loss(pred, label)
 
 class JointTransformer(nn.Module):
-	def __init__(self, args: ELDArgs):
+	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
+	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
+	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
+	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
 		super(JointTransformer, self).__init__()
 
-	def forward(self, *input):
+
+
+	def forward(self, character_batch, character_len,
+	            left_word_context_batch, left_word_context_len,
+	            right_word_context_batch, right_word_context_len,
+	            left_entity_context_batch, left_entity_context_len,
+	            right_entity_context_batch, right_entity_context_len,
+	            relation_batch, relation_len,
+	            type_batch, type_len):
 		pass

@@ -41,21 +41,38 @@ class BiContextEncoder(nn.Module):
 class CNNEncoder(nn.Module):
 	def __init__(self, in_channel, out_channel, kernel_size):
 		super(CNNEncoder, self).__init__()
-		self.emb = nn.Sequential(
+		self.enc = nn.Sequential(
 				nn.Conv1d(in_channel, out_channel, kernel_size=kernel_size),
 				nn.MaxPool1d(2)
 		)
 
 	def forward(self, input_tensor):
-		emb = self.emb(input_tensor)
+		emb = self.enc(input_tensor)
 		return emb.view(input_tensor.size()[0], -1)
 
 class RNNEncoder(nn.Module):
-	def __init__(self):
+	def __init__(self, input_dim, output_dim, use_attention=True):
 		super(RNNEncoder, self).__init__()
+		self.hidden_size = output_dim
+		self.encoder = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_size, batch_first=True, bidirectional=True)
+		self.use_attention = use_attention
+	def forward(self, tensor, length):
+		seq = rnn.pack_padded_sequence(tensor, length, batch_first=True, enforce_sorted=False)
 
-	def forward(self):
-		pass
+		enc, hidden = self.encoder(seq)
+		pad_enc = rnn.pad_packed_sequence(enc[0], batch_first=True)
+
+		if self.use_attention:
+			enc, _ = self.attention(enc, hidden)
+		return F.relu(enc)
+
+	def attention(self, lstm_output, final_state):
+		# code from https://medium.com/platfarm/%EC%96%B4%ED%85%90%EC%85%98-%EB%A9%94%EC%BB%A4%EB%8B%88%EC%A6%98%EA%B3%BC-transfomer-self-attention-842498fd3225
+		hidden = final_state.view(-1, self.hidden_size, 1)
+		attn_weights = torch.bmm(lstm_output, hidden).squeeze(2)
+		soft_attn_weights = F.softmax(attn_weights, 1)
+		context = torch.bmm(lstm_output.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+		return context, soft_attn_weights
 
 class SelfAttentionEncoder(nn.Module):
 	# using https://github.com/huggingface/pytorch-transformers

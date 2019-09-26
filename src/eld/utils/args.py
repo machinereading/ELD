@@ -12,7 +12,7 @@ class ELDArgs(AbstractArgument):
 		self.eval_per_epoch = 5
 
 		# transformer config
-		self.encoder_mode = "joint" # one of "joint" or "separate"
+		self.transformer_mode = "joint" # one of "joint" or "separate"
 
 		self.use_character_embedding = True
 		self.use_word_context_embedding = True
@@ -41,11 +41,19 @@ class ELDArgs(AbstractArgument):
 		self.redirects_path = "data/el/redirects.pickle"
 
 		# values that will be modified in runtime
-		self.ce_dim = 0
-		self.we_dim = 0
-		self.ee_dim = 0
-		self.re_dim = 0
-		self.te_dim = 0
+		self.c_emb_dim = 0
+		self.w_emb_dim = 0
+		self.e_emb_dim = 0
+		self.r_emb_dim = 0
+		self.t_emb_dim = 0
+
+		# encoding config
+		self.c_enc_dim = 50
+		self.w_enc_dim = 100
+		self.e_enc_dim = 100
+		self.r_enc_dim = 100
+		self.t_enc_dim = 100
+
 
 		# if entity has different embedding, modify entity embedding (to average)
 		self.modify_entity_embedding = False
@@ -56,6 +64,9 @@ class ELDArgs(AbstractArgument):
 
 		# run config
 		self.use_relation_candidates = False
+
+		# prediction config
+		self.map_threshold = 0.5
 
 	@property
 	def model_path(self):

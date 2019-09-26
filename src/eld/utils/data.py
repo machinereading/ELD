@@ -17,9 +17,9 @@ class ELDDataset(Dataset):
 		# self.max_token_len_in_sentence = max(map(len, self.corpus))
 		self.device = args.device
 		self.window_size = args.context_window_size
-		self.ce_dim = args.ce_dim
-		self.we_dim = args.we_dim
-		self.ee_dim = args.ee_dim
+		self.ce_dim = args.c_emb_dim
+		self.we_dim = args.w_emb_dim
+		self.ee_dim = args.e_emb_dim
 
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding
@@ -78,27 +78,27 @@ class DataModule:
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = np.stack([np.zeros(ee.shape[-1]), *ee])
-		self.ee_dim = args.ee_dim = ee.shape[-1]
+		self.ee_dim = args.e_emb_dim = ee.shape[-1]
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
 		if self.ce_flag:
 			self.c2i = {w: i + 1 for i, w in enumerate({KoreanUtil.cho + KoreanUtil.jung + KoreanUtil.jong})}
-			self.character_embedding = torch.nn.embedding(len(self.c2i), args.ce_dim, padding_idx=0, max_norm=math.sqrt(3 / args.ce_dim))
-			self.ce_dim = args.ce_dim
+			self.character_embedding = torch.nn.embedding(len(self.c2i), args.c_emb_dim, padding_idx=0, max_norm=math.sqrt(3 / args.c_emb_dim))
+			self.ce_dim = args.c_emb_dim
 		if self.we_flag:
 			self.w2i = {w: i + 1 for i, w in enumerate(readfile(args.word_file))}
 			we = np.load(args.word_embedding_file)
 			self.word_embedding = np.stack([np.zeros(we.shape[-1]), *we])
-			self.we_dim = args.we_dim = we.shape[-1]
+			self.we_dim = args.w_emb_dim = we.shape[-1]
 		if self.re_flag:
 			self.r2i = {w: i + 1 for i, w in enumerate(readfile(args.relation_file))}
 			re = np.load(args.relation_embedding_file)
 			self.relation_embedding = np.stack([np.zeros(re.shape[-1]), *re])
-			self.re_dim = args.re_dim = re.shape[-1]
+			self.re_dim = args.r_emb_dim = re.shape[-1]
 		if self.te_flag:
 			self.t2i = {w: i + 1 for i, w in enumerate(readfile(args.type_file))}
 			te = np.load(args.type_embedding_file)
 			self.type_embedding = np.stack([np.zeros(te.shape[-1]), *te])
-			self.te_dim = args.te_dim = te.shape[-1]
+			self.te_dim = args.t_emb_dim = te.shape[-1]
 
 		if mode == "train":
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
@@ -113,7 +113,7 @@ class DataModule:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
 			self.test_dataset = ELDDataset(self.corpus, args)
-
+		self.new_entity_count = 0
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		for sentence in corpus:
 			for token in sentence:
@@ -140,6 +140,7 @@ class DataModule:
 		if make_copy:
 			corpus = deepcopy(corpus)
 		for entity, label in zip(corpus.entity_iter(), entity_label):
-			target_entity = self.i2e[label] if label > 0 else "_" + entity.surface.replace(" ", "_")
+			target_entity = self.i2e[label] if label > 0 else ("_%d" % self.new_entity_count) + entity.surface.replace(" ", "_")
 			entity.entity = target_entity
+			self.new_entity_count += 1
 		return corpus
