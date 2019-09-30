@@ -25,6 +25,7 @@ class Vocabulary:
 		self.type_embedding = torch.zeros(1)
 		self.eld_tensor_initialized = False
 		self.entity_label = None # entity id?
+		self.relation = []
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None

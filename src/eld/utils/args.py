@@ -12,7 +12,7 @@ class ELDArgs(AbstractArgument):
 		self.eval_per_epoch = 5
 
 		# transformer config
-		self.transformer_mode = "joint" # one of "joint" or "separate"
+		self.transformer_mode = "separate" # one of "joint" or "separate"
 
 		self.use_character_embedding = True
 		self.use_word_context_embedding = True

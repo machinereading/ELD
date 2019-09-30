@@ -1,6 +1,9 @@
+from typing import Iterator
+
+from src.ds import Relation
 from .Vocabulary import Vocabulary
 from .. import GlobalValues as gl
-from typing import Iterator
+
 class Sentence:
 	def __init__(self, sentence, tokenize_method=lambda x: x.split(" "), init=True):
 		if not init: return
@@ -50,7 +53,7 @@ class Sentence:
 				return item
 		return None
 
-	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1):
+	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1, relation=None):
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
 
@@ -80,6 +83,9 @@ class Sentence:
 		new_token.is_entity = True
 		new_token.entity = entity
 		new_token.entity_in_kb = entity in gl.entity_id_map
+		if relation is not None:
+			for r in relation:
+				new_token.relation.append(Relation.from_cw_form(r))
 		new_token_list = []
 		for token in self.tokens:
 			new_token_list += split_token(new_token, token)
@@ -109,7 +115,8 @@ class Sentence:
 			if "entity" not in entity or entity["entity"] == "": continue
 			try:
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
-				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id)
+				relation = entity["relation"] if "relation" in entity else None
+				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id, relation)
 			except:
 				error_count += 1
 		# if error_count > 0:
@@ -120,14 +127,14 @@ class Sentence:
 
 	def to_json(self):
 		return {
-			"original_sentence": self.original_sentence,
-			"id"               : self.id,
-			"tokens"           : [x.to_json() for x in self.tokens]
+			"text"  : self.original_sentence,
+			"id"    : self.id,
+			"tokens": [x.to_json() for x in self.tokens]
 		}
 
 	@classmethod
 	def from_json(cls, json):
-		sentence = cls(json["original_sentence"])
+		sentence = cls(json["text"])
 		sentence.id = json["id"]
 		# if len(json["tokens"]) > 100000: print(json["original_sentence"], len(json["tokens"]))
 		# print(len(json["tokens"]))
