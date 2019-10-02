@@ -1,16 +1,21 @@
 import logging
-
+import os
 from tqdm import tqdm
 
-from . import Cluster, Sentence, Vocabulary
-from ..utils import jsonload, TimeUtil
-from typing import Iterator
+from .Cluster import Cluster
+from .Sentence import Sentence
+from .Vocabulary import Vocabulary
+from ..utils import jsonload, TimeUtil, diriter
+from typing import Iterator, List
+
+
 class Corpus:
 	def __init__(self):
 		self.sentences = []  # list of sentence
 		self.tagged_voca_lens = []
 		self.cluster = {}  # dict of str(entity form): Cluster
 		self.additional_cluster = []
+		self.eld_items: List[Vocabulary] = []
 
 	def add_sentence(self, sentence):
 		self.sentences.append(sentence)
@@ -55,15 +60,17 @@ class Corpus:
 	def load_corpus(cls, path):
 		# load from crowdsourcing form
 		if type(path) is str:
-			try:
-				path = jsonload(path)
-			except PermissionError or IsADirectoryError:
+			if os.path.isfile(path):
 				try:
-					import os
-					if path[-1] != "/": path += "/"
-					path = [jsonload(path+f) for f in os.listdir(path)]
-				except:
-					raise Exception("Data format error")
+					path = jsonload(path)
+				except PermissionError or IsADirectoryError:
+					try:
+						if path[-1] != "/": path += "/"
+						path = [jsonload(path+f) for f in os.listdir(path)]
+					except:
+						raise Exception("Data format error")
+			else:
+				path = [x for x in map(jsonload, diriter(path))] # TODO 여기 수정
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
@@ -155,4 +162,15 @@ class Corpus:
 		for sent in self:
 			for ent in sent.entities:
 				yield ent
+
+	@property
+	def eld_len(self):
+		return len([x for x in self.entity_iter() if x.target])
+
+	def eld_get_item(self, idx):
+		if idx > self.eld_len: raise IndexError(idx, self.eld_len)
+		if len(self.eld_items) == 0:
+			for ent in self.entity_iter():
+				self.eld_items.append(ent)
+		return self.eld_items[idx]
 

@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import BiContextEncoder, CNNEncoder, SelfAttentionEncoder, encoder_map
-from ..utils import ELDArgs
+from . import BiContextEncoder, CNNEncoder, SelfAttentionEncoder, FFNNEncoder
 
 # entity context emb + relation emb --> transE emb
 class SeparateEncoderBasedTransformer(nn.Module):
@@ -12,9 +11,9 @@ class SeparateEncoderBasedTransformer(nn.Module):
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
 	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
 		super(SeparateEncoderBasedTransformer, self).__init__()
-		legal = encoder_map.keys()
-		for encoder in [character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder]:
-			assert encoder in legal, "Illegal encoder type: %s, must be one of %s" % (encoder, "/".join(legal))
+		# legal = encoder_map.keys()
+		# for encoder in [character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder]:
+		# 	assert encoder in legal, "Illegal encoder type: %s, must be one of %s" % (encoder, "/".join(legal))
 		self.ce_flag = use_character_embedding
 		self.we_flag = use_word_context_embedding
 		self.ee_flag = use_entity_context_embedding
@@ -29,25 +28,29 @@ class SeparateEncoderBasedTransformer(nn.Module):
 
 		self.transformer_input_dim = 0
 		if self.ce_flag:
+			self.character_encoder = CNNEncoder(character_embedding_dim, 1, 2, 3)
+			if type(self.character_encoder) is CNNEncoder:
+				character_encoding_dim = self.character_encoder.out_size
 			self.transformer_input_dim += character_encoding_dim
-			self.character_encoder = nn.Conv1d(1, 1, 1)
 		if self.we_flag:
-			self.transformer_input_dim += word_encoding_dim
+			self.transformer_input_dim += word_encoding_dim * 2
 			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_encoding_dim)
 		if self.ee_flag:
-			self.transformer_input_dim += entity_encoding_dim
+			self.transformer_input_dim += entity_encoding_dim * 2
 			self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_encoding_dim)
 		if self.re_flag:
+			self.relation_encoder = CNNEncoder(relation_embedding_dim, 1, 2, 3)
+			if type(self.relation_encoder) is CNNEncoder:
+				relation_encoding_dim = self.relation_encoder.out_size
 			self.transformer_input_dim += relation_encoding_dim
-			self.relation_encoder = CNNEncoder(1, 1, 1)
 		if self.te_flag:
 			self.transformer_input_dim += type_encoding_dim
-			self.type_encdoer = SelfAttentionEncoder(512, 8, 8)
+			self.type_encdoer = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
 
-		seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
-			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
-				nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
-				nn.Dropout()]
+		# seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
+		# 	[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
+		# 		nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
+		# 		nn.Dropout()]
 		# self.transformer = nn.Sequential(*seq)
 		self.transformer = SelfAttentionEncoder(512, 4, 8)
 	def forward(self, character_batch, character_len,

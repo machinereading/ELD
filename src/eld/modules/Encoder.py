@@ -39,14 +39,15 @@ class BiContextEncoder(nn.Module):
 		return context, soft_attn_weights
 
 class CNNEncoder(nn.Module):
-	def __init__(self, in_channel, out_channel, kernel_size):
+	def __init__(self, in_dim, in_channel, out_channel, kernel_size):
 		super(CNNEncoder, self).__init__()
 		self.enc = nn.Sequential(
 				nn.Conv1d(in_channel, out_channel, kernel_size=kernel_size),
 				nn.MaxPool1d(2)
 		)
+		self.out_size = out_channel * ((in_dim - kernel_size) // 2)
 
-	def forward(self, input_tensor):
+	def forward(self, input_tensor): # batch * in_channel * L -> batch * out_channel * Lout
 		emb = self.enc(input_tensor)
 		return emb.view(input_tensor.size()[0], -1)
 
@@ -60,7 +61,7 @@ class RNNEncoder(nn.Module):
 		seq = rnn.pack_padded_sequence(tensor, length, batch_first=True, enforce_sorted=False)
 
 		enc, hidden = self.encoder(seq)
-		pad_enc = rnn.pad_packed_sequence(enc[0], batch_first=True)
+		pad_enc = rnn.pad_packed_sequence(enc[0], batch_first=True) #TODO
 
 		if self.use_attention:
 			enc, _ = self.attention(enc, hidden)

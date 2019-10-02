@@ -1,7 +1,7 @@
 from ...utils import AbstractArgument
-class ELDArgs(AbstractArgument):
-	def __init__(self, model_name: str):
 
+class ELDArgs(AbstractArgument):
+	def __init__(self, model_name: str = ""):
 		self.model_name = model_name
 		self.device = "cuda"
 
@@ -12,7 +12,7 @@ class ELDArgs(AbstractArgument):
 		self.eval_per_epoch = 5
 
 		# transformer config
-		self.transformer_mode = "separate" # one of "joint" or "separate"
+		self.transformer_mode = "separate"  # one of "joint" or "separate"
 
 		self.use_character_embedding = True
 		self.use_word_context_embedding = True
@@ -28,24 +28,19 @@ class ELDArgs(AbstractArgument):
 		self.type_encoder = None
 
 		# data path config
-		self.word_file = None
-		self.word_embedding_file = None
-		self.entity_file = None
-		self.entity_embedding_file = None
-		self.relation_file = None
-		self.relation_embedding_file = None
-		self.type_file = None
-		self.type_embedding_file = None
-		self.ent_list_path = "data/el/kb_entities"
+		self.character_file = "data/eld/char"
+		self.character_embedding_file = "data/eld/character_embedding.npy"
+		self.word_file = "data/embedding/wiki_stem.word"
+		self.word_embedding_file = "data/embedding/wiki_stem.npy"
+		self.entity_file = "data/eld/entities"
+		self.entity_embedding_file = "data/eld/entity_embeddings.npy"
+		self.relation_file = "data/eld/relations"  # 그냥 정의문
+		self.type_file = "data/eld/types"  # 정의문
+		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-
-		# values that will be modified in runtime
-		self.c_emb_dim = 0
-		self.w_emb_dim = 0
-		self.e_emb_dim = 0
-		self.r_emb_dim = 0
-		self.t_emb_dim = 0
+		# embedding config
+		self.relation_limit = 5
 
 		# encoding config
 		self.c_enc_dim = 50
@@ -54,6 +49,12 @@ class ELDArgs(AbstractArgument):
 		self.r_enc_dim = 100
 		self.t_enc_dim = 100
 
+		# values that will be modified in runtime
+		self.c_emb_dim = 50
+		self.w_emb_dim = 0
+		self.e_emb_dim = 0
+		self.r_emb_dim = 0
+		self.t_emb_dim = 0
 
 		# if entity has different embedding, modify entity embedding (to average)
 		self.modify_entity_embedding = False

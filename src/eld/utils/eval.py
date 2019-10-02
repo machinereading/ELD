@@ -1,9 +1,8 @@
 from sklearn.metrics import f1_score
 
-from ...el.utils.data import CandDict
 from ..utils import ELDArgs
 from ...utils import readfile, pickleload
-from ...ds import Corpus
+from ...ds import Corpus, CandDict
 from . import DataModule
 class Evaluator:
 	def __init__(self, args: ELDArgs, data: DataModule):
@@ -17,7 +16,12 @@ class Evaluator:
 		in_gold = 0
 		in_pred = 0
 
-		# out-kb items = dark entities
+		# nil items (not yet disambiguated)
+		nil_tp = 0
+		nil_gold = 0
+		nil_pred = 0
+
+		# out-kb items
 		out_tp = 0
 		out_gold = 0
 		out_pred = 0
@@ -27,11 +31,16 @@ class Evaluator:
 		no_surface_gold = 0
 		no_surface_pred = 0
 
-		for gt, pt in zip(gold.entity_iter(), pred.entity_iter()):
+		# give entity uri to each cluster
+		pe_dark_id_to_ge_entity_map = {}
+		for pe in pred.entity_iter():
+			pass
+
+		for ge, pe in zip(gold.entity_iter(), pred.entity_iter()):
 			# in-kb items
-			correct = gt.entity == pt.entity
-			predicted = pt.entity not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE"]
-			if gt.entity_in_kb:
+			correct = ge.entity == pe.entity
+			predicted = pe.entity not in ["NOT_AN_ENTITY", "NOT_IN_CANDIDATE"]
+			if ge.entity_in_kb:
 				in_gold += 1
 				if predicted:
 					in_pred += 1
@@ -44,7 +53,7 @@ class Evaluator:
 					out_pred += 1
 					if correct:
 						out_tp += 1
-			if gt.surface not in self.surface_ent_dict:
+			if ge.surface not in self.surface_ent_dict:
 				no_surface_gold += 1
 				if predicted:
 					no_surface_pred += 1

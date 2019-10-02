@@ -94,6 +94,7 @@ class Sentence:
 			token.token_ind = i
 
 		self.tokens = new_token_list
+		return new_token
 
 	def add_fake_entity(self, target_vocab):
 		assert target_vocab in self.tokens
@@ -116,7 +117,9 @@ class Sentence:
 			try:
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
 				relation = entity["relation"] if "relation" in entity else None
-				sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id, relation)
+				new_ent = sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id, relation)
+				if "target" in entity:
+					new_ent.target = entity["target"]
 			except:
 				error_count += 1
 		# if error_count > 0:

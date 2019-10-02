@@ -7,7 +7,7 @@ from .modules.Transformer import SeparateEncoderBasedTransformer, JointTransform
 from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump
-
+import numpy as np
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
 		assert mode in ["train", "eval", "demo"]
@@ -22,7 +22,7 @@ class ELDMain:
 		else:
 			try:
 				args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
-			except FileNotFoundError:
+			except Exception:
 				args = ELDArgs(model_name)
 			self.epochs = args.epochs
 			self.eval_per_epoch = args.eval_per_epoch
@@ -32,7 +32,7 @@ class ELDMain:
 		self.evaluator = Evaluator(args, self.data)
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
-		self.entity_embedding = torch.zeros().cuda()
+		self.entity_embedding = np.load(args.entity_embedding_file)
 		self.entity_embedding_dim = self.entity_embedding[0].size()[-1]
 		self.map_threshold = args.map_threshold
 		transformer_map = {"separate": SeparateEncoderBasedTransformer, "joint": JointTransformer}
@@ -53,7 +53,7 @@ class ELDMain:
 		gold_corpus = self.data.dev_corpus
 		max_score = 0
 		max_score_epoch = 0
-
+		gl.logger.info("Train start")
 		for epoch in tqdmloop:
 			self.transformer.train()
 			for batch in train_batch:

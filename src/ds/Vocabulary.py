@@ -1,5 +1,8 @@
 import torch
+
+from . import Relation
 from ..utils.KoreanUtil import char_to_jamo
+from typing import List
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface = surface
@@ -18,14 +21,14 @@ class Vocabulary:
 		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
 
 		# reserved for ELD
-		self.char_embedding = torch.zeros(1)
-		self.word_embedding = torch.zeros(1) # embedding of self.surface
-		self.entity_embedding = torch.zeros(1) # embedding of self.entity
-		self.relation_embedding = torch.zeros(1)
-		self.type_embedding = torch.zeros(1)
-		self.eld_tensor_initialized = False
-		self.entity_label = None # entity id?
-		self.relation = []
+		self.char_embedding: torch.Tensor = torch.zeros(1)
+		self.word_embedding: torch.Tensor = torch.zeros(1) # embedding of self.surface
+		self.entity_embedding: torch.Tensor = torch.zeros(1) # embedding of self.entity
+		self.relation_embedding: torch.Tensor = torch.zeros(1)
+		self.type_embedding: torch.Tensor = torch.zeros(1)
+		self.eld_tensor_initialized: bool = False
+		self.entity_label: str = "" # entity id?
+		self.relation: List[Relation] = []
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None
