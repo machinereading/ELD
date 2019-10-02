@@ -6,8 +6,9 @@ class ELDArgs(AbstractArgument):
 		self.device = "cuda"
 
 		# training config
-		self.train_corpus_dir = None
-		self.dev_corpus_dir = None
+		self.train_corpus_dir = "corpus/namu_eld_handtag_train/"
+		self.dev_corpus_dir = "corpus/namu_eld_handtag_dev/"
+		self.test_corpus_dir = "corpus/namu_eld_handtag_test/"
 		self.epochs = 100
 		self.eval_per_epoch = 5
 

@@ -32,8 +32,9 @@ class ELDMain:
 		self.evaluator = Evaluator(args, self.data)
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
-		self.entity_embedding = np.load(args.entity_embedding_file)
-		self.entity_embedding_dim = self.entity_embedding[0].size()[-1]
+		if mode == "test":
+			self.entity_embedding = self.data.entity_embedding.weight
+			self.entity_embedding_dim = self.entity_embedding.size()[-1]
 		self.map_threshold = args.map_threshold
 		transformer_map = {"separate": SeparateEncoderBasedTransformer, "joint": JointTransformer}
 		self.transformer = transformer_map[args.transformer_mode](args.use_character_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,

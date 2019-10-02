@@ -1,8 +1,10 @@
+from typing import List
+
 import torch
 
 from . import Relation
-from ..utils.KoreanUtil import char_to_jamo
-from typing import List
+from ..utils.KoreanUtil import decompose_sent
+
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface = surface
@@ -22,12 +24,12 @@ class Vocabulary:
 
 		# reserved for ELD
 		self.char_embedding: torch.Tensor = torch.zeros(1)
-		self.word_embedding: torch.Tensor = torch.zeros(1) # embedding of self.surface
-		self.entity_embedding: torch.Tensor = torch.zeros(1) # embedding of self.entity
+		self.word_embedding: torch.Tensor = torch.zeros(1)  # embedding of self.surface
+		self.entity_embedding: torch.Tensor = torch.zeros(1)  # embedding of self.entity
 		self.relation_embedding: torch.Tensor = torch.zeros(1)
 		self.type_embedding: torch.Tensor = torch.zeros(1)
 		self.eld_tensor_initialized: bool = False
-		self.entity_label: str = "" # entity id?
+		self.entity_label: str = ""  # entity id?
 		self.relation: List[Relation] = []
 
 		# some properties that will be initialized later
@@ -103,14 +105,13 @@ class Vocabulary:
 		"""
 		return self.char_embedding, \
 		       torch.stack([x.word_embedding for x in self.lctx]), \
-		       torch.stack([x.word_embedding for x in self.rctx]), \
-		       torch.stack([x.entity_embedding for x in self.lctx_ent]),\
-		       torch.stack([x.entity_embedding for x in self.rctx_ent]), \
+		       torch.stack([x.word_embedding for x in self.rctx][::-1]), \
+		       torch.stack([x.entity_embedding for x in self.lctx_ent]), \
+		       torch.stack([x.entity_embedding for x in self.rctx_ent][::-1]), \
 		       self.relation_embedding, \
-		       self.type_embedding,\
-		       self.entity_label
-
+		       self.type_embedding, \
+		       self.entity_label # TODO 왜 여기서 에러가??
 
 	@property
 	def jamo(self):
-		return char_to_jamo(self.surface)
+		return decompose_sent(self.surface)

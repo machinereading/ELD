@@ -15,7 +15,7 @@ class Corpus:
 		self.tagged_voca_lens = []
 		self.cluster = {}  # dict of str(entity form): Cluster
 		self.additional_cluster = []
-		self.eld_items: List[Vocabulary] = []
+		self._eld_items: List[Vocabulary] = []
 
 	def add_sentence(self, sentence):
 		self.sentences.append(sentence)
@@ -70,11 +70,11 @@ class Corpus:
 					except:
 						raise Exception("Data format error")
 			else:
-				path = [x for x in map(jsonload, diriter(path))] # TODO 여기 수정
+				path = [x for x in map(jsonload, diriter(path))]
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
-		for item in tqdm(path, desc="Loading corpus"):
+		for item in tqdm(path[:100], desc="Loading corpus"): # TODO 100 지우기
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
@@ -169,8 +169,13 @@ class Corpus:
 
 	def eld_get_item(self, idx):
 		if idx > self.eld_len: raise IndexError(idx, self.eld_len)
-		if len(self.eld_items) == 0:
-			for ent in self.entity_iter():
-				self.eld_items.append(ent)
+
 		return self.eld_items[idx]
+
+	@property
+	def eld_items(self):
+		if len(self._eld_items) == 0:
+			for ent in self.entity_iter():
+				self._eld_items.append(ent)
+		return self._eld_items
 

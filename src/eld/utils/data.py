@@ -11,6 +11,7 @@ from . import flags
 from .args import ELDArgs
 from ...ds import *
 from ...utils import readfile, pickleload, TimeUtil, one_hot
+from ... import GlobalValues as gl
 
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
@@ -41,32 +42,32 @@ class ELDDataset(Dataset):
 	def __getitem__(self, index):
 		# return ce, cl, lcwe, lcwl, rcwe, rcwl, lcee, lcel, rcee, rcel, re, rl, te, tl, lab
 		# entity에 대한 주변 단어? -> we와 ee는 context, re는 다른 개체와의 관계, te는 자기 type
-		pad = lambda tensor, dim, pad_size, tensor_length: torch.stack([*tensor] + [torch.zeros(dim) for _ in range(pad_size - tensor_length)])
-		target = self.corpus[index]
+		pad = lambda tensor, pad_size: torch.stack((tensor, torch.zeros(pad_size - tensor.size()[0], tensor.size()[1], dtype=torch.float64)))
+		target = self.corpus.eld_get_item(index)
 
 		ce, lwe, rwe, lee, ree, re, te, lab = target.tensor
 		cl = lwl = rwl = lel = rel = rl = tl = 0
 		if self.ce_flag:
 			cl = ce.size()[0]
-			ce = pad(ce, self.ce_dim, self.max_character_len_in_character, cl)
+			ce = pad(ce, self.max_character_len_in_character)
 		if self.we_flag:
 			lwe = lwe[-self.window_size:]
 			rwe = rwe[:self.window_size]
 			lwl = lwe.size()[0]
 			rwl = rwe.size()[0]
-			lwe = pad(lwe, self.we_dim, self.window_size, lwl)
-			rwe = pad(rwe, self.we_dim, self.window_size, rwl)
+			lwe = pad(lwe, self.window_size)
+			rwe = pad(rwe, self.window_size)
 		if self.ee_flag:
 			lee = lee[-self.window_size:]
 			ree = ree[:self.window_size]
 			lel = lee.size()[0]
 			rel = ree.size()[0]
-			lee = pad(lee, self.ee_dim, self.window_size, lel)
-			ree = pad(ree, self.ee_dim, self.window_size, rel)
+			lee = pad(lee, self.window_size)
+			ree = pad(ree, self.window_size)
 		if self.re_flag:
 			re = target.relation_embedding
 			rl = re.size()[0]
-			re = pad(re, self.re_dim, self.r_limit, rl)
+			re = pad(re, self.r_limit)
 		if self.te_flag:
 			te = target.type_embedding
 			tl = te.size()[0]
@@ -74,7 +75,7 @@ class ELDDataset(Dataset):
 		return ce, cl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, lab
 
 	def __len__(self):
-		return len([x for x in self.corpus.entity_iter()])
+		return self.corpus.eld_len
 
 class DataModule:
 	def __init__(self, mode: str, args: ELDArgs):
@@ -119,36 +120,41 @@ class DataModule:
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
 			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
 
-			self.initialize_vocabulary_tensor(self.train_corpus)
+			self.initialize_vocabulary_tensor(self.train_corpus, register_new_entity=True)
+			gl.logger.info("Train corpus initialized")
 			self.initialize_vocabulary_tensor(self.dev_corpus)
-
+			gl.logger.info("Dev corpus initialized")
+			flags.data_initialized = True
 			self.train_dataset = ELDDataset(self.train_corpus, args)
+			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
 			self.dev_dataset = ELDDataset(self.dev_corpus, args)
+			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
+			flags.data_initialized = True
 			self.test_dataset = ELDDataset(self.corpus, args)
 		self.new_entity_count = 0
-		flags.data_initialized = True
 
-	@TimeUtil.measure_time
+
+
 	def initialize_vocabulary_tensor(self, corpus: Corpus, register_new_entity: bool = False):
-		with TimeUtil.TimeChecker("ELD Data Initialize - Entity Registeration"):
-			if register_new_entity:
-				new_ents = set([])
-				for token in corpus.eld_items:
-					if token.entity not in self.e2i:
-						new_ents.add(token.entity)
-				ent_emb = torch.randn([len(new_ents), self.ee_dim]) # TODO 일단 random
-				self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.cat((self.entity_embedding.weight, ent_emb), dim=0))
-				for ent in new_ents:
-					self.e2i[ent] = len(self.e2i)
+
+		if register_new_entity:
+			new_ents = set([])
+			for token in corpus.eld_items:
+				if token.entity not in self.e2i:
+					new_ents.add(token.entity)
+			ent_emb = torch.randn([len(new_ents), self.ee_dim], dtype=torch.float64) # TODO 일단 random
+			self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.cat((self.entity_embedding.weight.double(), ent_emb), dim=0))
+			for ent in new_ents:
+				self.e2i[ent] = len(self.e2i)
 		for token in corpus.eld_items:
-			token.entity_embedding = self.entity_embedding(self.e2i[token.entity] if token.entity in self.e2i else 0)
+			token.entity_embedding = self.entity_embedding(torch.tensor(self.e2i[token.entity] if token.entity in self.e2i else 0))
 			if self.ce_flag:
-				token.char_embedding = torch.tensor(np.stack(self.character_embedding(self.c2i[x] if x in self.c2i else 0) for x in token.jamo))
+				token.char_embedding = self.character_embedding(torch.tensor([self.c2i[x] if x in self.c2i else 0 for x in token.jamo]))
 			if self.we_flag:
-				token.word_embedding = self.word_embedding(self.w2i[token.surface] if token.surface in self.w2i else 0)
+				token.word_embedding = self.word_embedding(torch.tensor(self.w2i[token.surface] if token.surface in self.w2i else 0))
 
 			if self.re_flag:
 				relations = []
@@ -158,10 +164,14 @@ class DataModule:
 					x.append(rel.score)
 					x.append(1 if rel.outgoing else -1)
 					relations.append(x[:])
-				relations = sorted(relations, key=lambda x: -x[-2])[:self.relation_limit]
-				token.relation_embedding = torch.tensor(np.stack(relations))
+				if len(relations) > 0:
+					relations = sorted(relations, key=lambda x: -x[-2])[:self.relation_limit]
+					token.relation_embedding = torch.tensor(np.stack(relations))
+				else:
+					token.relation_embedding = torch.zeros(1, self.re_dim)
 			if self.te_flag:
-				token.type_embedding = torch.tensor(one_hot(self.t2i[token.ne_type[:2]], self.te_dim))
+				ne_type = token.ne_type[:2].upper()
+				token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
 
 	def postprocess(self, corpus: Corpus, entity_label: List, make_copy=False) -> Corpus:
 		"""

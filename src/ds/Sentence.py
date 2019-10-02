@@ -118,9 +118,18 @@ class Sentence:
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
 				relation = entity["relation"] if "relation" in entity else None
 				new_ent = sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id, relation)
-				if "target" in entity:
-					new_ent.target = entity["target"]
-			except:
+				# exclusive for ELD
+				if "is_target_entity" in entity:
+					new_ent.target = entity["is_target_entity"]
+				else:
+					new_ent.target = False
+				if "ne_type" not in entity:
+					new_ent.ne_type = "NA"
+				if entity["ne_type"] != "namu":
+					new_ent.ne_type = entity["dataType"][:2]
+				else:
+					new_ent.ne_type = entity["ne_type"]
+			except Exception as e:
 				error_count += 1
 		# if error_count > 0:
 		# print(error_count, len(entities))
