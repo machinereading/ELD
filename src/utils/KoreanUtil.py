@@ -38,7 +38,7 @@ def decompose_sent(sentence, decompose=False):
 			result.append(i)
 		else:
 			result += i
-	return "".join(result)
+	return result
 
 def char_to_jamo(character, to_num=False, decompose=False):
 	x = ord(character)

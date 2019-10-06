@@ -6,8 +6,8 @@ from . import BiContextEncoder, CNNEncoder, SelfAttentionEncoder, FFNNEncoder
 
 # entity context emb + relation emb --> transE emb
 class SeparateEncoderBasedTransformer(nn.Module):
-	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
-	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
+	def __init__(self, use_character_embedding, use_word_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
+	             character_encoder, word_encoder, word_context_encoder, entity_context_encoder, relation_encoder, type_encoder,
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
 	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
 		super(SeparateEncoderBasedTransformer, self).__init__()
@@ -15,11 +15,12 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		# for encoder in [character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder]:
 		# 	assert encoder in legal, "Illegal encoder type: %s, must be one of %s" % (encoder, "/".join(legal))
 		self.ce_flag = use_character_embedding
-		self.we_flag = use_word_context_embedding
+		self.we_flag = use_word_embedding
+		self.wce_flag = use_word_context_embedding
 		self.ee_flag = use_entity_context_embedding
 		self.re_flag = use_relation_embedding
 		self.te_flag = use_type_embedding
-		assert self.ce_flag or self.we_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
+		assert self.ce_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
 
 		self.transformer_layer = 1
 
@@ -32,7 +33,7 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			if type(self.character_encoder) is CNNEncoder:
 				character_encoding_dim = self.character_encoder.out_size
 			self.transformer_input_dim += character_encoding_dim
-		if self.we_flag:
+		if self.wce_flag:
 			self.transformer_input_dim += word_encoding_dim * 2
 			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_encoding_dim)
 		if self.ee_flag:
@@ -54,6 +55,7 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		# self.transformer = nn.Sequential(*seq)
 		self.transformer = SelfAttentionEncoder(512, 4, 8)
 	def forward(self, character_batch, character_len,
+	            word_batch, word_len,
 	            left_word_context_batch, left_word_context_len,
 	            right_word_context_batch, right_word_context_len,
 	            left_entity_context_batch, left_entity_context_len,
@@ -65,9 +67,11 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		if self.ce_flag:
 			mid_features.append(self.character_encoder(character_batch))
 		if self.we_flag:
-			mid_features.append(self.word_context_encoder(left_word_context_batch, right_word_context_batch))
+			mid_features.append(self.word_encoder(word_batch))
+		if self.wce_flag:
+			mid_features.append(self.word_context_encoder(left_word_context_batch, right_word_context_batch, left_word_context_len, right_word_context_len))
 		if self.ee_flag:
-			mid_features.append(self.entity_context_encoder(left_entity_context_batch, right_entity_context_batch))
+			mid_features.append(self.entity_context_encoder(left_entity_context_batch, right_entity_context_batch, left_entity_context_len, right_entity_context_len))
 		if self.re_flag:
 			mid_features.append(self.relation_encoder(relation_batch))
 		if self.te_flag:

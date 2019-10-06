@@ -88,7 +88,7 @@ class Sentence:
 				new_token.relation.append(Relation.from_cw_form(r))
 		new_token_list = []
 		for token in self.tokens:
-			new_token_list += split_token(new_token, token)
+			new_token_list += [x for x in split_token(new_token, token) if x.surface != ""]
 			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[:-1]
 		for i, token in enumerate(new_token_list):
 			token.token_ind = i

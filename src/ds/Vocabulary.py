@@ -7,8 +7,8 @@ from ..utils.KoreanUtil import decompose_sent
 
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
-		self.surface = surface
-		self.surface_ind = -1
+		self.surface: str = surface
+		self.surface_ind: int = -1
 		self.is_entity = False
 		self.ne_type = None
 		self.entity = None
@@ -23,11 +23,12 @@ class Vocabulary:
 		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
 
 		# reserved for ELD
-		self.char_embedding: torch.Tensor = torch.zeros(1)
-		self.word_embedding: torch.Tensor = torch.zeros(1)  # embedding of self.surface
-		self.entity_embedding: torch.Tensor = torch.zeros(1)  # embedding of self.entity
-		self.relation_embedding: torch.Tensor = torch.zeros(1)
-		self.type_embedding: torch.Tensor = torch.zeros(1)
+		self.target = False
+		self.char_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
+		self.word_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)  # embedding of self.surface
+		self.entity_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)  # embedding of self.entity
+		self.relation_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
+		self.type_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
 		self.eld_tensor_initialized: bool = False
 		self.entity_label: str = ""  # entity id?
 		self.relation: List[Relation] = []
@@ -101,16 +102,18 @@ class Vocabulary:
 	def tensor(self):
 		"""
 		tensor input of eld module
-		:return: character embedding, left word embedding, right word embedding, left entity embedding, right entity embedding, relation embedding, type embedding
+		:return: character embedding, word embedding, left word embedding, right word embedding, left entity embedding, right entity embedding, relation embedding, type embedding
 		"""
+
 		return self.char_embedding, \
-		       torch.stack([x.word_embedding for x in self.lctx]), \
-		       torch.stack([x.word_embedding for x in self.rctx][::-1]), \
-		       torch.stack([x.entity_embedding for x in self.lctx_ent]), \
-		       torch.stack([x.entity_embedding for x in self.rctx_ent][::-1]), \
+		       self.word_embedding, \
+		       [x.word_embedding for x in self.lctx], \
+		       [x.word_embedding for x in self.rctx[::-1]], \
+		       [x.entity_embedding for x in self.lctx_ent], \
+		       [x.entity_embedding for x in self.rctx_ent[::-1]], \
 		       self.relation_embedding, \
 		       self.type_embedding, \
-		       self.entity_label # TODO 왜 여기서 에러가??
+		       self.entity_label
 
 	@property
 	def jamo(self):

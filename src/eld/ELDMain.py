@@ -27,6 +27,7 @@ class ELDMain:
 			self.epochs = args.epochs
 			self.eval_per_epoch = args.eval_per_epoch
 			self.model_path = args.model_path
+		self.device = args.device = "cuda" if torch.cuda.is_available() and mode != "demo" else "cpu"
 		args.mode = mode
 		self.data = DataModule(mode, args)
 		self.evaluator = Evaluator(args, self.data)
@@ -37,10 +38,10 @@ class ELDMain:
 			self.entity_embedding_dim = self.entity_embedding.size()[-1]
 		self.map_threshold = args.map_threshold
 		transformer_map = {"separate": SeparateEncoderBasedTransformer, "joint": JointTransformer}
-		self.transformer = transformer_map[args.transformer_mode](args.use_character_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-		                                                          args.character_encoder, args.word_encoder, args.entity_encoder, args.relation_encoder, args.type_encoder,
+		self.transformer = transformer_map[args.transformer_mode](args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+		                                                          args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
 		                                                          args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-		                                                          args.c_enc_dim, args.w_enc_dim, args.e_enc_dim, args.r_enc_dim, args.t_enc_dim)
+		                                                          args.c_enc_dim, args.w_enc_dim, args.e_enc_dim, args.r_enc_dim, args.t_enc_dim).to(self.device)
 
 		jsondump(args.to_json(), "models/eld/%s_args.json")
 		gl.logger.info("ELD Model load complete")
@@ -59,9 +60,9 @@ class ELDMain:
 			self.transformer.train()
 			for batch in train_batch:
 				optimizer.zero_grad()
-				ce, cl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to("cuda") if x is not None else None for x in batch[:-1]]  # label 빼고
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device) if x is not None else None for x in batch[:-1]]  # label 빼고
 				label = batch[-1]
-				pred = self.transformer(ce, cl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				loss = self.transformer.loss(pred, label)
 				loss.backward()
 				optimizer.step()
@@ -69,7 +70,7 @@ class ELDMain:
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
 				for batch in dev_batch:
-					ce, we, ee, re, te = [x.to("cuda") if x is not None else None for x in batch[:-1]]  # label 빼고
+					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to("cuda") if x is not None else None for x in batch[:-1]]  # label 빼고
 					pred = self.transformer(ce, we, ee, re, te)
 					label = batch[-1]
 					pred_corpus = self.data.postprocess(pred_corpus, pred, make_copy=True)

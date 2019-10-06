@@ -15,7 +15,7 @@ class BiContextEncoder(nn.Module):
 		self.rctx_model = module[model.lower()](input_size=input_dim, hidden_size=self.hidden_size, batch_first=True, bidirectional=False)
 		self.use_attention = use_attention
 
-	def forward(self, lctx, lctxl, rctx, rctxl):
+	def forward(self, lctx, lctxl, rctx, rctxl, *args):
 		lctx = rnn.pack_padded_sequence(lctx, lctxl, batch_first=True, enforce_sorted=False)
 		rctx = rnn.pack_padded_sequence(rctx, rctxl, batch_first=True, enforce_sorted=False)
 
@@ -47,7 +47,7 @@ class CNNEncoder(nn.Module):
 		)
 		self.out_size = out_channel * ((in_dim - kernel_size) // 2)
 
-	def forward(self, input_tensor): # batch * in_channel * L -> batch * out_channel * Lout
+	def forward(self, input_tensor, *args): # batch * in_channel * L -> batch * out_channel * Lout
 		emb = self.enc(input_tensor)
 		return emb.view(input_tensor.size()[0], -1)
 
@@ -57,7 +57,7 @@ class RNNEncoder(nn.Module):
 		self.hidden_size = output_dim
 		self.encoder = nn.LSTM(input_size=input_dim, hidden_size=self.hidden_size, batch_first=True, bidirectional=True)
 		self.use_attention = use_attention
-	def forward(self, tensor, length):
+	def forward(self, tensor, length, *args):
 		seq = rnn.pack_padded_sequence(tensor, length, batch_first=True, enforce_sorted=False)
 
 		enc, hidden = self.encoder(seq)
@@ -83,7 +83,7 @@ class SelfAttentionEncoder(nn.Module):
 		self.config = BertConfig(hidden_size=hidden_size, num_hidden_layers=hidden_layers, num_attention_heads=attention_heads, output_attentions=output_attentions)
 		self.encoder = BertSelfAttention(self.config)
 
-	def forward(self, hidden_state, attention_mask=None, head_mask=None):
+	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args):
 		if attention_mask is None:
 			attention_mask = torch.where(hidden_state != torch.zeros_like(hidden_state), torch.tensor([1.]), torch.tensor([0.]))
 		return self.encoder(hidden_state, attention_mask, head_mask)
@@ -92,7 +92,7 @@ class Ident(nn.Module):
 	def __init__(self, *args, **kwargs):
 		super(Ident, self).__init__()
 
-	def forward(self, tensor):
+	def forward(self, tensor, *args):
 		return tensor
 
 class FFNNEncoder(nn.Module):
@@ -102,5 +102,5 @@ class FFNNEncoder(nn.Module):
 			[nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout()] + [nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout()] * (num_layers - 2) + [nn.Linear(hidden_dim, output_dim), nn.ReLU(), nn.Dropout()]
 		self.nn = torch.nn.Sequential(*layers)
 
-	def forward(self, input_tensor):
+	def forward(self, input_tensor, *args):
 		return self.nn(input_tensor)

@@ -16,6 +16,7 @@ class ELDArgs(AbstractArgument):
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
 
 		self.use_character_embedding = True
+		self.use_word_embedding = True
 		self.use_word_context_embedding = True
 		self.use_entity_context_embedding = True
 		self.use_relation_embedding = True
@@ -24,7 +25,8 @@ class ELDArgs(AbstractArgument):
 
 		self.character_encoder = None
 		self.word_encoder = None
-		self.entity_encoder = None
+		self.word_context_encoder = None
+		self.entity_context_encoder = None
 		self.relation_encoder = None
 		self.type_encoder = None
 

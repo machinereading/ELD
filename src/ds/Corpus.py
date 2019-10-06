@@ -176,6 +176,7 @@ class Corpus:
 	def eld_items(self):
 		if len(self._eld_items) == 0:
 			for ent in self.entity_iter():
-				self._eld_items.append(ent)
+				if ent.target:
+					self._eld_items.append(ent)
 		return self._eld_items
 
