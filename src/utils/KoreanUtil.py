@@ -20,7 +20,7 @@ def is_korean_character(char):
 	return 0xAC00 <= ord(char) <= 0xD7A3
 
 def is_alphabet(char):
-	return 'a' <= ord(char) <= 'z' or 'A' <= ord(char) <= 'Z'
+	return 'a' <= char <= 'z' or 'A' <= char <= 'Z'
 
 def is_digit(char):
 	return '0' <= char <= '9'

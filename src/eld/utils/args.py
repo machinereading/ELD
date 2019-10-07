@@ -10,7 +10,7 @@ class ELDArgs(AbstractArgument):
 		self.dev_corpus_dir = "corpus/namu_eld_handtag_dev/"
 		self.test_corpus_dir = "corpus/namu_eld_handtag_test/"
 		self.epochs = 100
-		self.eval_per_epoch = 5
+		self.eval_per_epoch = 1
 
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
@@ -44,20 +44,25 @@ class ELDArgs(AbstractArgument):
 		self.redirects_path = "data/el/redirects.pickle"
 		# embedding config
 		self.relation_limit = 5
+		self.jamo_limit = 100
+		self.word_limit = 5
 
 		# encoding config
 		self.c_enc_dim = 50
-		self.w_enc_dim = 100
-		self.e_enc_dim = 100
+		self.w_enc_dim = 50
+		self.wc_enc_dim = 100
+		self.ec_enc_dim = 100
 		self.r_enc_dim = 100
 		self.t_enc_dim = 100
 
 		# values that will be modified in runtime
-		self.c_emb_dim = 50
+		self.c_emb_dim = 0
 		self.w_emb_dim = 0
 		self.e_emb_dim = 0
 		self.r_emb_dim = 0
 		self.t_emb_dim = 0
+
+
 
 		# if entity has different embedding, modify entity embedding (to average)
 		self.modify_entity_embedding = False

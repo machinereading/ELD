@@ -9,7 +9,8 @@ class SeparateEncoderBasedTransformer(nn.Module):
 	def __init__(self, use_character_embedding, use_word_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
 	             character_encoder, word_encoder, word_context_encoder, entity_context_encoder, relation_encoder, type_encoder,
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
-	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
+	             character_encoding_dim, word_encoding_dim, word_context_encoding_dim, entity_context_encoding_dim, relation_encoding_dim, type_encoding_dim,
+	             max_jamo, max_word, max_relation):
 		super(SeparateEncoderBasedTransformer, self).__init__()
 		# legal = encoder_map.keys()
 		# for encoder in [character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder]:
@@ -29,31 +30,41 @@ class SeparateEncoderBasedTransformer(nn.Module):
 
 		self.transformer_input_dim = 0
 		if self.ce_flag:
-			self.character_encoder = CNNEncoder(character_embedding_dim, 1, 2, 3)
+			self.character_encoder = CNNEncoder(character_embedding_dim, max_jamo, 2, 3)
 			if type(self.character_encoder) is CNNEncoder:
 				character_encoding_dim = self.character_encoder.out_size
 			self.transformer_input_dim += character_encoding_dim
+		if self.we_flag:
+			self.word_encoder = CNNEncoder(word_embedding_dim, max_word, 2, 3)
+			self.transformer_input_dim += word_encoding_dim
+			if type(self.word_encoder) is CNNEncoder:
+				word_encoding_dim = self.character_encoder.out_size
+			self.transformer_input_dim += word_encoding_dim
 		if self.wce_flag:
-			self.transformer_input_dim += word_encoding_dim * 2
-			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_encoding_dim)
+			self.transformer_input_dim += word_context_encoding_dim * 2
+			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_context_encoding_dim)
 		if self.ee_flag:
-			self.transformer_input_dim += entity_encoding_dim * 2
-			self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_encoding_dim)
+			self.transformer_input_dim += entity_context_encoding_dim * 2
+			self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_context_encoding_dim)
 		if self.re_flag:
-			self.relation_encoder = CNNEncoder(relation_embedding_dim, 1, 2, 3)
+			self.relation_encoder = CNNEncoder(relation_embedding_dim, max_relation, 2, 2)
 			if type(self.relation_encoder) is CNNEncoder:
 				relation_encoding_dim = self.relation_encoder.out_size
 			self.transformer_input_dim += relation_encoding_dim
 		if self.te_flag:
 			self.transformer_input_dim += type_encoding_dim
-			self.type_encdoer = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
+			self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
 
+		# TODO 모든 encoder의 output dimension을 똑같이 만들 것(padding 사용) -> self_attention에서 쓸 때 그렇게 해야 함
+		# TODO 여러가지 transformer 방식 만들 것
+		
 		# seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
 		# 	[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
 		# 		nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
 		# 		nn.Dropout()]
 		# self.transformer = nn.Sequential(*seq)
-		self.transformer = SelfAttentionEncoder(512, 4, 8)
+		
+		self.transformer = SelfAttentionEncoder(self.transformer_input_dim, 4, 4)
 	def forward(self, character_batch, character_len,
 	            word_batch, word_len,
 	            left_word_context_batch, left_word_context_len,
@@ -65,20 +76,23 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		mid_features = []
 
 		if self.ce_flag:
-			mid_features.append(self.character_encoder(character_batch))
+			ce = self.character_encoder(character_batch)
+			mid_features.append(ce)
 		if self.we_flag:
-			mid_features.append(self.word_encoder(word_batch))
+			we = self.word_encoder(word_batch)
+			mid_features.append(we)
 		if self.wce_flag:
-			mid_features.append(self.word_context_encoder(left_word_context_batch, right_word_context_batch, left_word_context_len, right_word_context_len))
+			mid_features.append(self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len))
 		if self.ee_flag:
-			mid_features.append(self.entity_context_encoder(left_entity_context_batch, right_entity_context_batch, left_entity_context_len, right_entity_context_len))
+			mid_features.append(self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len))
 		if self.re_flag:
 			mid_features.append(self.relation_encoder(relation_batch))
 		if self.te_flag:
-			mid_features.append(self.type_encoder(type_batch))
+			te = self.type_encoder(type_batch)
+			# print(self.type_encoder.out_size, te.size())
+			mid_features.append(te)
 
 		ffnn_input = torch.cat(mid_features, dim=-1)
-
 		ffnn_output = self.transformer(ffnn_input)
 		return ffnn_output
 

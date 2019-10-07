@@ -20,8 +20,8 @@ class ELDDataset(Dataset):
 		if not flags.data_initialized:
 			raise Exception("Tensor not initialized")
 		self.corpus = corpus
-		self.max_character_len_in_character = max(map(lambda x: len(x.jamo), self.corpus.token_iter()))
-		self.max_word_len_in_entity = max(map(lambda x: len(x.surface.split(" ")), self.corpus.token_iter()))
+		self.max_jamo_len_in_word = args.jamo_limit
+		self.max_word_len_in_entity = args.word_limit
 		self.max_token_len_in_sentence = max(map(len, self.corpus))
 		self.device = args.device
 		self.window_size = args.context_window_size
@@ -49,7 +49,7 @@ class ELDDataset(Dataset):
 		def pad(tensor, pad_size, emb_dim):
 			if tensor.dim() == 1:
 				tensor = tensor.unsqueeze(0)
-			return F.pad(tensor, [0, 0, 0, pad_size - tensor.size()[0]]).double()
+			return F.pad(tensor, [0, 0, 0, pad_size - tensor.size()[0]])
 			# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
 		target = self.corpus.eld_get_item(index)
 
@@ -57,32 +57,28 @@ class ELDDataset(Dataset):
 		cl = wl = lwl = rwl = lel = rel = rl = tl = 0
 		if self.ce_flag:
 			cl = ce.size()[0]
-			ce = pad(ce, self.max_character_len_in_character, self.ce_dim)
+			ce = pad(ce, self.max_jamo_len_in_word, self.ce_dim)
 		if self.we_flag:
 			wl = we.size()[0]
 			we = pad(we, self.max_word_len_in_entity, self.we_dim)
 		if self.wce_flag:
-			lwe = lwe[-self.window_size:]
-			rwe = rwe[:self.window_size]
 			if len(lwe) == 0:
-				lwe = [torch.zeros(1, self.we_dim, dtype=torch.double)]
+				lwe = [torch.zeros(1, self.we_dim, dtype=torch.float)]
 			if len(rwe) == 0:
-				rwe = [torch.zeros(1, self.we_dim, dtype=torch.double)]
-			lwe = torch.cat(lwe, dim=0).view(-1, self.we_dim)
-			rwe = torch.cat(rwe, dim=0).view(-1, self.we_dim)
+				rwe = [torch.zeros(1, self.we_dim, dtype=torch.float)]
+			lwe = torch.cat(lwe, dim=0).view(-1, self.we_dim)[-self.window_size:]
+			rwe = torch.cat(rwe, dim=0).view(-1, self.we_dim)[:self.window_size]
 			lwl = lwe.size()[0]
 			rwl = rwe.size()[0]
 			lwe = pad(lwe, self.window_size, self.we_dim)
 			rwe = pad(rwe, self.window_size, self.we_dim)
 		if self.ee_flag:
-			lee = lee[-self.window_size:]
-			ree = ree[:self.window_size]
 			if len(lee) == 0:
-				lee = [torch.zeros(1, self.ee_dim, dtype=torch.double)]
+				lee = [torch.zeros(1, self.ee_dim, dtype=torch.float)]
 			if len(ree) == 0:
-				ree = [torch.zeros(1, self.ee_dim, dtype=torch.double)]
-			lee = torch.cat(lee, dim=0).view(-1, self.ee_dim)
-			ree = torch.cat(ree, dim=0).view(-1, self.ee_dim)
+				ree = [torch.zeros(1, self.ee_dim, dtype=torch.float)]
+			lee = torch.cat(lee, dim=0).view(-1, self.ee_dim)[-self.window_size:]
+			ree = torch.cat(ree, dim=0).view(-1, self.ee_dim)[:self.window_size]
 			lel = lee.size()[0]
 			rel = ree.size()[0]
 			lee = pad(lee, self.window_size, self.ee_dim)
@@ -116,18 +112,18 @@ class DataModule:
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
-		self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).double())
+		self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float())
 		self.ee_dim = args.e_emb_dim = ee.shape[-1]
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
 		if self.ce_flag:
 			self.c2i = {w: i + 1 for i, w in enumerate(readfile(args.character_file))}
 			ce = np.load(args.character_embedding_file)
-			self.character_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ce.shape[-1]), *ce])).double())
-			self.ce_dim = args.c_emb_dim
+			self.character_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ce.shape[-1]), *ce])).float())
+			self.ce_dim = args.c_emb_dim = ce.shape[-1]
 		if self.we_flag:
 			self.w2i = {w: i + 1 for i, w in enumerate(readfile(args.word_file))}
 			we = np.load(args.word_embedding_file)
-			self.word_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(we.shape[-1]), *we])).double())
+			self.word_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(we.shape[-1]), *we])).float())
 			self.we_dim = args.w_emb_dim = we.shape[-1]
 		if self.re_flag:
 			# relation embedding 방법
@@ -135,7 +131,6 @@ class DataModule:
 			# 2. [incoming relation score, outgoing relation score, ...] -> BATCH * (WORD * 2)
 			self.r2i = {w: i for i, w in enumerate(readfile(args.relation_file))}
 			self.re_dim = args.r_emb_dim = len(self.r2i) + 3
-			print(self.re_dim)
 			self.relation_limit = args.relation_limit
 
 		if self.te_flag:  # one-hot?
@@ -156,6 +151,8 @@ class DataModule:
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
 			self.dev_dataset = ELDDataset(self.dev_corpus, args)
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
+			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
+			args.word_limit = self.train_dataset.max_word_len_in_entity
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
@@ -171,8 +168,8 @@ class DataModule:
 			for token in corpus.eld_items:
 				if token.entity not in self.e2i:
 					new_ents.add(token.entity)
-			ent_emb = torch.randn([len(new_ents), self.ee_dim], dtype=torch.double) # TODO 일단 random
-			self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.cat((self.entity_embedding.weight.double(), ent_emb), dim=0))
+			ent_emb = torch.randn([len(new_ents), self.ee_dim], dtype=torch.float) # TODO 일단 random
+			self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.cat((self.entity_embedding.weight, ent_emb), dim=0).float())
 			for ent in new_ents:
 				self.e2i[ent] = len(self.e2i)
 		for token in corpus.token_iter():
@@ -201,7 +198,7 @@ class DataModule:
 					ne_type = token.ne_type[:2].upper()
 					token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
 
-	def postprocess(self, corpus: Corpus, entity_label: List, make_copy=False) -> Corpus:
+	def postprocess(self, corpus: Corpus, entity_label: List) -> Corpus:
 		"""
 		corpus와 entity label을 받아서 corpus 내의 entity로 판명난 것들에 대해 entity명 및 타입 부여
 		:param corpus: corpus
@@ -210,8 +207,6 @@ class DataModule:
 		:return: entity가 표시된 corpus
 		"""
 
-		if make_copy:
-			corpus = deepcopy(corpus)
 		for entity, label in zip(corpus.entity_iter(), entity_label):
 			target_entity = self.i2e[label] if label > 0 else ("_%d" % self.new_entity_count) + entity.surface.replace(" ", "_")
 			entity.entity = target_entity
