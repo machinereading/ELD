@@ -73,7 +73,7 @@ class ELDMain:
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
 				for batch in dev_batch:
-					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-1]]  # label 빼고
+					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-1]]
 					pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 					label = batch[-1]
 					pred_corpus = self.data.postprocess(pred_corpus, pred)

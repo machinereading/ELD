@@ -22,40 +22,39 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		self.re_flag = use_relation_embedding
 		self.te_flag = use_type_embedding
 		assert self.ce_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
-
 		self.transformer_layer = 1
 
 		self.transformer_hidden_dim = 100
 		self.transformer_output_dim = entity_embedding_dim
 
 		self.transformer_input_dim = 0
+		separate_layers = len([x for x in [self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag] if x])
+		self.ce_dim = self.we_dim = self.wce_dim = self.ee_dim = self.re_dim = self.te_dim = 0
 		if self.ce_flag:
 			self.character_encoder = CNNEncoder(character_embedding_dim, max_jamo, 2, 3)
 			if type(self.character_encoder) is CNNEncoder:
 				character_encoding_dim = self.character_encoder.out_size
-			self.transformer_input_dim += character_encoding_dim
+			self.ce_dim = character_encoding_dim
 		if self.we_flag:
 			self.word_encoder = CNNEncoder(word_embedding_dim, max_word, 2, 3)
-			self.transformer_input_dim += word_encoding_dim
 			if type(self.word_encoder) is CNNEncoder:
-				word_encoding_dim = self.character_encoder.out_size
-			self.transformer_input_dim += word_encoding_dim
+				word_encoding_dim = self.word_encoder.out_size
+			self.we_dim = word_encoding_dim
 		if self.wce_flag:
-			self.transformer_input_dim += word_context_encoding_dim * 2
+			self.wce_dim = word_context_encoding_dim * 2
 			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_context_encoding_dim)
 		if self.ee_flag:
-			self.transformer_input_dim += entity_context_encoding_dim * 2
+			self.ee_dim = entity_context_encoding_dim * 2
 			self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_context_encoding_dim)
 		if self.re_flag:
 			self.relation_encoder = CNNEncoder(relation_embedding_dim, max_relation, 2, 2)
 			if type(self.relation_encoder) is CNNEncoder:
 				relation_encoding_dim = self.relation_encoder.out_size
-			self.transformer_input_dim += relation_encoding_dim
+			self.re_dim = relation_encoding_dim
 		if self.te_flag:
-			self.transformer_input_dim += type_encoding_dim
 			self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
+			self.te_dim = type_encoding_dim
 
-		# TODO 모든 encoder의 output dimension을 똑같이 만들 것(padding 사용) -> self_attention에서 쓸 때 그렇게 해야 함
 		# TODO 여러가지 transformer 방식 만들 것
 		
 		# seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
@@ -63,8 +62,12 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		# 		nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
 		# 		nn.Dropout()]
 		# self.transformer = nn.Sequential(*seq)
-		
-		self.transformer = SelfAttentionEncoder(self.transformer_input_dim, 4, 4)
+
+		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
+		self.transformer_input_dim = self.max_input_dim * separate_layers
+		self.transformer = SelfAttentionEncoder(self.max_input_dim, 4, 4, separate_layers)
+
+
 	def forward(self, character_batch, character_len,
 	            word_batch, word_len,
 	            left_word_context_batch, left_word_context_len,
@@ -77,21 +80,20 @@ class SeparateEncoderBasedTransformer(nn.Module):
 
 		if self.ce_flag:
 			ce = self.character_encoder(character_batch)
-			mid_features.append(ce)
+			mid_features.append(F.pad(ce, [0, self.max_input_dim - self.ce_dim]))
 		if self.we_flag:
 			we = self.word_encoder(word_batch)
-			mid_features.append(we)
+			mid_features.append(F.pad(we, [0, self.max_input_dim - self.we_dim]))
 		if self.wce_flag:
-			mid_features.append(self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len))
+			mid_features.append(F.pad(self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len), [0, self.max_input_dim - self.wce_dim]))
 		if self.ee_flag:
-			mid_features.append(self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len))
+			mid_features.append(F.pad(self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len), [0, self.max_input_dim - self.ee_dim]))
 		if self.re_flag:
-			mid_features.append(self.relation_encoder(relation_batch))
+			mid_features.append(F.pad(self.relation_encoder(relation_batch), [0, self.max_input_dim - self.re_dim]))
 		if self.te_flag:
 			te = self.type_encoder(type_batch)
 			# print(self.type_encoder.out_size, te.size())
-			mid_features.append(te)
-
+			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
 		ffnn_input = torch.cat(mid_features, dim=-1)
 		ffnn_output = self.transformer(ffnn_input)
 		return ffnn_output

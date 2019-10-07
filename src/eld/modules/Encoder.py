@@ -46,11 +46,10 @@ class CNNEncoder(nn.Module):
 				nn.Conv1d(in_channel, out_channel, kernel_size=kernel_size),
 				nn.MaxPool1d(2)
 		)
-		self.out_size = out_channel * ((in_dim - (kernel_size - 1) - 1) // 2 + 1)
+		self.out_size = ((out_channel * (in_dim - (kernel_size - 1))) - 2) // 2 + 1
 
 	def forward(self, input_tensor, *args):  # batch * in_channel * L -> batch * out_channel * Lout
-		emb = self.enc(input_tensor)
-		return emb.view(input_tensor.size()[0], -1)
+		return self.enc(input_tensor).view(input_tensor.size(0), -1)
 
 class RNNEncoder(nn.Module):
 	def __init__(self, input_dim, output_dim, use_attention=True):
@@ -79,19 +78,23 @@ class RNNEncoder(nn.Module):
 
 class SelfAttentionEncoder(nn.Module):
 	# using https://github.com/huggingface/pytorch-transformers
-	def __init__(self, hidden_size, hidden_layers, attention_heads, output_attentions=True):
+	def __init__(self, input_size, hidden_layers, num_attention_heads, separate_layers, output_attentions=True):
 		super(SelfAttentionEncoder, self).__init__()
 		# assert hidden_size % attention_heads == 0
-		self.config = BertConfig(hidden_size=hidden_size, num_hidden_layers=hidden_layers, num_attention_heads=attention_heads, output_attentions=output_attentions)
+		self.config = BertConfig(hidden_size=input_size, num_hidden_layers=hidden_layers, num_attention_heads=num_attention_heads, output_attentions=output_attentions)
+		self.input_size = input_size
+		self.separate = separate_layers
 		self.encoder = BertEncoder(self.config)
 
 	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args): # batch * embedding_size -> batch * ? * ?
 		# if attention_mask is None:
 		# 	attention_mask = torch.where(hidden_state != torch.zeros_like(hidden_state), torch.tensor([1.]), torch.tensor([0.]))
-		if attention_mask is None:
-			attention_mask = torch.ones_like(hidden_state)
+
+		hidden_state = hidden_state.view(-1, self.separate, self.input_size)
 		if head_mask is None:
 			head_mask = [None] * self.config.num_hidden_layers
+		if attention_mask is None:
+			attention_mask = torch.ones_like(hidden_state).unsqueeze(1).unsqueeze(2)
 		print(hidden_state.size())
 		return self.encoder(hidden_state, attention_mask, head_mask)
 
