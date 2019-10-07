@@ -110,6 +110,7 @@ class DataModule:
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
+		self.oe2i = {w: -i-1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float())

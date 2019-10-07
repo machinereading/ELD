@@ -31,6 +31,7 @@ class ELDArgs(AbstractArgument):
 		self.type_encoder = None
 
 		# data path config
+		self.out_kb_entity_file = None
 		self.character_file = "data/eld/char"
 		self.character_embedding_file = "data/eld/character_embedding.npy"
 		self.word_file = "data/embedding/wiki_stem.word"
