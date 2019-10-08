@@ -78,7 +78,8 @@ class ELDArgs(AbstractArgument):
 
 		# prediction config
 		self.out_kb_threshold = 0.5
-		self.new_ent_threshold = 0.5
+		self.new_ent_threshold = 0.3
+		self.register_policy = "fifo" # one of fifo, pre_cluster
 
 	@property
 	def model_path(self):

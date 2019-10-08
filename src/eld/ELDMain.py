@@ -62,6 +62,7 @@ class ELDMain:
 	def train(self):
 		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=32, shuffle=True, num_workers=4)
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=32, shuffle=False, num_workers=4)
+		dev_corpus = self.data.dev_corpus
 		tqdmloop = tqdm(range(1, self.epochs + 1))
 		optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-4, weight_decay=1e-4)
 		max_score = 0
@@ -75,31 +76,39 @@ class ELDMain:
 			for batch in train_batch:
 				optimizer.zero_grad()
 				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-3]]
-				new_entity_flag, ee_label, eidx = [x.to(self.device) for x in batch[-3:]]
+				new_entity_flag, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
 				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				loss_val = loss(kb_score, pred, new_entity_flag, ee_label)
 				loss_val.backward()
 				optimizer.step()
 				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, loss_val))
 				ne.append(new_entity_flag)
-				ei.append(eidx)
+				ei.append(gold_entity_idx)
 				pr.append(pred)
 			self.data.update_no_kb_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
+				flags = []
+				pred_entity_idxs = []
+				new_entity_flags = []
+				gold_entity_idxs = []
 				for batch in dev_batch:
 					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
 					kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-					new_entity_flag, ee_label, eidx = [x.to(self.device) for x in batch[-3:]]
-					entity_idx = self.data.predict_entity(kb_score, pred)
-					score = self.evaluator.evaluate()
-					gl.logger.info("Epoch %d - Score %.4f" % (epoch, score))
-					if score > max_score:
-						max_score = score
-						max_score_epoch = epoch
-						torch.save(self.transformer.state_dict(), self.model_path)
-					gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
+					new_entity_flag, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
+					flag, entity_idx = self.data.predict_entity(kb_score, pred)
+					flags.append(flag)
+					pred_entity_idxs.append(entity_idx)
+					new_entity_flags.append(new_entity_flag)
+					gold_entity_idxs.append(gold_entity_idx)
+				score = self.evaluator.evaluate(dev_corpus, torch.tensor(flags).view(-1), torch.cat(pred_entity_idxs), torch.cat(new_entity_flags), torch.cat(gold_entity_idxs))
+				gl.logger.info("Epoch %d - Score %.4f" % (epoch, score))
+				if score > max_score:
+					max_score = score
+					max_score_epoch = epoch
+					torch.save(self.transformer.state_dict(), self.model_path)
+				gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
 
 	def predict(self, data, register=True):
 		self.transformer.eval()

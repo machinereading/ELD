@@ -2,6 +2,8 @@ from copy import deepcopy
 import os
 
 import math
+from functools import reduce
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -110,10 +112,11 @@ class DataModule:
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
-
+		self.new_entity_idx = {}
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float()
+		self.new_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
 		self.ee_dim = args.e_emb_dim = ee.shape[-1]
 
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
@@ -142,7 +145,7 @@ class DataModule:
 		# load corpus and se
 		if mode == "train":
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
-			self.out_kb_entity_embedding = torch.zeros([len(self.oe2i), self.ee_dim], dtype=torch.float)
+
 
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
 			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
@@ -166,7 +169,11 @@ class DataModule:
 		self.new_entity_count = 0
 		self.out_kb_threhold = args.out_kb_threshold
 		self.new_ent_threshold = args.new_ent_threshold
+		self.register_policy = args.register_policy
+		self.init_check()
 
+	def init_check(self):
+		assert self.register_policy.lower() in ["fifo", "pre_cluster"]
 
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		for token in corpus.token_iter():
@@ -204,7 +211,7 @@ class DataModule:
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = -1
 					token.target = False
-					# TODO entity embedding fix
+					# TODO entity embedding fix 지금은 몇개 비어있음
 					# raise Exception("Entity not in both dbpedia and namu", token.entity)
 
 	def update_no_kb_entity_embedding(self, tf, idx, emb):
@@ -217,7 +224,7 @@ class DataModule:
 					emb_map[i] = []
 				emb_map[i].append(e)
 		for k, v in emb_map.items():
-			self.out_kb_entity_embedding[k] = sum(v) / len(v)
+			self.new_entity_embedding[k] = sum(v) / len(v)
 
 	def postprocess(self, corpus: Corpus, entity_label: List) -> Corpus:
 		"""
@@ -234,12 +241,84 @@ class DataModule:
 		return corpus
 
 	def predict_entity(self, new_ent, pred_embedding) -> List[int]:
+		# batchwise prediction, with entity registeration
 		result = []
-		for i, e in zip(new_ent, pred_embedding):
+		flags = []
+		add_idx_queue = []
+		add_tensor_queue = []
+		for idx, (i, e) in enumerate(zip(new_ent, pred_embedding)):
 			if type(i) is torch.Tensor:
 				i = i.item()
-			target_emb = self.out_kb_entity_embedding if i > self.out_kb_threhold else self.entity_embedding
-			cos_sim = F.cosine_similarity(e.expand_as(target_emb), target_emb)
-			result.append(torch.argmax(cos_sim, dim=-1).item())
-			# TODO 새로운 entity 등록하는거랑 evaluate에서 새로운 entity와 정답 mapping하기
-		return result
+			flag = i > self.out_kb_threhold
+			target_emb = self.new_entity_embedding if flag else self.entity_embedding
+			if target_emb.size(0) > 0:
+				cos_sim = F.pairwise_distance(e.expand_as(target_emb), target_emb)
+				max_sim = torch.max(cos_sim)
+				pred_idx = torch.argmax(cos_sim, dim=-1).item()
+			else:
+				max_sim = 0
+				pred_idx = -1
+			if flag:
+				if max_sim < self.new_ent_threshold:
+					if self.register_policy == "fifo": # register immediately
+						pred_idx = self.new_entity_embedding.size(0)
+						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding))
+						result.append(pred_idx)
+					elif self.register_policy == "pre_cluster": # register after clustering batch wise
+						add_idx_queue.append(idx)
+						add_tensor_queue.append(e)
+						result.append(-2)
+				result.append(pred_idx)
+			else:
+				result.append(pred_idx)
+			flags.append(flag)
+		if len(add_tensor_queue) > 0:
+			len_before_register = self.new_entity_embedding.size(0)
+			cluster_info, cluster_tensor = hierarchical_clustering(torch.stack(add_tensor_queue))
+			for i, idx in enumerate(add_idx_queue):
+				for x, c in enumerate(cluster_info):
+					if i in c:
+						result[idx] = len_before_register + x
+			self.new_entity_embedding = torch.cat((self.new_entity_embedding, *cluster_tensor))
+		assert len([x for x in result if x == -2]) == 0
+		return flags, result
+
+def hierarchical_clustering(tensors: torch.Tensor):
+	iteration = 0
+	clustering_result = []
+	clustering_tensors = []
+	sim_tensors = tensors.clone()
+	original_len = tensors.size(0)
+	emb_dim = tensors.size(1)
+	clustered_idx = []
+	while True:
+		iteration += 1
+		iteration_max_sim = 0
+		iteration_max_pair = None
+		for i, tensor in enumerate(sim_tensors[:-1]):
+			if i in clustered_idx: continue
+			target_tensors = sim_tensors[i+1:]
+			sim = F.pairwise_distance(tensor.expand_as(target_tensors), target_tensors)
+			max_val = torch.max(sim).item()
+			max_idx = torch.argmax(sim).item()
+			if max_val > iteration_max_sim:
+				iteration_max_sim = max_val
+				iteration_max_pair = [i, max_idx + i + 1]
+		if iteration_max_sim > 0.5:
+			if iteration_max_pair[1] >= original_len:
+				clustering_result[iteration_max_pair[1] - original_len].append(iteration_max_pair[0])
+				clustering_tensors[iteration_max_pair[1] - original_len].append(tensors[iteration_max_pair[0]])
+			else:
+				clustering_result.append(iteration_max_pair)
+				clustering_tensors.append([tensors[x] for x in iteration_max_pair])
+			clustered_idx = reduce(lambda x, y: x + y, clustering_result)
+			for item in clustered_idx:
+				sim_tensors[item] = torch.full([emb_dim], 100, dtype=torch.float)
+			sim_tensors = torch.cat((sim_tensors, *[sum(x) / len(x) for x in clustering_tensors]))
+		else:
+			break
+	for item in range(original_len):
+		if item not in clustered_idx:
+			clustering_result.append([item])
+			clustering_tensors.append([tensors[item]])
+	return clustering_result, [sum(x) / len(x) for x in clustering_tensors]
