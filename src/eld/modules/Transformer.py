@@ -22,9 +22,9 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		self.re_flag = use_relation_embedding
 		self.te_flag = use_type_embedding
 		assert self.ce_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
-		self.transformer_layer = 1
+		self.transformer_layer = 2
 
-		self.transformer_hidden_dim = 100
+		self.transformer_hidden_dim = 300
 		self.transformer_output_dim = entity_embedding_dim
 
 		self.transformer_input_dim = 0
@@ -56,17 +56,19 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			self.te_dim = type_encoding_dim
 
 		# TODO 여러가지 transformer 방식 만들 것
-		
-		# seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
-		# 	[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
-		# 		nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
-		# 		nn.Dropout()]
-		# self.transformer = nn.Sequential(*seq)
-
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
 		self.transformer_input_dim = self.max_input_dim * separate_layers
-		self.transformer = SelfAttentionEncoder(self.max_input_dim, 4, 4, separate_layers)
 
+		seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
+			[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
+				nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
+				nn.Dropout()]
+		self.transformer = nn.Sequential(*seq)
+
+		# self.transformer = SelfAttentionEncoder(self.max_input_dim, 4, 4, separate_layers)
+
+		self.encoder_output = None
+		self.binary_encoder = nn.Linear(self.transformer_output_dim, 1)
 
 	def forward(self, character_batch, character_len,
 	            word_batch, word_len,
@@ -96,11 +98,11 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
 		ffnn_input = torch.cat(mid_features, dim=-1)
 		ffnn_output = self.transformer(ffnn_input)
-		return ffnn_output
+		binary_output = self.binary_encoder(ffnn_output)
+		return binary_output, ffnn_output
 
 	# noinspection PyMethodMayBeStatic
-	def loss(self, pred, label):
-		return F.mse_loss(pred, label)
+
 
 class JointTransformer(nn.Module):
 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
@@ -108,8 +110,6 @@ class JointTransformer(nn.Module):
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
 	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
 		super(JointTransformer, self).__init__()
-
-
 
 	def forward(self, character_batch, character_len,
 	            left_word_context_batch, left_word_context_len,

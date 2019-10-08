@@ -8,6 +8,15 @@ from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump
 
+def loss(kb_score, pred, new_entity_flag, label):
+	binary_loss = F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
+
+	in_kb_loss = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
+
+	out_kb_loss = sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)]) # zero tensor는 일단 거름
+
+	return binary_loss + in_kb_loss + out_kb_loss
+
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
 		assert mode in ["train", "eval", "demo"]
@@ -38,15 +47,16 @@ class ELDMain:
 		if mode == "test":
 			self.entity_embedding = self.data.entity_embedding.weight
 			self.entity_embedding_dim = self.entity_embedding.size()[-1]
-		self.map_threshold = args.map_threshold
+		self.map_threshold = args.out_kb_threshold
 		transformer_map = {"separate": SeparateEncoderBasedTransformer, "joint": JointTransformer}
-		self.transformer = transformer_map[args.transformer_mode](args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-		                                                          args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-		                                                          args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-		                                                          args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-		                                                          args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+		self.transformer = transformer_map[args.transformer_mode] \
+			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
 
-		jsondump(args.to_json(), "models/eld/%s_args.json")
+		jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
 		gl.logger.info("ELD Model load complete")
 
 	def train(self):
@@ -54,30 +64,36 @@ class ELDMain:
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=32, shuffle=False, num_workers=4)
 		tqdmloop = tqdm(range(1, self.epochs + 1))
 		optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-4, weight_decay=1e-4)
-		pred_corpus = self.data.train_corpus
-		gold_corpus = self.data.dev_corpus
 		max_score = 0
 		max_score_epoch = 0
 		gl.logger.info("Train start")
 		for epoch in tqdmloop:
 			self.transformer.train()
+			ne = []
+			ei = []
+			pr = []
 			for batch in train_batch:
 				optimizer.zero_grad()
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-1]]  # label 빼고
-				label = batch[-1]
-				pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-				loss = self.transformer.loss(pred, label)
-				loss.backward()
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-3]]
+				new_entity_flag, ee_label, eidx = [x.to(self.device) for x in batch[-3:]]
+				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				loss_val = loss(kb_score, pred, new_entity_flag, ee_label)
+				loss_val.backward()
 				optimizer.step()
-				tqdmloop.set_description("Epoch %d, Loss %.4f" % (epoch, loss))
+				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, loss_val))
+				ne.append(new_entity_flag)
+				ei.append(eidx)
+				pr.append(pred)
+			self.data.update_no_kb_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
+
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
 				for batch in dev_batch:
-					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-1]]
-					pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-					label = batch[-1]
-					pred_corpus = self.data.postprocess(pred_corpus, pred)
-					score = self.evaluator.evaluate(gold_corpus, pred_corpus)
+					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
+					kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+					new_entity_flag, ee_label, eidx = [x.to(self.device) for x in batch[-3:]]
+					entity_idx = self.data.predict_entity(kb_score, pred)
+					score = self.evaluator.evaluate()
 					gl.logger.info("Epoch %d - Score %.4f" % (epoch, score))
 					if score > max_score:
 						max_score = score
@@ -86,6 +102,7 @@ class ELDMain:
 					gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
 
 	def predict(self, data, register=True):
+		self.transformer.eval()
 		pred_embedding = self.transformer(data)
 		pred_embedding.repeat(len(self.entity_index))
 		cos_sim = F.cosine_similarity(pred_embedding, self.entity_embedding)

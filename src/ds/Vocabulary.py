@@ -8,11 +8,11 @@ from ..utils.KoreanUtil import decompose_sent
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface: str = surface
-		self.surface_ind: int = -1
+		self.surface_idx: int = -1
 		self.is_entity = False
 		self.ne_type = None
 		self.entity = None
-		self.entity_ind = -1
+		self.entity_idx = -1
 		self.entity_in_kb = False
 		self.char_ind = char_ind
 		self.token_ind = token_ind
@@ -30,7 +30,8 @@ class Vocabulary:
 		self.relation_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
 		self.type_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
 		self.eld_tensor_initialized: bool = False
-		self.entity_label: str = ""  # entity id?
+		self.entity_label_embedding: torch.Tensor = None
+		self.entity_label_idx: int = -1
 		self.relation: List[Relation] = []
 
 		# some properties that will be initialized later
@@ -113,8 +114,14 @@ class Vocabulary:
 		       [x.entity_embedding for x in self.rctx_ent[::-1]], \
 		       self.relation_embedding, \
 		       self.type_embedding, \
-		       self.entity_label
+		       self.is_new_entity, \
+		       self.entity_label_embedding,\
+			   self.entity_label_idx
 
 	@property
 	def jamo(self):
 		return decompose_sent(self.surface)
+
+	@property
+	def is_new_entity(self):
+		return self.entity.startswith("namu_")

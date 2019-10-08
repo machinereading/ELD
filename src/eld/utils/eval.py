@@ -9,8 +9,10 @@ class Evaluator:
 		self.ent_list = data.ent_list
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+		self.entity_embedding = data.entity_embedding
+		self.out_kb_entity_embedding = data.out_kb_entity_embedding
 
-	def evaluate(self, gold: Corpus, pred: Corpus):
+	def evaluate(self, in_kb_pred, pred_embedding, in_kb_label, index):
 		# in-kb items
 		in_tp = 0
 		in_gold = 0

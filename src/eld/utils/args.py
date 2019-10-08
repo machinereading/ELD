@@ -31,18 +31,19 @@ class ELDArgs(AbstractArgument):
 		self.type_encoder = None
 
 		# data path config
-		self.out_kb_entity_file = None
+		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"
 		self.character_file = "data/eld/char"
 		self.character_embedding_file = "data/eld/character_embedding.npy"
 		self.word_file = "data/embedding/wiki_stem.word"
 		self.word_embedding_file = "data/embedding/wiki_stem.npy"
-		self.entity_file = "data/eld/entities"
-		self.entity_embedding_file = "data/eld/entity_embeddings.npy"
-		self.relation_file = "data/eld/relations"  # 그냥 정의문
-		self.type_file = "data/eld/types"  # 정의문
+		self.entity_file = "data/embedding/entity_kbox_gl.word"
+		self.entity_embedding_file = "data/embedding/entity_kbox_gl.npy"
+		self.relation_file = "data/eld/relations"
+		self.type_file = "data/eld/types"
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
+
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100
@@ -76,7 +77,8 @@ class ELDArgs(AbstractArgument):
 		self.use_relation_candidates = False
 
 		# prediction config
-		self.map_threshold = 0.5
+		self.out_kb_threshold = 0.5
+		self.new_ent_threshold = 0.5
 
 	@property
 	def model_path(self):

@@ -53,7 +53,7 @@ class ELDDataset(Dataset):
 			# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
 		target = self.corpus.eld_get_item(index)
 
-		ce, we, lwe, rwe, lee, ree, re, te, lab = target.tensor
+		ce, we, lwe, rwe, lee, ree, re, te, new_ent, ee_label, eidx = target.tensor
 		cl = wl = lwl = rwl = lel = rel = rl = tl = 0
 		if self.ce_flag:
 			cl = ce.size()[0]
@@ -91,7 +91,7 @@ class ELDDataset(Dataset):
 			te = target.type_embedding
 			tl = te.size()[0]
 
-		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, lab
+		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx
 
 	def __len__(self):
 		return self.corpus.eld_len
@@ -110,11 +110,12 @@ class DataModule:
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
-		self.oe2i = {w: -i-1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
+
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
-		self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float())
+		self.entity_embedding = torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float()
 		self.ee_dim = args.e_emb_dim = ee.shape[-1]
+
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
 		if self.ce_flag:
 			self.c2i = {w: i + 1 for i, w in enumerate(readfile(args.character_file))}
@@ -140,10 +141,13 @@ class DataModule:
 
 		# load corpus and se
 		if mode == "train":
+			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
+			self.out_kb_entity_embedding = torch.zeros([len(self.oe2i), self.ee_dim], dtype=torch.float)
+
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
 			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
 
-			self.initialize_vocabulary_tensor(self.train_corpus, register_new_entity=True)
+			self.initialize_vocabulary_tensor(self.train_corpus)
 			gl.logger.info("Train corpus initialized")
 			self.initialize_vocabulary_tensor(self.dev_corpus)
 			gl.logger.info("Dev corpus initialized")
@@ -160,22 +164,14 @@ class DataModule:
 			flags.data_initialized = True
 			self.test_dataset = ELDDataset(self.corpus, args)
 		self.new_entity_count = 0
+		self.out_kb_threhold = args.out_kb_threshold
+		self.new_ent_threshold = args.new_ent_threshold
 
 
-
-	def initialize_vocabulary_tensor(self, corpus: Corpus, register_new_entity: bool = False):
-		if register_new_entity:
-			new_ents = set([])
-			for token in corpus.eld_items:
-				if token.entity not in self.e2i:
-					new_ents.add(token.entity)
-			ent_emb = torch.randn([len(new_ents), self.ee_dim], dtype=torch.float) # TODO 일단 random
-			self.entity_embedding = torch.nn.Embedding.from_pretrained(torch.cat((self.entity_embedding.weight, ent_emb), dim=0).float())
-			for ent in new_ents:
-				self.e2i[ent] = len(self.e2i)
+	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		for token in corpus.token_iter():
 			if token.is_entity:
-				token.entity_embedding = self.entity_embedding(torch.tensor(self.e2i[token.entity] if token.entity in self.e2i else 0))
+				token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
 			if self.ce_flag:
 				token.char_embedding = self.character_embedding(torch.tensor([self.c2i[x] if x in self.c2i else 0 for x in token.jamo]))
 			if self.we_flag:
@@ -198,13 +194,36 @@ class DataModule:
 				if self.te_flag:
 					ne_type = token.ne_type[:2].upper()
 					token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
+				if token.entity in self.e2i:
+					token.entity_label_embedding = self.entity_embedding[self.e2i[token.entity]]
+					token.entity_label_idx = self.e2i[token.entity]
+				elif token.entity in self.oe2i:
+					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
+					token.entity_label_idx = self.oe2i[token.entity]
+				else:
+					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
+					token.entity_label_idx = -1
+					token.target = False
+					# TODO entity embedding fix
+					# raise Exception("Entity not in both dbpedia and namu", token.entity)
+
+	def update_no_kb_entity_embedding(self, tf, idx, emb):
+		emb_map = {}
+		for t, i, e in zip(tf, idx, emb):
+			i = i.item()
+			if t.item():
+				print(t.item(), i)
+				if i not in emb_map:
+					emb_map[i] = []
+				emb_map[i].append(e)
+		for k, v in emb_map.items():
+			self.out_kb_entity_embedding[k] = sum(v) / len(v)
 
 	def postprocess(self, corpus: Corpus, entity_label: List) -> Corpus:
 		"""
 		corpus와 entity label을 받아서 corpus 내의 entity로 판명난 것들에 대해 entity명 및 타입 부여
 		:param corpus: corpus
 		:param entity_label: list of int
-		:param make_copy: True일 경우 corpus를 deepcopy해서 복사본을 만듬. 원본이 필요한 경우 사용
 		:return: entity가 표시된 corpus
 		"""
 
@@ -213,3 +232,14 @@ class DataModule:
 			entity.entity = target_entity
 			self.new_entity_count += 1
 		return corpus
+
+	def predict_entity(self, new_ent, pred_embedding) -> List[int]:
+		result = []
+		for i, e in zip(new_ent, pred_embedding):
+			if type(i) is torch.Tensor:
+				i = i.item()
+			target_emb = self.out_kb_entity_embedding if i > self.out_kb_threhold else self.entity_embedding
+			cos_sim = F.cosine_similarity(e.expand_as(target_emb), target_emb)
+			result.append(torch.argmax(cos_sim, dim=-1).item())
+			# TODO 새로운 entity 등록하는거랑 evaluate에서 새로운 entity와 정답 mapping하기
+		return result
