@@ -215,8 +215,8 @@ class DataModule:
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = -1
 					token.target = False
-			# TODO entity embedding fix 지금은 몇개 비어있음
-			# raise Exception("Entity not in both dbpedia and namu", token.entity)
+		# TODO entity embedding fix 지금은 몇개 비어있음
+		# raise Exception("Entity not in both dbpedia and namu", token.entity)
 		return error_count
 
 	def update_no_kb_entity_embedding(self, new_entity_flag, gold_idx, pred_emb):
@@ -244,21 +244,24 @@ class DataModule:
 	def reset_new_entity(self):
 		self.new_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
 
-	def predict_entity(self, new_ent, pred_embedding):
+	def predict_entity(self, new_ent_pred, pred_embedding):
 		# batchwise prediction, with entity registeration
 		result = []
 		new_ent_flags = []
 		add_idx_queue = []
 		add_tensor_queue = []
-		for idx, (i, e) in enumerate(zip(new_ent, pred_embedding)):
+		for idx, (i, e) in enumerate(zip(new_ent_pred, pred_embedding)):
 			if type(i) is torch.Tensor:
 				i = i.item()
 			new_ent_flag = i > self.out_kb_threshold
 			target_emb = self.new_entity_embedding if new_ent_flag else self.entity_embedding
 			if target_emb.size(0) > 0:
-				cos_sim = F.pairwise_distance(e.expand_as(target_emb).to(self.device), target_emb.to(self.device))
-				max_sim = torch.max(cos_sim)
-				pred_idx = torch.argmax(cos_sim, dim=-1).item()
+				expanded = e.expand_as(target_emb).to(self.device)
+				dist = F.pairwise_distance(expanded, target_emb.to(self.device))
+				cos_sim = F.cosine_similarity(expanded, target_emb.to(self.device))
+
+				max_sim = torch.min(dist + cos_sim)
+				pred_idx = torch.argmin(dist + cos_sim, dim=-1).item()
 			else:
 				max_sim = 0
 				pred_idx = -1
@@ -294,18 +297,19 @@ class DataModule:
 				"Total score"         : evaluation_result[1],
 				"In-KB score"         : evaluation_result[2],
 				"Out-KB score"        : evaluation_result[3],
-				"No-surface score"    : evaluation_result[4]
+				"No-surface score"    : evaluation_result[4],
+				"Clustering score"    : evaluation_result[5]
 			},
 			"result": []
 		}
-		mapping_result = evaluation_result[5]
+		mapping_result = evaluation_result[-1]
 		for e, pn, pi, ln, li in zip(corpus.eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
 			pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
 			result["result"].append({
-				"Entity": e.entity,
-				"NewEntPred": pn,
+				"Entity"     : e.entity,
+				"NewEntPred" : pn,
 				"NewEntLabel": ln,
-				"EntPred": self.i2e[pi] if pn else self.i2oe[mapping_result[pi]]
+				"EntPred"    : self.i2e[pi] if pn else self.i2oe[mapping_result[pi]]
 			})
 		return result
 

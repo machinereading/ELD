@@ -63,4 +63,4 @@ class Evaluator:
 		exist_p, exist_r, exist_f1, exist_support = precision_recall_fscore_support([x.item() for x, y in zip(idx_label, new_ent_flags) if not y], [x.item() for x, y in zip(idx_pred, new_ent_flags) if not y], average="micro")
 		new_p, new_r, new_f1, new_support = precision_recall_fscore_support([x.item() for x, y in zip(idx_label, new_ent_flags) if y], [x.item() for x, y in zip(idx_pred, new_ent_flags) if y], average="micro")
 		no_surface_p, no_surface_r, no_surface_f1, _ = precision_recall_fscore_support([x.item() for x, y in zip(idx_label, in_surface_dict_flags) if not y], [x.item() for x, y in zip(idx_pred, in_surface_dict_flags) if not y], average="micro")
-		return (in_kb_prec, in_kb_rec, in_kb_f1), (total_p, total_r, total_f1), (exist_p, exist_r, exist_f1), (new_p, new_r, new_f1), (no_surface_p, no_surface_r, no_surface_f1), mapping_result
+		return (in_kb_prec, in_kb_rec, in_kb_f1), (total_p, total_r, total_f1), (exist_p, exist_r, exist_f1), (new_p, new_r, new_f1), (no_surface_p, no_surface_r, no_surface_f1), cluster_score_ari, mapping_result

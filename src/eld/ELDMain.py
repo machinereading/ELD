@@ -105,20 +105,22 @@ class ELDMain:
 					pred_entity_idxs += entity_idx
 					new_entity_labels.append(new_entity_label)
 					gold_entity_idxs.append(gold_entity_idx)
-				kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
-				                                                                                                                         torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
+				kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
+				                                                                                                                                        torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
 				for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
 				                              ["Total", total_score],
 				                              ["in-KB", in_kb_score],
 				                              ["out KB", out_kb_score],
 				                              ["No surface", no_surface_score]]:
 					gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
+				gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
 				if total_score[-1] > max_score:
 					max_score = total_score[-1]
 					max_score_epoch = epoch
 					torch.save(self.transformer.state_dict(), self.model_path)
 				gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
-				jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(), (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, mapping_result)), "runs/eld/%s_%d.json" % (self.model_name, epoch))
+				jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+				                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s_%d.json" % (self.model_name, epoch))
 
 	def predict(self, data, register=True):
 		self.transformer.eval()
