@@ -1,21 +1,15 @@
-from copy import deepcopy
-import os
-
-import math
-from functools import reduce
-
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 import torch.nn.functional as F
-from typing import List
+from functools import reduce
+from torch.utils.data import Dataset
 
 from src.utils import KoreanUtil
 from . import flags
 from .args import ELDArgs
+from ... import GlobalValues as gl
 from ...ds import *
 from ...utils import readfile, pickleload, TimeUtil, one_hot
-from ... import GlobalValues as gl
 
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
@@ -52,7 +46,8 @@ class ELDDataset(Dataset):
 			if tensor.dim() == 1:
 				tensor = tensor.unsqueeze(0)
 			return F.pad(tensor, [0, 0, 0, pad_size - tensor.size()[0]])
-			# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
+
+		# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
 		target = self.corpus.eld_get_item(index)
 
 		ce, we, lwe, rwe, lee, ree, re, te, new_ent, ee_label, eidx = target.tensor
@@ -96,12 +91,15 @@ class ELDDataset(Dataset):
 		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx
 
 	def __len__(self):
-		return self.corpus.eld_len
+		limit = 99999
+		return min(self.corpus.eld_len, limit)  # todo limit 지우기
 
 class DataModule:
 	def __init__(self, mode: str, args: ELDArgs):
 		# index 0: not in dictionary
 		# initialize embedding
+		self.mode = mode
+		self.device = args.device
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding
 		self.ee_flag = args.use_entity_context_embedding
@@ -144,16 +142,18 @@ class DataModule:
 
 		# load corpus and se
 		if mode == "train":
-			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
-
+			self.oe2i = {w: i for i, w in enumerate(readfile(args.out_kb_entity_file))}
+			self.i2oe = {v: k for k, v in self.oe2i.items()}
+			self.oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 
 			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
-			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
+			error_count = self.initialize_vocabulary_tensor(self.train_corpus)
+			gl.logger.info("Train corpus initialized, Errors: %d" % error_count)
 
-			self.initialize_vocabulary_tensor(self.train_corpus)
-			gl.logger.info("Train corpus initialized")
-			self.initialize_vocabulary_tensor(self.dev_corpus)
-			gl.logger.info("Dev corpus initialized")
+			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
+			error_count = self.initialize_vocabulary_tensor(self.dev_corpus)
+			gl.logger.info("Dev corpus initialized, Errors: %d" % error_count)
+
 			flags.data_initialized = True
 			self.train_dataset = ELDDataset(self.train_corpus, args)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
@@ -167,7 +167,7 @@ class DataModule:
 			flags.data_initialized = True
 			self.test_dataset = ELDDataset(self.corpus, args)
 		self.new_entity_count = 0
-		self.out_kb_threhold = args.out_kb_threshold
+		self.out_kb_threshold = args.out_kb_threshold
 		self.new_ent_threshold = args.new_ent_threshold
 		self.register_policy = args.register_policy
 		self.init_check()
@@ -176,6 +176,7 @@ class DataModule:
 		assert self.register_policy.lower() in ["fifo", "pre_cluster"]
 
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
+		error_count = 0
 		for token in corpus.token_iter():
 			if token.is_entity:
 				token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
@@ -183,6 +184,7 @@ class DataModule:
 				token.char_embedding = self.character_embedding(torch.tensor([self.c2i[x] if x in self.c2i else 0 for x in token.jamo]))
 			if self.we_flag:
 				words = KoreanUtil.tokenize(token.surface)
+				if len(words) == 0: words = [token.surface]
 				token.word_embedding = self.word_embedding(torch.tensor([self.w2i[x] if x in self.w2i else 0 for x in words]))
 			if token.target:
 				if self.re_flag:
@@ -208,80 +210,104 @@ class DataModule:
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = self.oe2i[token.entity]
 				else:
+					gl.logger.debug(token.entity + " is not in entity embedding")
+					error_count += 1
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = -1
 					token.target = False
-					# TODO entity embedding fix 지금은 몇개 비어있음
-					# raise Exception("Entity not in both dbpedia and namu", token.entity)
+			# TODO entity embedding fix 지금은 몇개 비어있음
+			# raise Exception("Entity not in both dbpedia and namu", token.entity)
+		return error_count
 
-	def update_no_kb_entity_embedding(self, tf, idx, emb):
+	def update_no_kb_entity_embedding(self, new_entity_flag, gold_idx, pred_emb):
+		"""
+		Train 과정에서 label별로 entity embedding을 업데이트 하는 함수, prediction에서는 안쓰임
+		:param new_entity_flag:
+		:param gold_idx: 
+		:param pred_emb:
+		:return:
+		"""
+		assert self.mode == "train"
 		emb_map = {}
-		for t, i, e in zip(tf, idx, emb):
+		for flag, i, e in zip(new_entity_flag, gold_idx, pred_emb):
 			i = i.item()
-			if t.item():
-				print(t.item(), i)
+			if flag.item():
 				if i not in emb_map:
 					emb_map[i] = []
 				emb_map[i].append(e)
 		for k, v in emb_map.items():
-			self.new_entity_embedding[k] = sum(v) / len(v)
+			self.oe_embedding[k] = sum(v) / len(v)
+		for token in self.train_corpus.eld_items:
+			if token.target and token.entity in self.oe2i:
+				token.entity_label_embedding = torch.tensor(self.oe_embedding[token.entity_label_idx], requires_grad=False)
 
-	def postprocess(self, corpus: Corpus, entity_label: List) -> Corpus:
-		"""
-		corpus와 entity label을 받아서 corpus 내의 entity로 판명난 것들에 대해 entity명 및 타입 부여
-		:param corpus: corpus
-		:param entity_label: list of int
-		:return: entity가 표시된 corpus
-		"""
+	def reset_new_entity(self):
+		self.new_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
 
-		for entity, label in zip(corpus.entity_iter(), entity_label):
-			target_entity = self.i2e[label] if label > 0 else ("_%d" % self.new_entity_count) + entity.surface.replace(" ", "_")
-			entity.entity = target_entity
-			self.new_entity_count += 1
-		return corpus
-
-	def predict_entity(self, new_ent, pred_embedding) -> List[int]:
+	def predict_entity(self, new_ent, pred_embedding):
 		# batchwise prediction, with entity registeration
 		result = []
-		flags = []
+		new_ent_flags = []
 		add_idx_queue = []
 		add_tensor_queue = []
 		for idx, (i, e) in enumerate(zip(new_ent, pred_embedding)):
 			if type(i) is torch.Tensor:
 				i = i.item()
-			flag = i > self.out_kb_threhold
-			target_emb = self.new_entity_embedding if flag else self.entity_embedding
+			new_ent_flag = i > self.out_kb_threshold
+			target_emb = self.new_entity_embedding if new_ent_flag else self.entity_embedding
 			if target_emb.size(0) > 0:
-				cos_sim = F.pairwise_distance(e.expand_as(target_emb), target_emb)
+				cos_sim = F.pairwise_distance(e.expand_as(target_emb).to(self.device), target_emb.to(self.device))
 				max_sim = torch.max(cos_sim)
 				pred_idx = torch.argmax(cos_sim, dim=-1).item()
 			else:
 				max_sim = 0
 				pred_idx = -1
-			if flag:
+			if new_ent_flag:
 				if max_sim < self.new_ent_threshold:
-					if self.register_policy == "fifo": # register immediately
+					if self.register_policy == "fifo":  # register immediately
 						pred_idx = self.new_entity_embedding.size(0)
-						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding))
-						result.append(pred_idx)
-					elif self.register_policy == "pre_cluster": # register after clustering batch wise
+						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
+						result.append(len(self.e2i) + pred_idx)
+					elif self.register_policy == "pre_cluster":  # register after clustering batch wise
 						add_idx_queue.append(idx)
 						add_tensor_queue.append(e)
 						result.append(-2)
 				result.append(pred_idx)
 			else:
 				result.append(pred_idx)
-			flags.append(flag)
+			new_ent_flags.append(new_ent_flag)
 		if len(add_tensor_queue) > 0:
 			len_before_register = self.new_entity_embedding.size(0)
 			cluster_info, cluster_tensor = hierarchical_clustering(torch.stack(add_tensor_queue))
 			for i, idx in enumerate(add_idx_queue):
 				for x, c in enumerate(cluster_info):
 					if i in c:
-						result[idx] = len_before_register + x
+						result[idx] = len_before_register + x + len(self.e2i)
 			self.new_entity_embedding = torch.cat((self.new_entity_embedding, *cluster_tensor))
 		assert len([x for x in result if x == -2]) == 0
-		return flags, result
+		return new_ent_flags, result
+
+	def analyze(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label, evaluation_result):
+		result = {
+			"scores": {
+				"KB expectation score": evaluation_result[0],
+				"Total score"         : evaluation_result[1],
+				"In-KB score"         : evaluation_result[2],
+				"Out-KB score"        : evaluation_result[3],
+				"No-surface score"    : evaluation_result[4]
+			},
+			"result": []
+		}
+		mapping_result = evaluation_result[5]
+		for e, pn, pi, ln, li in zip(corpus.eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
+			pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
+			result["result"].append({
+				"Entity": e.entity,
+				"NewEntPred": pn,
+				"NewEntLabel": ln,
+				"EntPred": self.i2e[pi] if pn else self.i2oe[mapping_result[pi]]
+			})
+		return result
 
 def hierarchical_clustering(tensors: torch.Tensor):
 	iteration = 0
@@ -297,7 +323,7 @@ def hierarchical_clustering(tensors: torch.Tensor):
 		iteration_max_pair = None
 		for i, tensor in enumerate(sim_tensors[:-1]):
 			if i in clustered_idx: continue
-			target_tensors = sim_tensors[i+1:]
+			target_tensors = sim_tensors[i + 1:]
 			sim = F.pairwise_distance(tensor.expand_as(target_tensors), target_tensors)
 			max_val = torch.max(sim).item()
 			max_idx = torch.argmax(sim).item()

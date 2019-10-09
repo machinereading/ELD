@@ -74,7 +74,7 @@ class Corpus:
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
-		for item in tqdm(path[:100], desc="Loading corpus"): # TODO 100 지우기
+		for item in tqdm(path[:500], desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue
@@ -173,7 +173,7 @@ class Corpus:
 		return self.eld_items[idx]
 
 	@property
-	def eld_items(self):
+	def eld_items(self) -> List[Vocabulary]:
 		if len(self._eld_items) == 0:
 			for ent in self.entity_iter():
 				if ent.target:

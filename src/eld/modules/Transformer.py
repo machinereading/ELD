@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import BiContextEncoder, CNNEncoder, SelfAttentionEncoder, FFNNEncoder
+from . import BiContextEncoder, CNNEncoder, FFNNEncoder
 
 # entity context emb + relation emb --> transE emb
 class SeparateEncoderBasedTransformer(nn.Module):
@@ -68,7 +68,9 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		# self.transformer = SelfAttentionEncoder(self.max_input_dim, 4, 4, separate_layers)
 
 		self.encoder_output = None
-		self.binary_encoder = nn.Linear(self.transformer_output_dim, 1)
+		binary_encoder_seq = [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
+			nn.Linear(self.transformer_hidden_dim, 1), nn.Dropout()]
+		self.binary_encoder = nn.Sequential(*binary_encoder_seq)
 
 	def forward(self, character_batch, character_len,
 	            word_batch, word_len,
@@ -98,11 +100,10 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
 		ffnn_input = torch.cat(mid_features, dim=-1)
 		ffnn_output = self.transformer(ffnn_input)
-		binary_output = self.binary_encoder(ffnn_output)
+		binary_output = self.binary_encoder(ffnn_input)
 		return binary_output, ffnn_output
 
-	# noinspection PyMethodMayBeStatic
-
+# noinspection PyMethodMayBeStatic
 
 class JointTransformer(nn.Module):
 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
