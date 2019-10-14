@@ -8,14 +8,7 @@ from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump
 
-def loss(kb_score, pred, new_entity_flag, label):
-	binary_loss = F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
-	# return binary_loss
-	in_kb_loss = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
 
-	out_kb_loss = sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
-
-	return 2 * binary_loss + in_kb_loss + out_kb_loss
 
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
@@ -44,7 +37,7 @@ class ELDMain:
 		self.evaluator = Evaluator(args, self.data)
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
-
+		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		if mode == "test":
 			self.entity_embedding = self.data.entity_embedding.weight
 			self.entity_embedding_dim = self.entity_embedding.size()[-1]
@@ -79,14 +72,14 @@ class ELDMain:
 				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-3]]
 				new_entity_label, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
 				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-				loss_val = loss(kb_score, pred, new_entity_label, ee_label)
+				loss_val = self.loss(kb_score, pred, new_entity_label, ee_label)
 				loss_val.backward()
 				optimizer.step()
 				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, loss_val))
 				ne.append(new_entity_label)
 				ei.append(gold_entity_idx)
 				pr.append(pred)
-			self.data.update_no_kb_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
+			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
@@ -114,8 +107,8 @@ class ELDMain:
 				                              ["No surface", no_surface_score]]:
 					gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
 				gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-				if total_score[-1] > max_score:
-					max_score = total_score[-1]
+				if kb_expectation_score[-1] > max_score:
+					max_score = kb_expectation_score[-1]
 					max_score_epoch = epoch
 					torch.save(self.transformer.state_dict(), self.model_path)
 				gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
@@ -149,3 +142,12 @@ class ELDMain:
 
 	def __call__(self, data):
 		return self.predict(data)
+
+	def loss(self, kb_score, pred, new_entity_flag, label):
+		loss = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
+
+		loss += sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
+		if self.use_explicit_kb_classifier:
+			loss += F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
+
+		return loss

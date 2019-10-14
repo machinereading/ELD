@@ -108,7 +108,7 @@ class DataModule:
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
-
+		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
 		self.new_entity_idx = {}
 		self.i2e = {v: k for k, v in self.e2i.items()}
@@ -219,7 +219,7 @@ class DataModule:
 		# raise Exception("Entity not in both dbpedia and namu", token.entity)
 		return error_count
 
-	def update_no_kb_entity_embedding(self, new_entity_flag, gold_idx, pred_emb):
+	def update_new_entity_embedding(self, new_entity_flag, gold_idx, pred_emb):
 		"""
 		Train 과정에서 label별로 entity embedding을 업데이트 하는 함수, prediction에서는 안쓰임
 		:param new_entity_flag:
@@ -246,6 +246,14 @@ class DataModule:
 
 	def predict_entity(self, new_ent_pred, pred_embedding):
 		# batchwise prediction, with entity registeration
+
+		def get_pred(tensor, emb):
+			expanded = tensor.expand_as(emb).to(self.device)
+			cos_sim = F.cosine_similarity(expanded, emb.to(self.device))
+			dist = F.pairwise_distance(expanded, emb.to(self.device))
+			sim = torch.max(cos_sim - dist)
+			index = torch.argmax(cos_sim - dist, dim=-1).item()
+			return sim, index
 		result = []
 		new_ent_flags = []
 		add_idx_queue = []
@@ -253,29 +261,27 @@ class DataModule:
 		for idx, (i, e) in enumerate(zip(new_ent_pred, pred_embedding)):
 			if type(i) is torch.Tensor:
 				i = i.item()
-			new_ent_flag = i > self.out_kb_threshold
-			target_emb = self.new_entity_embedding if new_ent_flag else self.entity_embedding
-			if target_emb.size(0) > 0:
-				expanded = e.expand_as(target_emb).to(self.device)
-				dist = F.pairwise_distance(expanded, target_emb.to(self.device))
-				cos_sim = F.cosine_similarity(expanded, target_emb.to(self.device))
+			if self.use_explicit_kb_classifier: # in-KB score를 사용할 경우
+				new_ent_flag = i > self.out_kb_threshold
+				target_emb = self.new_entity_embedding if new_ent_flag else self.entity_embedding
+				if target_emb.size(0) > 0:
+					max_sim, pred_idx = get_pred(e, target_emb)
+				else:
+					max_sim = 0
+					pred_idx = -1
+			else: # in-KB score를 사용하지 않고 direct 비교
+				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
+				new_ent_flag = max_sim < self.new_ent_threshold
 
-				max_sim = torch.min(dist + cos_sim)
-				pred_idx = torch.argmin(dist + cos_sim, dim=-1).item()
-			else:
-				max_sim = 0
-				pred_idx = -1
-			if new_ent_flag:
-				if max_sim < self.new_ent_threshold:
-					if self.register_policy == "fifo":  # register immediately
-						pred_idx = self.new_entity_embedding.size(0)
-						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
-						result.append(len(self.e2i) + pred_idx)
-					elif self.register_policy == "pre_cluster":  # register after clustering batch wise
-						add_idx_queue.append(idx)
-						add_tensor_queue.append(e)
-						result.append(-2)
-				result.append(pred_idx)
+			if new_ent_flag and max_sim < self.new_ent_threshold: # entity registeration
+				if self.register_policy == "fifo":  # register immediately
+					pred_idx = self.new_entity_embedding.size(0)
+					self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
+					result.append(len(self.e2i) + pred_idx)
+				elif self.register_policy == "pre_cluster":  # register after clustering batch wise
+					add_idx_queue.append(idx)
+					add_tensor_queue.append(e)
+					result.append(-2)
 			else:
 				result.append(pred_idx)
 			new_ent_flags.append(new_ent_flag)
@@ -288,6 +294,7 @@ class DataModule:
 						result[idx] = len_before_register + x + len(self.e2i)
 			self.new_entity_embedding = torch.cat((self.new_entity_embedding, *cluster_tensor))
 		assert len([x for x in result if x == -2]) == 0
+		assert len(new_ent_flags) == len(result)
 		return new_ent_flags, result
 
 	def analyze(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label, evaluation_result):
@@ -303,14 +310,14 @@ class DataModule:
 			"result": []
 		}
 		mapping_result = evaluation_result[-1]
-		for e, pn, pi, ln, li in zip(corpus.eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
-			pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
-			result["result"].append({
-				"Entity"     : e.entity,
-				"NewEntPred" : pn,
-				"NewEntLabel": ln,
-				"EntPred"    : self.i2e[pi] if pn else self.i2oe[mapping_result[pi]]
-			})
+		# for e, pn, pi, ln, li in zip(corpus.eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
+		# 	pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
+		# 	result["result"].append({
+		# 		"Entity"     : e.entity,
+		# 		"NewEntPred" : pn,
+		# 		"NewEntLabel": ln
+		# 		# "EntPred"    : self.i2e[pi] if pn else self.i2oe[mapping_result[pi]]
+		# 	})
 		return result
 
 def hierarchical_clustering(tensors: torch.Tensor):

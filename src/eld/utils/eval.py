@@ -15,9 +15,11 @@ class Evaluator:
 		self.oe2i = data.oe2i
 
 	def evaluate(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label):
+		print(len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		assert corpus.eld_len == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
-		print(new_ent_label, new_ent_pred)
-		print(idx_pred, idx_label)
+
+		# print(new_ent_label, new_ent_pred)
+		# print(idx_pred, idx_label)
 		in_kb_prec, in_kb_rec, in_kb_f1, _ = precision_recall_fscore_support(new_ent_label, new_ent_pred, average="binary")
 		# print(in_kb_prec, in_kb_rec, in_kb_f1)
 

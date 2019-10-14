@@ -228,3 +228,16 @@ class EVNone:
 		for cluster in corpus.cluster_list:
 			cluster.kb_uploadable = False
 		return corpus
+
+class EVGold:
+	def __init__(self):
+		self.args = EVArgs("EVGold")
+		self.args.device = "cuda"
+		self.dataset = DataModule("test", self.args)
+
+	def __call__(self, corpus):
+		corpus = self.dataset.generate_fake_cluster(corpus)
+		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=108)
+		for cluster in corpus.cluster_list:
+			cluster.kb_uploadable = type(cluster) is not FakeCluster
+		return corpus

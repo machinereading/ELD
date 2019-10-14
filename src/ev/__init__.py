@@ -1,1 +1,1 @@
-from .EVMain import EV, EVAll, EVNone, EVRandom
+from .EVMain import EV, EVAll, EVNone, EVRandom, EVGold

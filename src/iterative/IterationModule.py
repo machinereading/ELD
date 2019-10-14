@@ -5,7 +5,7 @@ from .. import GlobalValues as gl
 from ..ds import *
 from ..ec import EC
 from ..el import EL
-from ..ev import EV, EVAll, EVRandom, EVNone
+from ..ev import EV, EVAll, EVRandom, EVNone, EVGold
 from ..utils import jsonload, jsondump, diriter, pickleload, pickledump
 import torch
 import os
@@ -15,7 +15,7 @@ class IterationModule:
 
 	def __init__(self, el_model_name, ev_model_name):
 		gl.logger.info("Initializing IterationModule")
-		ev_redirection = {"ev_all": EVAll, "ev_random": EVRandom, "ev_none": EVNone}
+		ev_redirection = {"ev_all": EVAll, "ev_random": EVRandom, "ev_none": EVNone, "ev_gold": EVGold}
 		self.args = IterationArgs()
 		self.args.el_model_name = el_model_name
 		self.args.ev_model_name = ev_model_name

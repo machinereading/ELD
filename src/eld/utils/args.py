@@ -14,7 +14,7 @@ class ELDArgs(AbstractArgument):
 
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
-
+		self.use_explicit_kb_classifier = True
 		self.use_character_embedding = True
 		self.use_word_embedding = True
 		self.use_word_context_embedding = True
@@ -36,8 +36,10 @@ class ELDArgs(AbstractArgument):
 		self.character_embedding_file = "data/eld/character_embedding.npy"
 		self.word_file = "data/embedding/wiki_stem.word"
 		self.word_embedding_file = "data/embedding/wiki_stem.npy"
-		self.entity_file = "data/embedding/entity_kbox_gl.word"
-		self.entity_embedding_file = "data/embedding/entity_kbox_gl.npy"
+		# self.entity_file = "data/embedding/entity_kbox_gl.word"
+		self.entity_file = "data/eld/handtag_only.word"
+		# self.entity_embedding_file = "data/embedding/entity_kbox_gl.npy"
+		self.entity_embedding_file = "data/eld/handtag_only.npy"
 		self.relation_file = "data/eld/relations"
 		self.type_file = "data/eld/types"
 		self.ent_list_path = "data/eld/entities"
