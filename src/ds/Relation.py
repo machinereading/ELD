@@ -4,6 +4,7 @@ class Relation:
 		self.relation = relation
 		self.score = score
 		self.outgoing = outgoing
+
 	@classmethod
 	def from_cw_form(cls, rel):
 		return cls(rel[0], rel[1], rel[2], True if rel[3] == "outgoing" else False)

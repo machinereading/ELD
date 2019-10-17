@@ -15,8 +15,8 @@ class MulRel(InKBLinker):
 	def __init__(self, args: ELDArgs):
 		self.el_module = EL()
 
-	def __call__(self, *voca):
-		token_idx = [x.token_idx for x in voca]
+	def __call__(self, *voca: Vocabulary):
+		token_idx = [x.token_ind for x in voca]
 		sentences = [x.parent_sentence for x in voca]
 		result = self.el_module(*sentences)
 		return [x[idx].el_pred_entity for idx, x in zip(token_idx, result)]
@@ -31,9 +31,13 @@ class PEM(InKBLinker):
 		result = []
 		for item in voca:
 			res = self.surface_ent_dict[item.surface]
-			result.append(res[0] if len(res) > 0 else "NOT_IN_CANDIDATE")
+			result.append(res[0][0] if len(res) > 0 else "NOT_IN_CANDIDATE")
 		return result
 
 class Dist(InKBLinker):
-	pass
-# 	def __init__(self, args: ELDArgs):
+
+	def __init__(self, args: ELDArgs):
+		pass
+
+	def __call__(self, *voca: Vocabulary):
+		pass

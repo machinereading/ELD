@@ -1,11 +1,12 @@
 from typing import Iterator
 
-from src.ds import Relation
+from src.ds.Relation import Relation
+from src.utils import KoreanUtil
 from .Vocabulary import Vocabulary
 from .. import GlobalValues as gl
 
 class Sentence:
-	def __init__(self, sentence, tokenize_method=lambda x: x.split(" "), init=True):
+	def __init__(self, sentence, tokenize_method=KoreanUtil.tokenize, init=True):
 		if not init: return
 		self.original_sentence = sentence
 		self.tokens = [Vocabulary(x, self, i) for i, x in enumerate(tokenize_method(sentence))]
@@ -54,30 +55,28 @@ class Sentence:
 		return None
 
 	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1, relation=None):
+		def split_token(nt, t, sent):
+			sidx = nt.char_ind
+			eidx = nt.char_ind + len(nt.surface)
+			token_start = t.char_ind
+			token_end = t.char_ind + len(t.surface)
+			if sidx <= token_start and token_end <= eidx: return [nt]
+			if sidx > token_end: return [t]
+			if eidx <= t.char_ind: return [t]
+			# case 1: token start / sin / token end
+			if t.char_ind < sidx < token_end:
+				tok1 = Vocabulary(t.surface[:sidx - t.char_ind], sent, char_ind=t.char_ind)
+				return [tok1, nt]
+			# case 2: token start / ein / token end
+			if t.char_ind < eidx < token_end:
+				tok1 = Vocabulary(t.surface[eidx - t.char_ind:], sent, char_ind=eidx)
+				return [nt, tok1]
+			# case 3: token start / sin / ein / token end
+			tok1 = Vocabulary(t.surface[:sidx - t.char_ind], sent, char_ind=t.char_ind)
+			tok2 = Vocabulary(t.surface[eidx - t.char_ind:], sent, char_ind=eidx)
+			return [tok1, nt, tok2]
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
-
-		def split_token(new_token, token):
-			sin = new_token.char_ind
-			ein = new_token.char_ind + len(new_token.surface)
-			token_start = token.char_ind
-			token_end = token.char_ind + len(token.surface)
-			if sin <= token_start and token_end <= ein: return [new_token]
-			if sin > token_end: return [token]
-			if ein <= token.char_ind: return [token]
-			# case 1: token start / sin / token end
-			if token.char_ind < sin < token_end:
-				tok1 = Vocabulary(token.surface[:sin - token.char_ind], self, char_ind=token.char_ind)
-				return [tok1, new_token]
-			# case 2: token start / ein / token end
-			if token.char_ind < ein < token_end:
-				tok1 = Vocabulary(token.surface[ein - token.char_ind:], self, char_ind=ein)
-				return [new_token, tok1]
-			# case 3: token start / sin / ein / token end
-			tok1 = Vocabulary(token.surface[:sin - token.char_ind], self, char_ind=token.char_ind)
-			tok2 = Vocabulary(token.surface[ein - token.char_ind:], self, char_ind=ein)
-			return [tok1, new_token, tok2]
-
 		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_ind=sin)
 		new_token.ec_cluster_id = cluster_id
 		new_token.is_entity = True
@@ -88,7 +87,7 @@ class Sentence:
 				new_token.relation.append(Relation.from_cw_form(r))
 		new_token_list = []
 		for token in self.tokens:
-			new_token_list += [x for x in split_token(new_token, token) if x.surface != ""]
+			new_token_list += [x for x in split_token(new_token, token, self) if x.surface != ""]
 			if len(new_token_list) > 1 and new_token_list[-1] == new_token_list[-2]: new_token_list = new_token_list[:-1]
 		for i, token in enumerate(new_token_list):
 			token.token_ind = i
@@ -125,11 +124,13 @@ class Sentence:
 					new_ent.target = False
 				if "ne_type" not in entity:
 					new_ent.ne_type = "NA"
-				if entity["ne_type"] != "namu":
+				elif entity["ne_type"] != "namu":
 					new_ent.ne_type = entity["dataType"][:2]
 				else:
 					new_ent.ne_type = entity["ne_type"]
 			except Exception as e:
+				import traceback
+				traceback.print_exc()
 				error_count += 1
 		# if error_count > 0:
 		# print(error_count, len(entities))
