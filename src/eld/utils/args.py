@@ -46,7 +46,7 @@ class ELDArgs(AbstractArgument):
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-
+		self.in_kb_linker = "pem"
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100

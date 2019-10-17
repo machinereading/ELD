@@ -82,7 +82,7 @@ class Sentence:
 		new_token.ec_cluster_id = cluster_id
 		new_token.is_entity = True
 		new_token.entity = entity
-		new_token.entity_in_kb = entity in gl.entity_id_map
+		# new_token.entity_in_kb = entity in gl.entity_id_map
 		if relation is not None:
 			for r in relation:
 				new_token.relation.append(Relation.from_cw_form(r))

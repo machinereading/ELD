@@ -131,9 +131,12 @@ class JointTransformer(nn.Module):
 class VectorTransformer(nn.Module):
 	def __init__(self, in_dim, out_dim, features):
 		super(VectorTransformer, self).__init__()
-		self.transformer = SelfAttentionEncoder(in_dim, 4, 4, features)
+		self.transformer = SelfAttentionEncoder(in_dim, 5, 4, features)
 		self.dropout = nn.Dropout()
-		self.linear = nn.Linear(in_dim, out_dim)
+		self.linear = nn.Linear(in_dim * features, out_dim)
+		self.linear_in_dim = in_dim * features
 
 	def forward(self, vec, attention_mask=None):
-		return self.linear(self.dropout(self.transformer(vec, attention_mask)))
+		transformed = self.transformer(vec, attention_mask)[0]
+		transformed = transformed.view(-1, self.linear_in_dim)
+		return self.linear(self.dropout(transformed))

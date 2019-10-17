@@ -76,8 +76,12 @@ class Corpus:
 		corpus = cls()
 		for item in tqdm(path[:100], desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
-			if sentence is None: continue
-			if len(sentence.entities) == 0: continue
+			if sentence is None:
+				print("Sentence is None")
+				continue
+			if len(sentence.entities) == 0:
+				print("No entities")
+				continue
 			corpus.add_sentence(sentence)
 
 			for nt in sentence.entities:
@@ -168,9 +172,12 @@ class Corpus:
 		return len([x for x in self.entity_iter() if x.target])
 
 	def eld_get_item(self, idx):
-		if idx > self.eld_len: raise IndexError(idx, self.eld_len)
+		if type(idx) is int:
+			if idx > self.eld_len: raise IndexError(idx, self.eld_len)
 
-		return self.eld_items[idx]
+			return self.eld_items[idx]
+		elif type(idx) is slice:
+			return self.eld_items[idx]
 
 	@property
 	def eld_items(self) -> List[Vocabulary]:

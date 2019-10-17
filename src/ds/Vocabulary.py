@@ -18,6 +18,9 @@ class Vocabulary:
 		self.token_ind = token_ind
 		self.parent_sentence = parent_sentence
 
+		# reserved for EL
+		self.el_pred_entity = None
+
 		# reserved for EV
 		self.cluster = -1
 		self.error_type = -1  # -1: normal, 0: ER, 1: EL, 2: EC
@@ -33,6 +36,7 @@ class Vocabulary:
 		self.entity_label_embedding: torch.Tensor = None
 		self.entity_label_idx: int = -1
 		self.relation: List[Relation] = []
+		self.eld_pred_entity = None
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None

@@ -4,11 +4,11 @@ import torch.nn.functional as F
 from functools import reduce
 from torch.utils.data import Dataset
 
-from src.utils import KoreanUtil
 from .args import ELDArgs
+from ..modules.InKBLinker import MulRel, PEM, Dist, InKBLinker
 from ... import GlobalValues as gl
 from ...ds import *
-from ...utils import readfile, pickleload, TimeUtil, one_hot
+from ...utils import readfile, pickleload, TimeUtil, one_hot, KoreanUtil
 
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
@@ -137,6 +137,8 @@ class DataModule:
 			self.t2i = {w: i + 1 for i, w in enumerate(readfile(args.type_file))}
 			self.te_dim = args.t_emb_dim = len(self.t2i)
 
+		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
+		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 		# load corpus and se
 		if mode == "train":
 			self.oe2i = {w: i for i, w in enumerate(readfile(args.out_kb_entity_file))}
@@ -234,12 +236,12 @@ class DataModule:
 			self.oe_embedding[k] = sum(v) / len(v)
 		for token in self.train_corpus.eld_items:
 			if token.target and token.entity in self.oe2i:
-				token.entity_label_embedding = torch.tensor(self.oe_embedding[token.entity_label_idx], requires_grad=False)
+				token.entity_label_embedding = self.oe_embedding[token.entity_label_idx].clone().detach()
 
 	def reset_new_entity(self):
 		self.new_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
 
-	def predict_entity(self, new_ent_pred, pred_embedding):
+	def predict_entity(self, new_ent_pred, pred_embedding, target_voca_list):
 		# batchwise prediction, with entity registeration
 
 		def get_pred(tensor, emb):
@@ -253,7 +255,9 @@ class DataModule:
 		new_ent_flags = []
 		add_idx_queue = []
 		add_tensor_queue = []
-		for idx, (i, e) in enumerate(zip(new_ent_pred, pred_embedding)):
+		in_kb_idx_queue = []
+		in_kb_voca_queue = []
+		for idx, (i, e, v) in enumerate(zip(new_ent_pred, pred_embedding, target_voca_list)):
 			if type(i) is torch.Tensor:
 				i = i.item()
 			if self.use_explicit_kb_classifier: # in-KB score를 사용할 경우
@@ -268,17 +272,22 @@ class DataModule:
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
 				new_ent_flag = max_sim < self.new_ent_threshold
 
-			if new_ent_flag and max_sim < self.new_ent_threshold: # entity registeration
-				if self.register_policy == "fifo":  # register immediately
-					pred_idx = self.new_entity_embedding.size(0)
-					self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
-					result.append(len(self.e2i) + pred_idx)
-				elif self.register_policy == "pre_cluster":  # register after clustering batch wise
-					add_idx_queue.append(idx)
-					add_tensor_queue.append(e)
-					result.append(-2)
-			else:
-				result.append(pred_idx)
+			if new_ent_flag:
+				if max_sim < self.new_ent_threshold: # entity registeration
+					if self.register_policy == "fifo":  # register immediately
+						pred_idx = self.new_entity_embedding.size(0)
+						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
+						result.append(len(self.e2i) + pred_idx)
+					elif self.register_policy == "pre_cluster":  # register after clustering batch wise
+						add_idx_queue.append(idx)
+						add_tensor_queue.append(e)
+						result.append(-2)
+				else:
+					result.append(pred_idx)
+			else: # in-kb
+				in_kb_idx_queue.append(idx)
+				in_kb_voca_queue.append(v)
+				result.append(-2)
 			new_ent_flags.append(new_ent_flag)
 		if len(add_tensor_queue) > 0:
 			len_before_register = self.new_entity_embedding.size(0)
@@ -288,6 +297,10 @@ class DataModule:
 					if i in c:
 						result[idx] = len_before_register + x + len(self.e2i)
 			self.new_entity_embedding = torch.cat((self.new_entity_embedding, *cluster_tensor))
+		if len(in_kb_idx_queue) > 0:
+			ents = self.in_kb_linker(*in_kb_voca_queue)
+			for idx, e in zip(in_kb_idx_queue, ents):
+				result[idx] = self.e2i[e] if e in self.e2i else 0
 		assert len([x for x in result if x == -2]) == 0
 		assert len(new_ent_flags) == len(result)
 		return new_ent_flags, result

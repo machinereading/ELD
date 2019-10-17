@@ -8,6 +8,7 @@ from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump
 
+# noinspection PyMethodMayBeStatic
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
 		self.model_name = model_name
@@ -53,8 +54,9 @@ class ELDMain:
 		gl.logger.info("ELD Model load complete")
 
 	def train(self):
-		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=256, shuffle=True, num_workers=8)
-		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
+		batch_size = 256
+		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
+		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 		dev_corpus = self.data.dev_corpus
 		tqdmloop = tqdm(range(1, self.epochs + 1))
 		discovery_optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -74,10 +76,10 @@ class ELDMain:
 				new_entity_label, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
 				kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				# pred = torch.tensor(pred, requires_grad=False).detach()
-				pred = self.vector_transformer(pred)
 				discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
 				discovery_loss_val.backward()
 				discovery_optimizer.step()
+				pred = self.vector_transformer(pred.detach())
 				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, ee_label)
 				tensor_loss_val.backward()
 				tensor_optimizer.step()
@@ -94,13 +96,14 @@ class ELDMain:
 				pred_entity_idxs = []
 				new_entity_labels = []
 				gold_entity_idxs = []
+				dev_batch_start_idx = 0
 				for batch in dev_batch:
 					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
 					kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 					kb_score = torch.sigmoid(kb_score)
 					pred = self.vector_transformer(pred)
 					new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred)
+					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx,dev_batch_start_idx+batch_size)))
 					new_ent_preds += new_ent_pred
 					pred_entity_idxs += entity_idx
 					new_entity_labels.append(new_entity_label)

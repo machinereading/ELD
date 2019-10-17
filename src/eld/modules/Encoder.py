@@ -83,6 +83,8 @@ class SelfAttentionEncoder(nn.Module):
 		# assert hidden_size % attention_heads == 0
 		self.config = BertConfig(hidden_size=input_size, num_hidden_layers=hidden_layers, num_attention_heads=num_attention_heads, output_attentions=output_attentions)
 		self.input_size = input_size
+		self.hidden_layers = hidden_layers
+		self.num_attention_heads = num_attention_heads
 		self.separate = features
 		self.encoder = BertEncoder(self.config)
 
@@ -91,11 +93,11 @@ class SelfAttentionEncoder(nn.Module):
 		# 	attention_mask = torch.where(hidden_state != torch.zeros_like(hidden_state), torch.tensor([1.]), torch.tensor([0.]))
 
 		if attention_mask is None:
-			attention_mask = torch.ones_like(hidden_state)
+			attention_mask = torch.ones([hidden_state.size(0), self.num_attention_heads, self.separate, self.separate]).to(hidden_state.device) # 4,6,6으로 맞춰야 하는데
 		hidden_state = hidden_state.view(-1, self.separate, self.input_size)
 		if head_mask is None:
 			head_mask = [None] * self.config.num_hidden_layers
-		attention_mask = attention_mask.view(-1, self.separate, self.input_size)
+		# attention_mask = attention_mask.view(-1, self.separate, self.input_size)
 		return self.encoder(hidden_state, attention_mask, head_mask)
 
 class Ident(nn.Module):
