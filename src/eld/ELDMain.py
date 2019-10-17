@@ -3,12 +3,10 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .modules.Transformer import SeparateEncoderBasedTransformer, JointTransformer
+from .modules import SeparateEncoderBasedTransformer, JointTransformer, VectorTransformer
 from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump
-
-
 
 class ELDMain:
 	def __init__(self, mode: str, model_name: str):
@@ -38,6 +36,7 @@ class ELDMain:
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
+		self.train_embedding = args.train_embedding
 		if mode == "test":
 			self.entity_embedding = self.data.entity_embedding.weight
 			self.entity_embedding_dim = self.entity_embedding.size()[-1]
@@ -49,16 +48,17 @@ class ELDMain:
 			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
 			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-
+		self.vector_transformer = VectorTransformer(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 		jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
 		gl.logger.info("ELD Model load complete")
 
 	def train(self):
-		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=32, shuffle=True, num_workers=4)
-		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=32, shuffle=False, num_workers=4)
+		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=256, shuffle=True, num_workers=8)
+		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
 		dev_corpus = self.data.dev_corpus
 		tqdmloop = tqdm(range(1, self.epochs + 1))
-		optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
+		discovery_optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
+		tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3, weight_decay=1e-4)
 		max_score = 0
 		max_score_epoch = 0
 		gl.logger.info("Train start")
@@ -68,14 +68,20 @@ class ELDMain:
 			ei = []
 			pr = []
 			for batch in train_batch:
-				optimizer.zero_grad()
+				discovery_optimizer.zero_grad()
+				tensor_optimizer.zero_grad()
 				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-3]]
 				new_entity_label, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-				loss_val = self.loss(kb_score, pred, new_entity_label, ee_label)
-				loss_val.backward()
-				optimizer.step()
-				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, loss_val))
+				kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				# pred = torch.tensor(pred, requires_grad=False).detach()
+				pred = self.vector_transformer(pred)
+				discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
+				discovery_loss_val.backward()
+				discovery_optimizer.step()
+				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, ee_label)
+				tensor_loss_val.backward()
+				tensor_optimizer.step()
+				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, discovery_loss_val + tensor_loss_val))
 				ne.append(new_entity_label)
 				ei.append(gold_entity_idx)
 				pr.append(pred)
@@ -90,8 +96,9 @@ class ELDMain:
 				gold_entity_idxs = []
 				for batch in dev_batch:
 					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
-					kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+					kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 					kb_score = torch.sigmoid(kb_score)
+					pred = self.vector_transformer(pred)
 					new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
 					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred)
 					new_ent_preds += new_ent_pred
@@ -143,11 +150,16 @@ class ELDMain:
 	def __call__(self, data):
 		return self.predict(data)
 
-	def loss(self, kb_score, pred, new_entity_flag, label):
+	def discovery_loss(self, kb_score, new_entity_flag):
+		loss = None
+		closs = F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
+		if loss is not None:
+			loss += closs
+		else:
+			loss = closs
+		return loss
+
+	def out_kb_loss(self, pred, new_entity_flag, label):
 		loss = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
-
 		loss += sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
-		if self.use_explicit_kb_classifier:
-			loss += F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
-
 		return loss

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import BiContextEncoder, CNNEncoder, FFNNEncoder
+from . import BiContextEncoder, CNNEncoder, FFNNEncoder, SelfAttentionEncoder
 
 # entity context emb + relation emb --> transE emb
 class SeparateEncoderBasedTransformer(nn.Module):
@@ -55,7 +55,6 @@ class SeparateEncoderBasedTransformer(nn.Module):
 			self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
 			self.te_dim = type_encoding_dim
 
-		# TODO 여러가지 transformer 방식 만들 것
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
 		self.transformer_input_dim = self.max_input_dim * separate_layers
 
@@ -81,29 +80,37 @@ class SeparateEncoderBasedTransformer(nn.Module):
 	            relation_batch, relation_len,
 	            type_batch, type_len):
 		mid_features = []
-
+		attention_mask = []
 		if self.ce_flag:
 			ce = self.character_encoder(character_batch)
 			mid_features.append(F.pad(ce, [0, self.max_input_dim - self.ce_dim]))
+			attention_mask.append(F.pad(torch.ones_like(ce), [0, self.max_input_dim - self.ce_dim]))
 		if self.we_flag:
 			we = self.word_encoder(word_batch)
 			mid_features.append(F.pad(we, [0, self.max_input_dim - self.we_dim]))
+			attention_mask.append(F.pad(torch.ones_like(we), [0, self.max_input_dim - self.we_dim]))
 		if self.wce_flag:
-			mid_features.append(F.pad(self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len), [0, self.max_input_dim - self.wce_dim]))
+			wce = self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len)
+			mid_features.append(F.pad(wce, [0, self.max_input_dim - self.wce_dim]))
+			attention_mask.append(F.pad(torch.ones_like(wce), [0, self.max_input_dim - self.wce_dim]))
 		if self.ee_flag:
-			mid_features.append(F.pad(self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len), [0, self.max_input_dim - self.ee_dim]))
+			ece = self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len)
+			mid_features.append(F.pad(ece, [0, self.max_input_dim - self.ee_dim]))
+			attention_mask.append(F.pad(torch.ones_like(ece), [0, self.max_input_dim - self.ee_dim]))
 		if self.re_flag:
-			mid_features.append(F.pad(self.relation_encoder(relation_batch), [0, self.max_input_dim - self.re_dim]))
+			re = self.relation_encoder(relation_batch)
+			mid_features.append(F.pad(re, [0, self.max_input_dim - self.re_dim]))
+			attention_mask.append(F.pad(torch.ones_like(re), [0, self.max_input_dim - self.re_dim]))
 		if self.te_flag:
 			te = self.type_encoder(type_batch)
 			# print(self.type_encoder.out_size, te.size())
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
+			attention_mask.append(F.pad(torch.ones_like(te), [0, self.max_input_dim - self.te_dim]))
 		ffnn_input = torch.cat(mid_features, dim=-1)
-		ffnn_output = self.transformer(ffnn_input)
+		attention_mask = torch.cat(attention_mask, dim=-1)
+		# ffnn_output = self.transformer(ffnn_input)
 		binary_output = self.binary_encoder(ffnn_input)
-		return binary_output, ffnn_output
-
-# noinspection PyMethodMayBeStatic
+		return binary_output, ffnn_input, attention_mask
 
 class JointTransformer(nn.Module):
 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
@@ -120,3 +127,13 @@ class JointTransformer(nn.Module):
 	            relation_batch, relation_len,
 	            type_batch, type_len):
 		pass
+
+class VectorTransformer(nn.Module):
+	def __init__(self, in_dim, out_dim, features):
+		super(VectorTransformer, self).__init__()
+		self.transformer = SelfAttentionEncoder(in_dim, 4, 4, features)
+		self.dropout = nn.Dropout()
+		self.linear = nn.Linear(in_dim, out_dim)
+
+	def forward(self, vec, attention_mask=None):
+		return self.linear(self.dropout(self.transformer(vec, attention_mask)))

@@ -15,6 +15,7 @@ class ELDArgs(AbstractArgument):
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
 		self.use_explicit_kb_classifier = True
+		self.train_embedding = False
 		self.use_character_embedding = True
 		self.use_word_embedding = True
 		self.use_word_context_embedding = True
@@ -72,12 +73,6 @@ class ELDArgs(AbstractArgument):
 		self.modify_entity_embedding = False
 		self.modify_entity_embedding_weight = 0.1  # weight on new entity
 
-		# evaluation config
-		self.corpus_dir = None
-
-		# run config
-		self.use_relation_candidates = False
-
 		# prediction config
 		self.out_kb_threshold = 0.5
 		self.new_ent_threshold = 0.3
@@ -86,3 +81,7 @@ class ELDArgs(AbstractArgument):
 	@property
 	def model_path(self):
 		return "models/eld/" + self.model_name
+
+	@property
+	def flags(self):
+		return len([x for x in [self.use_character_embedding, self.use_word_embedding, self.use_word_context_embedding, self.use_entity_context_embedding, self.use_relation_embedding, self.use_type_embedding] if x])

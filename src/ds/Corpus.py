@@ -74,7 +74,7 @@ class Corpus:
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
-		for item in tqdm(path, desc="Loading corpus"):
+		for item in tqdm(path[:100], desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None: continue
 			if len(sentence.entities) == 0: continue

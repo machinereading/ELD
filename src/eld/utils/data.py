@@ -5,7 +5,6 @@ from functools import reduce
 from torch.utils.data import Dataset
 
 from src.utils import KoreanUtil
-from . import flags
 from .args import ELDArgs
 from ... import GlobalValues as gl
 from ...ds import *
@@ -13,8 +12,6 @@ from ...utils import readfile, pickleload, TimeUtil, one_hot
 
 class ELDDataset(Dataset):
 	def __init__(self, corpus: Corpus, args: ELDArgs):
-		if not flags.data_initialized:
-			raise Exception("Tensor not initialized")
 		self.corpus = corpus
 		self.max_jamo_len_in_word = args.jamo_limit
 		self.max_word_len_in_entity = args.word_limit
@@ -154,7 +151,6 @@ class DataModule:
 			error_count = self.initialize_vocabulary_tensor(self.dev_corpus)
 			gl.logger.info("Dev corpus initialized, Errors: %d" % error_count)
 
-			flags.data_initialized = True
 			self.train_dataset = ELDDataset(self.train_corpus, args)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
 			self.dev_dataset = ELDDataset(self.dev_corpus, args)
@@ -164,7 +160,6 @@ class DataModule:
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
-			flags.data_initialized = True
 			self.test_dataset = ELDDataset(self.corpus, args)
 		self.new_entity_count = 0
 		self.out_kb_threshold = args.out_kb_threshold
