@@ -15,21 +15,18 @@ class Evaluator:
 		self.oe2i = data.oe2i
 
 	def evaluate(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label):
-		print(len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		assert corpus.eld_len == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
-
-		# print(new_ent_label, new_ent_pred)
-		# print(idx_pred, idx_label)
 		in_kb_prec, in_kb_rec, in_kb_f1, _ = precision_recall_fscore_support(new_ent_label, new_ent_pred, average="binary")
-		# print(in_kb_prec, in_kb_rec, in_kb_f1)
 
 		# give entity uri to each cluster
 		pe_dark_id_to_ge_entity_map = {}
 
 		pred_cluster = []
 		gold_cluster = []
-
+		if not all([x == 0 for x in new_ent_pred]):
+			pass # for breakpoint
 		for e, new_ent, idx in zip(corpus.eld_items, new_ent_pred, idx_pred):
+			idx = idx.item()
 			if not hasattr(e, "in_surface_dict"):
 				e.in_surface_dict = e.surface in self.surface_ent_dict
 			if new_ent:

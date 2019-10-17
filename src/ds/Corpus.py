@@ -157,6 +157,10 @@ class Corpus:
 					self.cluster[token.ec_cluster] = Cluster(str(token.ec_cluster))
 				self.cluster[token.ec_cluster].add_elem(token)
 
+	@property
+	def token_len(self):
+		return sum(map(len, self))
+
 	def token_iter(self):
 		for sent in self:
 			for token in sent:

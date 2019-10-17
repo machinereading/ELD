@@ -117,7 +117,7 @@ class ELDMain:
 				                              ["No surface", no_surface_score]]:
 					gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
 				gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-				if kb_expectation_score[-1] > max_score:
+				if total_score[-1] > max_score:
 					max_score = kb_expectation_score[-1]
 					max_score_epoch = epoch
 					torch.save(self.transformer.state_dict(), self.model_path)

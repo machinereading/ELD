@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from functools import reduce
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from .args import ELDArgs
 from ..modules.InKBLinker import MulRel, PEM, Dist, InKBLinker
@@ -141,6 +142,7 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 		# load corpus and se
 		if mode == "train":
+			self.err_entity = set([])
 			self.oe2i = {w: i for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
 			self.oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
@@ -174,7 +176,7 @@ class DataModule:
 
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		error_count = 0
-		for token in corpus.token_iter():
+		for token in tqdm(corpus.token_iter(), total=corpus.token_len):
 			if token.is_entity:
 				token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
 			if self.ce_flag:
@@ -194,9 +196,9 @@ class DataModule:
 						relations.append(x[:])
 					if len(relations) > 0:
 						relations = sorted(relations, key=lambda x: -x[-2])[:self.relation_limit]
-						token.relation_embedding = torch.tensor(np.stack(relations))
+						token.relation_embedding = torch.tensor(np.stack(relations), dtype=torch.float)
 					else:
-						token.relation_embedding = torch.zeros(1, self.re_dim)
+						token.relation_embedding = torch.zeros(1, self.re_dim, dtype=torch.float)
 				if self.te_flag:
 					ne_type = token.ne_type[:2].upper()
 					token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
@@ -207,7 +209,9 @@ class DataModule:
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = self.oe2i[token.entity]
 				else:
-					gl.logger.debug(token.entity + " is not in entity embedding")
+					if token.entity not in self.err_entity:
+						gl.logger.debug(token.entity + " is not in entity embedding")
+						self.err_entity.add(token.entity)
 					error_count += 1
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 					token.entity_label_idx = -1
