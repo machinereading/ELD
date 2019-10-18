@@ -48,6 +48,8 @@ class Evaluator:
 				if gold_idx >= len(self.e2i):
 					mapping_idx = gold_idx
 					break
+			else:
+				mapping_idx = 0
 			mapping_result[pred_idx] = mapping_idx
 			for i in range(idx_pred.size(0)):
 				if idx_pred[i] == pred_idx:
