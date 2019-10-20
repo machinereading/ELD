@@ -169,7 +169,7 @@ class DataModule:
 			self.test_dataset = ELDDataset(self.corpus, args)
 		self.new_entity_count = 0
 		self.out_kb_threshold = args.out_kb_threshold
-		self.new_ent_threshold = args.new_ent_threshold
+		self.register_threshold = args.new_ent_threshold
 		self.register_policy = args.register_policy
 		self.init_check()
 
@@ -212,7 +212,7 @@ class DataModule:
 					token.entity_label_idx = self.oe2i[token.entity]
 				else:
 					if token.entity not in self.err_entity:
-						gl.logger.debug(token.entity + " is not in entity embedding")
+						# gl.logger.debug(token.entity + " is not in entity embedding")
 						self.err_entity.add(token.entity)
 					error_count += 1
 					token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
@@ -278,17 +278,17 @@ class DataModule:
 						max_sim = 0
 						pred_idx = -1
 				else: # in-kb
-					max_sim = 0
-					pred_idx = -2
+					max_sim, pred_idx = get_pred(e, self.entity_embedding)
 					in_kb_idx_queue.append(idx)
 					in_kb_voca_queue.append(v)
+					result.append(pred_idx) # temp index - not -2 because to exploit embedding-based similarity
 			else: # in-KB score를 사용하지 않고 direct 비교
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
-				new_ent_flag = max_sim < self.new_ent_threshold
+				new_ent_flag = max_sim < self.register_threshold
 
 			# registration & result generation
 			if new_ent_flag: # out-kb
-				if max_sim < self.new_ent_threshold: # entity registeration
+				if max_sim < self.register_threshold: # entity registeration
 					if self.register_policy == "fifo":  # register immediately
 						pred_idx = self.new_entity_embedding.size(0)
 						self.new_entity_embedding = torch.cat((self.new_entity_embedding, pred_embedding.cpu()))
@@ -299,10 +299,6 @@ class DataModule:
 						result.append(-2)
 				else: # out-kb index
 					result.append(pred_idx + len(self.e2i)) # new entity should have index from existing entities
-			else: # in-kb - link batchwise
-				in_kb_idx_queue.append(idx)
-				in_kb_voca_queue.append(v)
-				result.append(pred_idx) # temp index - not -2 because to exploit embedding-based similarity
 			new_ent_flags.append(new_ent_flag) # new entity flag marker
 		if len(add_tensor_queue) > 0: # perform preclustering
 			len_before_register = self.new_entity_embedding.size(0)
@@ -335,14 +331,17 @@ class DataModule:
 			"result": []
 		}
 		mapping_result = evaluation_result[-1]
+		print(mapping_result)
+		print(len(corpus.eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		for e, pn, pi, ln, li in zip(corpus.eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
 			pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
 			result["result"].append({
 				"Entity"     : e.entity,
 				"NewEntPred" : pn,
 				"NewEntLabel": ln,
-				"EntPred"    : self.i2e[pi] if pn else self.i2oe[mapping_result[pi] - len(self.e2i)]
+				"EntPred"    : self.i2e[pi] if pn else self.i2oe[mapping_result[pi - len(self.e2i)] - len(self.e2i)]
 			})
+		print(len(result["result"]))
 		return result
 
 def hierarchical_clustering(tensors: torch.Tensor):

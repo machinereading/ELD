@@ -27,6 +27,7 @@ class Evaluator:
 			pass # for breakpoint
 		for e, new_ent, idx in zip(corpus.eld_items, new_ent_pred, idx_pred):
 			idx = idx.item()
+			new_ent = new_ent.item()
 			if not hasattr(e, "in_surface_dict"):
 				e.in_surface_dict = e.surface in self.surface_ent_dict
 			if new_ent:
@@ -41,9 +42,9 @@ class Evaluator:
 		cluster_score_ari = adjusted_rand_score(gold_cluster, pred_cluster)
 		# apply mapping
 		mapping_result = {}
+		print(pe_dark_id_to_ge_entity_map)
 		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():
 			sorted_mapping = sorted(mapping.items(), key=lambda x: x[1], reverse=True)
-			mapping_idx = -1
 			for gold_idx, gold_count in sorted_mapping:
 				if gold_idx >= len(self.e2i):
 					mapping_idx = gold_idx
