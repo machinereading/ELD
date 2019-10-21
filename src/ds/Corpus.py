@@ -1,13 +1,13 @@
 import logging
 import os
+
 from tqdm import tqdm
+from typing import Iterator, List
 
 from .Cluster import Cluster
 from .Sentence import Sentence
 from .Vocabulary import Vocabulary
 from ..utils import jsonload, TimeUtil, diriter
-from typing import Iterator, List
-
 
 class Corpus:
 	def __init__(self):
@@ -66,7 +66,7 @@ class Corpus:
 				except PermissionError or IsADirectoryError:
 					try:
 						if path[-1] != "/": path += "/"
-						path = [jsonload(path+f) for f in os.listdir(path)]
+						path = [jsonload(path + f) for f in os.listdir(path)]
 					except:
 						raise Exception("Data format error")
 			else:
@@ -188,4 +188,3 @@ class Corpus:
 		if len(self._eld_items) == 0:
 			self._eld_items = [x for x in self.entity_iter() if x.target]
 		return self._eld_items
-

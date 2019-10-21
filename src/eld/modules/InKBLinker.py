@@ -6,9 +6,8 @@ from ...el import EL
 from ...utils import pickleload, readfile
 
 class InKBLinker(ABC):
-
 	@abstractmethod
-	def __call__(self, *voca: Vocabulary) :
+	def __call__(self, *voca: Vocabulary):
 		return None
 
 class MulRel(InKBLinker):

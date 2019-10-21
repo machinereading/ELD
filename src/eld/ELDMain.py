@@ -9,8 +9,8 @@ from .. import GlobalValues as gl
 from ..utils import jsondump
 
 # noinspection PyMethodMayBeStatic
-class ELDMain:
-	def __init__(self, mode: str, model_name: str):
+class ELD:
+	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		self.model_name = model_name
 		assert mode in ["train", "eval", "demo"]
 		if mode != "train":
@@ -23,7 +23,13 @@ class ELDMain:
 			self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
 		else:
 			try:
-				args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
+				if train_new:
+					if train_args is not None:
+						args = train_args
+					else:
+						args = ELDArgs(model_name)
+				else:
+					args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			except Exception:
 				args = ELDArgs(model_name)
 			self.epochs = args.epochs
@@ -54,6 +60,7 @@ class ELDMain:
 		gl.logger.info("ELD Model load complete")
 
 	def train(self):
+		gl.logger.info("Train start")
 		batch_size = 256
 		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
@@ -63,7 +70,7 @@ class ELDMain:
 		tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3, weight_decay=1e-4)
 		max_score = 0
 		max_score_epoch = 0
-		gl.logger.info("Train start")
+
 		for epoch in tqdmloop:
 			self.transformer.train()
 			ne = []
@@ -103,7 +110,7 @@ class ELDMain:
 					kb_score = torch.sigmoid(kb_score)
 					pred = self.vector_transformer(pred)
 					new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx,dev_batch_start_idx+batch_size)))
+					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
 					new_ent_preds += new_ent_pred
 					pred_entity_idxs += entity_idx
 					new_entity_labels.append(new_entity_label)
@@ -118,10 +125,10 @@ class ELDMain:
 					gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
 				gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
 				if total_score[-1] > max_score:
-					max_score = kb_expectation_score[-1]
+					max_score = total_score[-1]
 					max_score_epoch = epoch
 					torch.save(self.transformer.state_dict(), self.model_path)
-				gl.logger.info("Best epoch %d - Score %.4f" % (max_score_epoch, max_score))
+				gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
 				jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 				                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s_%d.json" % (self.model_name, epoch))
 

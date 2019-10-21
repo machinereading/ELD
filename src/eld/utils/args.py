@@ -24,12 +24,12 @@ class ELDArgs(AbstractArgument):
 		self.use_type_embedding = True
 		self.context_window_size = 5
 
-		self.character_encoder = None
-		self.word_encoder = None
-		self.word_context_encoder = None
-		self.entity_context_encoder = None
-		self.relation_encoder = None
-		self.type_encoder = None
+		self.character_encoder = "cnn"
+		self.word_encoder = "cnn"
+		self.word_context_encoder = "bilstm"
+		self.entity_context_encoder = "bilstm"
+		self.relation_encoder = "cnn"
+		self.type_encoder = "ffnn"
 
 		# data path config
 		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"
@@ -67,8 +67,6 @@ class ELDArgs(AbstractArgument):
 		self.r_emb_dim = 0
 		self.t_emb_dim = 0
 
-
-
 		# if entity has different embedding, modify entity embedding (to average)
 		self.modify_entity_embedding = False
 		self.modify_entity_embedding_weight = 0.1  # weight on new entity
@@ -76,7 +74,7 @@ class ELDArgs(AbstractArgument):
 		# prediction config
 		self.out_kb_threshold = 0.5
 		self.new_ent_threshold = 0.3
-		self.register_policy = "fifo" # one of fifo, pre_cluster
+		self.register_policy = "fifo"  # one of fifo, pre_cluster
 
 	@property
 	def model_path(self):

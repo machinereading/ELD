@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn
-from pytorch_transformers.modeling_bert import BertSelfAttention, BertConfig, BertLayer, BertEncoder
+from pytorch_transformers.modeling_bert import BertConfig, BertEncoder
 
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
 
@@ -78,7 +78,7 @@ class RNNEncoder(nn.Module):
 
 class SelfAttentionEncoder(nn.Module):
 	# using https://github.com/huggingface/pytorch-transformers
-	def __init__(self, input_size, hidden_layers, num_attention_heads, features, output_attentions=True):
+	def __init__(self, input_size, hidden_layers, num_attention_heads, features, output_attentions=True, output_dim=None):
 		super(SelfAttentionEncoder, self).__init__()
 		# assert hidden_size % attention_heads == 0
 		self.config = BertConfig(hidden_size=input_size, num_hidden_layers=hidden_layers, num_attention_heads=num_attention_heads, output_attentions=output_attentions)
@@ -87,18 +87,22 @@ class SelfAttentionEncoder(nn.Module):
 		self.num_attention_heads = num_attention_heads
 		self.separate = features
 		self.encoder = BertEncoder(self.config)
+		self.apply_ffnn = output_dim is not None
+		if self.apply_ffnn:
+			self.ffnn = nn.Linear(input_size, output_dim)
 
-	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args): # batch * embedding_size -> batch * ? * ?
-		# if attention_mask is None:
-		# 	attention_mask = torch.where(hidden_state != torch.zeros_like(hidden_state), torch.tensor([1.]), torch.tensor([0.]))
 
+	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args):
 		if attention_mask is None:
-			attention_mask = torch.ones([hidden_state.size(0), self.num_attention_heads, self.separate, self.separate]).to(hidden_state.device) # 4,6,6으로 맞춰야 하는데
+			attention_mask = torch.ones([hidden_state.size(0), self.num_attention_heads, self.separate, self.separate]).to(hidden_state.device)
 		hidden_state = hidden_state.view(-1, self.separate, self.input_size)
 		if head_mask is None:
 			head_mask = [None] * self.config.num_hidden_layers
 		# attention_mask = attention_mask.view(-1, self.separate, self.input_size)
-		return self.encoder(hidden_state, attention_mask, head_mask)
+		output = self.encoder(hidden_state, attention_mask, head_mask)
+		if self.apply_ffnn:
+			output = F.relu(self.ffnn(F.dropout(output)))
+		return output
 
 class Ident(nn.Module):
 	def __init__(self, *args, **kwargs):

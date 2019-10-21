@@ -31,29 +31,44 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		separate_layers = len([x for x in [self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag] if x])
 		self.ce_dim = self.we_dim = self.wce_dim = self.ee_dim = self.re_dim = self.te_dim = 0
 		if self.ce_flag:
-			self.character_encoder = CNNEncoder(character_embedding_dim, max_jamo, 2, 3)
-			if type(self.character_encoder) is CNNEncoder:
+			if character_encoder.lower() == "cnn":
+				self.character_encoder = CNNEncoder(character_embedding_dim, max_jamo, 2, 3)
 				character_encoding_dim = self.character_encoder.out_size
-			self.ce_dim = character_encoding_dim
+				self.ce_dim = character_encoding_dim
+			elif character_encoder.lower() == "selfattn":
+				self.character_encoder = SelfAttentionEncoder(word_embedding_dim, 4, 5, 1, output_dim=character_encoding_dim)
+				self.ce_dim = character_encoding_dim
 		if self.we_flag:
-			self.word_encoder = CNNEncoder(word_embedding_dim, max_word, 2, 3)
-			if type(self.word_encoder) is CNNEncoder:
+			if word_encoder.lower() == "cnn":
+				self.word_encoder = CNNEncoder(word_embedding_dim, max_word, 2, 3)
 				word_encoding_dim = self.word_encoder.out_size
-			self.we_dim = word_encoding_dim
+				self.we_dim = word_encoding_dim
+			elif word_encoder.lower() == "selfattn":
+				self.word_encoder = SelfAttentionEncoder(word_embedding_dim, 4, 5, 1, output_dim=word_encoding_dim)
+				self.we_dim = word_encoding_dim
 		if self.wce_flag:
-			self.wce_dim = word_context_encoding_dim * 2
-			self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_context_encoding_dim)
+			if word_context_encoder.lower() == "bilstm":
+				self.wce_dim = word_context_encoding_dim * 2
+				self.word_context_encoder = BiContextEncoder("LSTM", word_embedding_dim, word_context_encoding_dim)
 		if self.ee_flag:
-			self.ee_dim = entity_context_encoding_dim * 2
-			self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_context_encoding_dim)
+			if entity_context_encoder.lower() == "bilstm":
+				self.ee_dim = entity_context_encoding_dim * 2
+				self.entity_context_encoder = BiContextEncoder("LSTM", entity_embedding_dim, entity_context_encoding_dim)
 		if self.re_flag:
-			self.relation_encoder = CNNEncoder(relation_embedding_dim, max_relation, 2, 2)
-			if type(self.relation_encoder) is CNNEncoder:
+			if relation_encoder.lower() == "cnn":
+				self.relation_encoder = CNNEncoder(relation_embedding_dim, max_relation, 2, 2)
 				relation_encoding_dim = self.relation_encoder.out_size
-			self.re_dim = relation_encoding_dim
+				self.re_dim = relation_encoding_dim
+			elif word_encoder.lower() == "selfattn":
+				self.relation_encoder = SelfAttentionEncoder(relation_embedding_dim, 4, 5, 1, output_dim=relation_encoding_dim)
+				self.re_dim = relation_encoding_dim
 		if self.te_flag:
-			self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
-			self.te_dim = type_encoding_dim
+			if type_encoder.lower() == "ffnn":
+				self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
+				self.te_dim = type_encoding_dim
+			elif word_encoder.lower() == "selfattn":
+				self.type_encoder = SelfAttentionEncoder(type_embedding_dim, 4, 4, 1, output_dim=type_encoding_dim)
+				self.te_dim = type_encoding_dim
 
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
 		self.transformer_input_dim = self.max_input_dim * separate_layers
