@@ -1,5 +1,3 @@
-from functools import reduce
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -150,11 +148,11 @@ class DataModule:
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
 			self.oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 
-			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir)
+			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir, args.corpus_limit)
 			error_count = self.initialize_vocabulary_tensor(self.train_corpus)
 			gl.logger.info("Train corpus initialized, Errors: %d" % error_count)
 
-			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir)
+			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir, args.corpus_limit)
 			error_count = self.initialize_vocabulary_tensor(self.dev_corpus)
 			gl.logger.info("Dev corpus initialized, Errors: %d" % error_count)
 
@@ -316,7 +314,7 @@ class DataModule:
 		if len(in_kb_idx_queue) > 0:  # in-kb entity linking
 			ents = self.in_kb_linker(*in_kb_voca_queue)
 			for idx, e in zip(in_kb_idx_queue, ents):
-				result[idx] = self.e2i[e] if e in self.e2i else result[idx]
+				result[idx] = self.e2i[e] if e in self.e2i and e != "NOT_IN_CANDIDATE" else result[idx]
 
 		assert len([x for x in result if x == -2]) == 0
 		assert len(new_ent_pred) == len(result)
@@ -365,41 +363,40 @@ class DataModule:
 
 def hierarchical_clustering(tensors: torch.Tensor):
 	iteration = 0
-	clustering_result = []
-	clustering_tensors = []
-	sim_tensors = tensors.clone()
-	original_len = tensors.size(0)
-	emb_dim = tensors.size(1)
-	clustered_idx = []
+	clustering_result = [[x] for x in range(tensors.size(0))]
+	clustering_tensors = tensors.clone().detach()
 	clustering_result_history = []
-	while True:
+	original_state = (1, clustering_result[:], clustering_tensors.clone())
+	while len(clustering_result) > 1:  # perform clustering until 1 remaining cluster
 		iteration += 1
 		iteration_max_sim = 0
 		iteration_max_pair = None
-		for i, tensor in enumerate(sim_tensors[:-1]):
-			if i in clustered_idx: continue
-			target_tensors = sim_tensors[i + 1:]
+		for i, tensor in enumerate(clustering_tensors[:-1]):
+			target_tensors = clustering_tensors[i + 1:]
 			sim = F.pairwise_distance(tensor.expand_as(target_tensors), target_tensors)
 			max_val = torch.max(sim).item()
 			max_idx = torch.argmax(sim).item()
 			if max_val > iteration_max_sim:
 				iteration_max_sim = max_val
 				iteration_max_pair = [i, max_idx + i + 1]
-		if iteration_max_sim > 0.5:
-			if iteration_max_pair[1] >= original_len:
-				clustering_result[iteration_max_pair[1] - original_len].append(iteration_max_pair[0])
-				clustering_tensors[iteration_max_pair[1] - original_len].append(tensors[iteration_max_pair[0]])
-			else:
-				clustering_result.append(iteration_max_pair)
-				clustering_tensors.append([tensors[x] for x in iteration_max_pair])
-			clustered_idx = reduce(lambda x, y: x + y, clustering_result)
-			for item in clustered_idx:
-				sim_tensors[item] = torch.full([emb_dim], 100, dtype=torch.float)
-			sim_tensors = torch.cat((sim_tensors, *[sum(x) / len(x) for x in clustering_tensors]))
-		else:
-			break
-	for item in range(original_len):
-		if item not in clustered_idx:
-			clustering_result.append([item])
-			clustering_tensors.append([tensors[item]])
-	return clustering_result, [sum(x) / len(x) for x in clustering_tensors]
+
+		f, t = iteration_max_pair
+		clustering_result.append(clustering_result[f] + clustering_result[t])  # add new cluster
+		clustering_result = clustering_result[:f] + clustering_result[f + 1:t] + clustering_result[t + 1]  # remove original cluster
+		t = [[tensors[x] for x in y] for y in clustering_result]  # cluster-tensor mapping
+		clustering_tensors = torch.stack([sum(x) / len(x) for x in t])  # update tensors
+
+		clustering_result_history.append((iteration_max_sim, clustering_result[:], clustering_tensors.clone()))
+	# find pivot - minimum similarity
+	target = original_state
+	buf = original_state
+	min_sim = 100
+	for history in clustering_result_history:
+		sim = history[0]
+		if sim < min_sim:
+			min_sim = sim
+			target = buf
+		buf = history
+	_, clustering_result, clustering_tensors = target
+	gl.logger.debug("Pre-Clustering - Before: %d, After: %d" % (tensors.size(0), len(clustering_result)))
+	return clustering_result, clustering_tensors

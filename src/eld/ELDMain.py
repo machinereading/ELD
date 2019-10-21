@@ -56,6 +56,7 @@ class ELD:
 			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
 		self.vector_transformer = VectorTransformer(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
+		self.stop = args.early_stop
 		jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
 		gl.logger.info("ELD Model load complete")
 
@@ -70,7 +71,6 @@ class ELD:
 		tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3, weight_decay=1e-4)
 		max_score = 0
 		max_score_epoch = 0
-
 		for epoch in tqdmloop:
 			self.transformer.train()
 			ne = []
@@ -117,6 +117,7 @@ class ELD:
 					gold_entity_idxs.append(gold_entity_idx)
 				kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
 				                                                                                                                                        torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
+				print()
 				for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
 				                              ["Total", total_score],
 				                              ["in-KB", in_kb_score],
@@ -131,7 +132,9 @@ class ELD:
 				gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
 				jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 				                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s_%d.json" % (self.model_name, epoch))
-
+				if epoch - max_score_epoch > self.stop:
+					gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
+					break
 	def predict(self, data, register=True):
 		self.transformer.eval()
 		pred_embedding = self.transformer(data)

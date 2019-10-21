@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=2,3 python -m exec.ELDScript --mode train --model_name "$1" --transformer separate --char_encoder selfattn --word_encoder selfattn --relation_encoder selfattn --type_encoder selfattn
+CUDA_VISIBLE_DEVICES=2,3 python -m exec.ELDScript --mode train --model_name "$1" --transformer separate --char_encoder selfattn --word_encoder selfattn --relation_encoder selfattn --type_encoder selfattn --register_policy pre_cluster

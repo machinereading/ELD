@@ -10,7 +10,9 @@ class ELDArgs(AbstractArgument):
 		self.dev_corpus_dir = "corpus/namu_eld_handtag_dev/"
 		self.test_corpus_dir = "corpus/namu_eld_handtag_test/"
 		self.epochs = 100
-		self.eval_per_epoch = 1
+		self.eval_per_epoch = 4
+		self.early_stop = 30
+		self.corpus_limit = -1
 
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
@@ -46,7 +48,7 @@ class ELDArgs(AbstractArgument):
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-		self.in_kb_linker = "mulrel"
+		self.in_kb_linker = "pem"
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100

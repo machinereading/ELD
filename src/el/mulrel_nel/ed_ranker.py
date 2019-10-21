@@ -81,6 +81,7 @@ class EDRanker:
                             for m in content]
                 rctx_ids = [m['context'][1][:min(len(m['context'][1]), self.args.prerank_ctx_window // 2)]
                             for m in content]
+                ment_ids = [[] for _ in content]
                 token_ids = [l + m + r if len(l) + len(r) > 0 else [self.prerank_model.word_voca.unk_id]
                              for l, m, r in zip(lctx_ids, ment_ids, rctx_ids)]
 

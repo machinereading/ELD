@@ -57,7 +57,7 @@ class Corpus:
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path):
+	def load_corpus(cls, path, limit=None):
 		# load from crowdsourcing form
 		if type(path) is str:
 			if os.path.isfile(path):
@@ -74,7 +74,9 @@ class Corpus:
 		assert type(path) is list
 		logging.info("Loading corpus")
 		corpus = cls()
-		for item in tqdm(path[:1000], desc="Loading corpus"):
+		if limit is not None and limit > 0:
+			path = path[:limit]
+		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None:
 				print("Sentence is None")

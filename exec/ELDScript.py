@@ -13,8 +13,9 @@ parser.add_argument("--char_encoder", type=str, default="cnn", choices=["cnn", "
 parser.add_argument("--word_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
 # parser.add_argument("word_context_encoder")
 parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
-parser.add_argument("--type_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
-
+parser.add_argument("--type_encoder", type=str, default="cnn", choices=["ffnn", "selfattn"])
+parser.add_argument("--register_policy", type=str, default="fifo", choices=["fifo", "pre_cluster"])
+parser.add_argument("--limit", type=int, default=-1)
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 args = parser.parse_args()
 mode = args.mode
@@ -26,7 +27,8 @@ eld_args.character_encoder = args.char_encoder
 eld_args.word_encoder = args.word_encoder
 eld_args.relation_encoder = args.relation_encoder
 eld_args.type_encoder = args.type_encoder
-
+eld_args.register_policy = args.register_policy
+eld_args.corpus_limit = args.limit
 module = ELD(mode, model_name, eld_args)
 
 if mode == "train":
