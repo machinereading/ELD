@@ -72,7 +72,7 @@ class Corpus:
 			else:
 				path = [x for x in map(jsonload, diriter(path))]
 		assert type(path) is list
-		logging.info("Loading corpus")
+		# logging.info("Loading corpus")
 		corpus = cls()
 		if limit is not None and limit > 0:
 			path = path[:limit]

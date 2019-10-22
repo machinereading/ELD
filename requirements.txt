@@ -1,3 +1,4 @@
+transformers
 torch
 gensim
 konlpy
@@ -9,5 +10,4 @@ tensorflow_hub
 pyhocon
 h5py
 tqdm
-pytorch_pretrained_bert
 networkx

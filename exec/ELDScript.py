@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from src.eld import ELD
+from src.eld import ELD, BertBasedELD
 from src.eld.utils import ELDArgs
 from src.utils.TimeUtil import time_analysis
 
@@ -15,6 +15,7 @@ parser.add_argument("--word_encoder", type=str, default="cnn", choices=["cnn", "
 parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
 parser.add_argument("--type_encoder", type=str, default="cnn", choices=["ffnn", "selfattn"])
 parser.add_argument("--register_policy", type=str, default="fifo", choices=["fifo", "pre_cluster"])
+parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--limit", type=int, default=-1)
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 args = parser.parse_args()
@@ -28,8 +29,12 @@ eld_args.word_encoder = args.word_encoder
 eld_args.relation_encoder = args.relation_encoder
 eld_args.type_encoder = args.type_encoder
 eld_args.register_policy = args.register_policy
+eld_args.new_ent_threshold = args.register_threshold
 eld_args.corpus_limit = args.limit
-module = ELD(mode, model_name, eld_args)
+if model_name.startswith("bert"):
+	module = BertBasedELD(mode, model_name, eld_args)
+else:
+	module = ELD(mode, model_name, eld_args)
 
 if mode == "train":
 	module.train()

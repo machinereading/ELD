@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn
 
-from pytorch_transformers.modeling_bert import BertConfig, BertEncoder
+from transformers.modeling_bert import BertConfig, BertEncoder
 
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
 

@@ -10,7 +10,7 @@ from ..utils import jsondump, split_to_batch
 
 import os
 import random
-from pytorch_transformers import BertTokenizer, BertModel
+from transformers import BertTokenizer, BertModel
 
 # noinspection PyMethodMayBeStatic
 class ELDSkeleton:
@@ -231,11 +231,13 @@ class BertBasedELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(BertBasedELD, self).__init__(mode, model_name, train_new, train_args)
 		pretrained_weight = "bert-base-multilingual-cased"
-		self.tokenizer = BertTokenizer.from_pretrained(pretrained_weight).to(self.device)
-		self.tokenizer.add_special_tokens({"cls_token": "<CLS>", "additional_special_tokens": ["<e>", "</e>"], "sep_token": "<SEP>"})
-		self.transformer = BertTokenizer.from_pretrained(pretrained_weight).to(self.device)
-		self.binary_classifier = FFNNEncoder(512, 1, 512, 2)
-		self.vector_transformer = FFNNEncoder(512, 300, 512, 2)
+		self.tokenizer = BertTokenizer.from_pretrained(pretrained_weight, do_lower_case=True)
+		# self.tokenizer.add_special_tokens({"cls_token": "<CLS>", "additional_special_tokens": ["<e>", "</e>"], "sep_token": "<SEP>"})
+		print(self.device)
+		self.transformer = BertModel.from_pretrained(pretrained_weight).to(self.device)
+		# self.transformer.resize_token_embeddings(self.transformer.config.vocab_size + 4)
+		self.binary_classifier = FFNNEncoder(768, 1, 512, 2).to(self.device)
+		self.vector_transformer = FFNNEncoder(768, 300, 512, 2).to(self.device)
 
 	def initialize_dataset(self, corpus):
 		s = []
@@ -260,27 +262,41 @@ class BertBasedELD(ELDSkeleton):
 		# initialize train and dev set
 		train_set = self.initialize_dataset(train_corpus)
 		dev_set = self.initialize_dataset(dev_corpus)
-
+		pad = lambda tensor, size: F.pad(tensor, [0, size - tensor.size(0)])
 		for epoch in tqdmloop:
 			self.transformer.train()
 			self.binary_classifier.train()
 			self.vector_transformer.train()
 			optimizer.zero_grad()
 			random.shuffle(train_set)
+			ne = []
+			ei = []
+			pr = []
 			for batch in split_to_batch(train_set, batch_size):
-				marked_sentence, in_kb_label, target_embedding, _ = zip(*batch)
-				transformer_input, attention_mask = torch.stack([self.tokenizer.encode_plus(x, max_length=512, return_tensors="pt") for x in marked_sentence]).to(self.device)
-				new_entity_label = torch.stack(in_kb_label).to(self.device)
+				marked_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
+				encoded_sequence = torch.stack([pad(self.tokenizer.encode(x, max_length=512, return_tensors="pt").squeeze(0), 512) for x in marked_sentence]).to(self.device)
+				# print("encoded_sequence", encoded_sequence.size())
+				attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
+				# transformer_input = torch.stack(encoded_sequence).to(self.device)
+
+				new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
 				target_embedding = torch.stack(target_embedding).to(self.device)
-				transformer_output = self.transformer(transformer_input, attention_mask)[0][:, 0, :]
+				transformer_output = self.transformer(encoded_sequence, attention_mask)[0][:, 0, :]
+				# print("transformer_output", transformer_output.size())
 				kb_score = self.binary_classifier(transformer_output)
+				# print("kb_score, new_ent", kb_score.size(), new_entity_label.size())
 				discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
-				discovery_loss_val.backward()
 
 				pred = self.vector_transformer(transformer_output)
 				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, target_embedding)
-				tensor_loss_val.backward()
+				total_loss = discovery_loss_val + tensor_loss_val
+				total_loss.backward()
+
 				optimizer.step()
+				ne.append(new_entity_label)
+				ei.append(torch.LongTensor(gold_entity_idx))
+				pr.append(pred)
+			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 			if epoch % self.eval_per_epoch == 0:
 				self.transformer.eval()
 				self.binary_classifier.eval()

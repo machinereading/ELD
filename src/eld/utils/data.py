@@ -178,7 +178,7 @@ class DataModule:
 	@TimeUtil.measure_time
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
 		error_count = 0
-		for token in tqdm(corpus.token_iter(), total=corpus.token_len):
+		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
 			if token.is_entity:
 				token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
 			if self.ce_flag:
