@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=2 python -m exec.ELDScript --mode train --model_name allattn_precluster --transformer separate --char_encoder cnn --word_encoder cnn --relation_encoder cnn --type_encoder ffnn --register_policy pre_cluster

@@ -399,4 +399,5 @@ def hierarchical_clustering(tensors: torch.Tensor):
 		buf = history
 	_, clustering_result, clustering_tensors = target
 	gl.logger.debug("Pre-Clustering - Before: %d, After: %d" % (tensors.size(0), len(clustering_result)))
+	print(clustering_result)
 	return clustering_result, clustering_tensors

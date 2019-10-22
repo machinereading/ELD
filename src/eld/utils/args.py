@@ -12,7 +12,7 @@ class ELDArgs(AbstractArgument):
 		self.epochs = 100
 		self.eval_per_epoch = 4
 		self.early_stop = 30
-		self.corpus_limit = -1
+		self.corpus_limit = 1000
 
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"

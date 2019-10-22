@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.rnn as rnn
+
 from pytorch_transformers.modeling_bert import BertConfig, BertEncoder
 
 module = {"rnn": nn.RNN, "lstm": nn.LSTM, "gru": nn.GRU}
@@ -90,7 +91,6 @@ class SelfAttentionEncoder(nn.Module):
 		self.apply_ffnn = output_dim is not None
 		if self.apply_ffnn:
 			self.ffnn = nn.Linear(input_size, output_dim)
-
 
 	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args):
 		if attention_mask is None:

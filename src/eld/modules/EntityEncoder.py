@@ -5,13 +5,13 @@ import torch.nn.functional as F
 from . import BiContextEncoder, CNNEncoder, FFNNEncoder, SelfAttentionEncoder
 
 # entity context emb + relation emb --> transE emb
-class SeparateEncoderBasedTransformer(nn.Module):
+class SeparateEntityEncoder(nn.Module):
 	def __init__(self, use_character_embedding, use_word_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
 	             character_encoder, word_encoder, word_context_encoder, entity_context_encoder, relation_encoder, type_encoder,
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
 	             character_encoding_dim, word_encoding_dim, word_context_encoding_dim, entity_context_encoding_dim, relation_encoding_dim, type_encoding_dim,
 	             max_jamo, max_word, max_relation):
-		super(SeparateEncoderBasedTransformer, self).__init__()
+		super(SeparateEntityEncoder, self).__init__()
 		# legal = encoder_map.keys()
 		# for encoder in [character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder]:
 		# 	assert encoder in legal, "Illegal encoder type: %s, must be one of %s" % (encoder, "/".join(legal))
@@ -127,12 +127,12 @@ class SeparateEncoderBasedTransformer(nn.Module):
 		binary_output = self.binary_encoder(ffnn_input)
 		return binary_output, ffnn_input, attention_mask
 
-class JointTransformer(nn.Module):
+class JointEntityEncoder(nn.Module):
 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
 	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
 	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
-		super(JointTransformer, self).__init__()
+		super(JointEntityEncoder, self).__init__()
 
 	def forward(self, character_batch, character_len,
 	            left_word_context_batch, left_word_context_len,
