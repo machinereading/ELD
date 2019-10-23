@@ -90,18 +90,20 @@ class SelfAttentionEncoder(nn.Module):
 		self.encoder = BertEncoder(self.config)
 		self.apply_ffnn = output_dim is not None
 		if self.apply_ffnn:
-			self.ffnn = nn.Linear(input_size, output_dim)
+			self.ffnn = nn.Linear(input_size * features, output_dim)
 
 	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args):
 		if attention_mask is None:
 			attention_mask = torch.ones([hidden_state.size(0), self.num_attention_heads, self.separate, self.separate]).to(hidden_state.device)
+		# print(hidden_state.size())
 		hidden_state = hidden_state.view(-1, self.separate, self.input_size)
 		if head_mask is None:
 			head_mask = [None] * self.config.num_hidden_layers
 		# attention_mask = attention_mask.view(-1, self.separate, self.input_size)
+		# print(hidden_state.size())
 		output = self.encoder(hidden_state, attention_mask, head_mask)
 		if self.apply_ffnn:
-			output = F.relu(self.ffnn(F.dropout(output)))
+			output = F.relu(self.ffnn(F.dropout(output[0].view(-1, self.separate * self.input_size))))
 		return output
 
 class Ident(nn.Module):

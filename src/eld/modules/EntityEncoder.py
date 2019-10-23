@@ -30,13 +30,14 @@ class SeparateEntityEncoder(nn.Module):
 		self.transformer_input_dim = 0
 		separate_layers = len([x for x in [self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag] if x])
 		self.ce_dim = self.we_dim = self.wce_dim = self.ee_dim = self.re_dim = self.te_dim = 0
+		# print(character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim)
 		if self.ce_flag:
 			if character_encoder.lower() == "cnn":
 				self.character_encoder = CNNEncoder(character_embedding_dim, max_jamo, 2, 3)
 				character_encoding_dim = self.character_encoder.out_size
 				self.ce_dim = character_encoding_dim
 			elif character_encoder.lower() == "selfattn":
-				self.character_encoder = SelfAttentionEncoder(word_embedding_dim, 4, 5, 1, output_dim=character_encoding_dim)
+				self.character_encoder = SelfAttentionEncoder(character_embedding_dim, 6, 5, max_jamo, output_dim=character_encoding_dim)
 				self.ce_dim = character_encoding_dim
 		if self.we_flag:
 			if word_encoder.lower() == "cnn":
@@ -44,7 +45,7 @@ class SeparateEntityEncoder(nn.Module):
 				word_encoding_dim = self.word_encoder.out_size
 				self.we_dim = word_encoding_dim
 			elif word_encoder.lower() == "selfattn":
-				self.word_encoder = SelfAttentionEncoder(word_embedding_dim, 4, 5, 1, output_dim=word_encoding_dim)
+				self.word_encoder = SelfAttentionEncoder(word_embedding_dim, 6, 5, max_word, output_dim=word_encoding_dim)
 				self.we_dim = word_encoding_dim
 		if self.wce_flag:
 			if word_context_encoder.lower() == "bilstm":
@@ -59,15 +60,15 @@ class SeparateEntityEncoder(nn.Module):
 				self.relation_encoder = CNNEncoder(relation_embedding_dim, max_relation, 2, 2)
 				relation_encoding_dim = self.relation_encoder.out_size
 				self.re_dim = relation_encoding_dim
-			elif word_encoder.lower() == "selfattn":
-				self.relation_encoder = SelfAttentionEncoder(relation_embedding_dim, 4, 5, 1, output_dim=relation_encoding_dim)
-				self.re_dim = relation_encoding_dim
+			# elif relation_encoder.lower() == "selfattn":
+			# 	self.relation_encoder = SelfAttentionEncoder(relation_embedding_dim, 4, 5, 1, output_dim=relation_encoding_dim)
+			# 	self.re_dim = relation_encoding_dim
 		if self.te_flag:
 			if type_encoder.lower() == "ffnn":
 				self.type_encoder = FFNNEncoder(type_embedding_dim, type_encoding_dim, (type_embedding_dim + type_encoding_dim) // 2, 2)
 				self.te_dim = type_encoding_dim
-			elif word_encoder.lower() == "selfattn":
-				self.type_encoder = SelfAttentionEncoder(type_embedding_dim, 4, 4, 1, output_dim=type_encoding_dim)
+			elif type_encoder.lower() == "selfattn":
+				self.type_encoder = SelfAttentionEncoder(type_embedding_dim, 6, 5, 1, output_dim=type_encoding_dim)
 				self.te_dim = type_encoding_dim
 
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
@@ -97,7 +98,7 @@ class SeparateEntityEncoder(nn.Module):
 		mid_features = []
 		attention_mask = []
 		if self.ce_flag:
-			ce = self.character_encoder(character_batch)
+			ce = self.character_encoder(character_batch) # batch * max_character * embedding_size
 			mid_features.append(F.pad(ce, [0, self.max_input_dim - self.ce_dim]))
 			attention_mask.append(F.pad(torch.ones_like(ce), [0, self.max_input_dim - self.ce_dim]))
 		if self.we_flag:
@@ -121,6 +122,7 @@ class SeparateEntityEncoder(nn.Module):
 			# print(self.type_encoder.out_size, te.size())
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
 			attention_mask.append(F.pad(torch.ones_like(te), [0, self.max_input_dim - self.te_dim]))
+		# for item in mid_features: print(item.size())
 		ffnn_input = torch.cat(mid_features, dim=-1)
 		attention_mask = torch.cat(attention_mask, dim=-1)
 		# ffnn_output = self.transformer(ffnn_input)

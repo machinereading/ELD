@@ -56,7 +56,7 @@ class Evaluator:
 		mapping_result = {}
 		mapped_entity = {}  # 한번 assign된 entity의 re-assign 방지
 		# {gold_idx: {pred_idx:count}}
-		for pred_idx, mapping in pe_dark_id_to_ge_entity_map:
+		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():
 			for gold_idx, gold_count in mapping.items():
 				if gold_idx not in mapped_entity:
 					mapped_entity[gold_idx] = {}
@@ -65,19 +65,24 @@ class Evaluator:
 				mapped_entity[gold_idx][pred_idx] += gold_count
 
 		for k, v in mapped_entity.items():
-			mapped_entity[k] = list(sorted(v.items(), key=lambda x: x[1], reverse=True))
+			mapped_entity[k] = list(sorted([[k, v] for k, v in v.items()], key=lambda x: x[1], reverse=True))
+		mapped_entity = [[k, v] for k, v in mapped_entity.items()]
 		# 최대 cluster부터 linking 시작
 		while len(mapped_entity) > 0:
-			mapped_entity = list(sorted(mapped_entity, key=lambda x: max(x[1].values()), reverse=True))
+			mapped_entity = list(sorted([[k, v] for k, v in mapped_entity], key=lambda x: max([y[1] for y in x[1]]), reverse=True))
 			gold_idx, sorted_pred_index = mapped_entity[0]
-			pred_idx = sorted_pred_index[0]
-			mapping_result[pred_idx] = gold_idx
+			pred_idx, _ = sorted_pred_index[0]
+			# print(gold_idx, sorted_pred_index, pred_idx)
+			mapping_result[pred_idx] = gold_idx if gold_idx >= len(self.e2i) else 0
 			del mapped_entity[0]
 			for item in mapped_entity:
 				item[1] = list(filter(lambda x: x[0] != pred_idx, item[1]))
+			mapped_entity = [x for x in mapped_entity if len(x[1]) > 0]
+
 		for pred_idx in pe_dark_id_to_ge_entity_map.keys():
 			if pred_idx not in mapping_result:
 				mapping_result[pred_idx] = -1
+		print(mapping_result)
 		# for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():  # out-kb pred to label matching
 		# 	# 등록 순서에 따라 index를 받기 때문에 index 변환 과정이 필요함
 		# 	sorted_mapping = sorted(mapping.items(), key=lambda x: x[1], reverse=True)
@@ -88,9 +93,10 @@ class Evaluator:
 		# 	else:  # out-kb 매핑 불가 - 틀림
 		# 		mapping_idx = 0  # not in candidate(wrong)
 		# 	mapping_result[pred_idx] = mapping_idx
-		# 	for i in range(idx_pred.size(0)):
-		# 		if idx_pred[i].item() == pred_idx:
-		# 			idx_pred[i] = mapping_idx
+		for pred_idx, mapping_idx in mapping_result.items():
+			for i in range(idx_pred.size(0)):
+				if idx_pred[i].item() == pred_idx:
+					idx_pred[i] = mapping_idx
 
 		in_surface_dict_flags = [x.in_surface_dict for x in corpus.eld_items]
 		new_ent_flags = [x.is_new_entity for x in corpus.eld_items]

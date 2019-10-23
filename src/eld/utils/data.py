@@ -310,7 +310,7 @@ class DataModule:
 				for x, c in enumerate(cluster_info):
 					if i in c:
 						result[idx] = len_before_register + x + len(self.e2i)
-			self.new_entity_embedding = torch.cat((self.new_entity_embedding, *cluster_tensor))
+			self.new_entity_embedding = torch.cat((self.new_entity_embedding, cluster_tensor.cpu()))
 
 		if len(in_kb_idx_queue) > 0:  # in-kb entity linking
 			ents = self.in_kb_linker(*in_kb_voca_queue)
@@ -356,7 +356,7 @@ class DataModule:
 				pred = self.i2e[pi]
 			result["result"].append({
 				"Surface"    : e.surface,
-				"Context"    : " ".join([x.surface for x in e.lctx[-5:]] + ["/"] + [x.surface for x in e.rctx[:5]]),
+				"Context"    : " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
 				"EntPred"    : pred,
 				"Entity"     : e.entity,
 				"NewEntPred" : pn,
@@ -385,7 +385,8 @@ def hierarchical_clustering(tensors: torch.Tensor):
 
 		f, t = iteration_max_pair
 		clustering_result.append(clustering_result[f] + clustering_result[t])  # add new cluster
-		clustering_result = clustering_result[:f] + clustering_result[f + 1:t] + clustering_result[t + 1]  # remove original cluster
+		clustering_result = clustering_result[:f] + clustering_result[f + 1:t] + clustering_result[t + 1:]  # remove original cluster
+		# print(clustering_result)
 		t = [[tensors[x] for x in y] for y in clustering_result]  # cluster-tensor mapping
 		clustering_tensors = torch.stack([sum(x) / len(x) for x in t])  # update tensors
 
@@ -401,6 +402,5 @@ def hierarchical_clustering(tensors: torch.Tensor):
 			target = buf
 		buf = history
 	_, clustering_result, clustering_tensors = target
-	gl.logger.debug("Pre-Clustering - Before: %d, After: %d" % (tensors.size(0), len(clustering_result)))
-	print(clustering_result)
+	# gl.logger.debug("Pre-Clustering - Before: %d, After: %d" % (tensors.size(0), len(clustering_result)))
 	return clustering_result, clustering_tensors
