@@ -18,7 +18,7 @@ parser.add_argument("--register_policy", type=str, default="fifo", choices=["fif
 parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
