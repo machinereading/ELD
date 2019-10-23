@@ -148,11 +148,11 @@ class DataModule:
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
 			self.oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 
-			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir, args.corpus_limit)
+			self.train_corpus = Corpus.load_corpus(args.train_corpus_dir, args.train_corpus_limit)
 			error_count = self.initialize_vocabulary_tensor(self.train_corpus)
 			gl.logger.info("Train corpus initialized, Errors: %d" % error_count)
 
-			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir, args.corpus_limit)
+			self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir, args.dev_corpus_limit)
 			error_count = self.initialize_vocabulary_tensor(self.dev_corpus)
 			gl.logger.info("Dev corpus initialized, Errors: %d" % error_count)
 
@@ -162,6 +162,7 @@ class DataModule:
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
 			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
 			args.word_limit = self.train_dataset.max_word_len_in_entity
+
 		else:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)
 			self.initialize_vocabulary_tensor(self.corpus)
@@ -344,16 +345,18 @@ class DataModule:
 			# print(pi in self.i2e, pi in mapping_result, pi - len(self.e2i) in self.i2oe)
 
 			if pn:
-				if mapping_result[pi] != 0:
+				if mapping_result[pi] > 0:
 					if mapping_result[pi] not in has_cluster:
 						has_cluster[mapping_result[pi]] = []
 					has_cluster[mapping_result[pi]].append(pi)
 					pred = self.i2oe[mapping_result[pi] - len(self.e2i)] + "_%d" % has_cluster[mapping_result[pi]].index(pi)
 				else:
-					pred = "EXPECTED_IN_KB_AS_OUT_KB"
+					pred = ["EXPECTED_IN_KB_AS_OUT_KB", "CLUSTER_PREASSIGNED"][mapping_result[pi]]
 			else:
 				pred = self.i2e[pi]
 			result["result"].append({
+				"Surface"    : e.surface,
+				"Context"    : " ".join([x.surface for x in e.lctx[-5:]] + ["/"] + [x.surface for x in e.rctx[:5]]),
 				"EntPred"    : pred,
 				"Entity"     : e.entity,
 				"NewEntPred" : pn,

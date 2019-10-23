@@ -16,7 +16,8 @@ parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["cnn
 parser.add_argument("--type_encoder", type=str, default="cnn", choices=["ffnn", "selfattn"])
 parser.add_argument("--register_policy", type=str, default="fifo", choices=["fifo", "pre_cluster"])
 parser.add_argument("--register_threshold", type=float, default=0.3)
-parser.add_argument("--limit", type=int, default=-1)
+parser.add_argument("--train_limit", type=int, default=-1)
+parser.add_argument("--dev_limit", type=int, default=-1)
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 args = parser.parse_args()
 mode = args.mode
@@ -30,11 +31,12 @@ eld_args.relation_encoder = args.relation_encoder
 eld_args.type_encoder = args.type_encoder
 eld_args.register_policy = args.register_policy
 eld_args.new_ent_threshold = args.register_threshold
-eld_args.corpus_limit = args.limit
+eld_args.train_corpus_limit = args.train_limit
+eld_args.dev_corpus_limit = args.dev_limit
 if model_name.startswith("bert"):
-	module = BertBasedELD(mode, model_name, eld_args)
+	module = BertBasedELD(mode, model_name, train_args=eld_args)
 else:
-	module = ELD(mode, model_name, eld_args)
+	module = ELD(mode, model_name, train_args=eld_args)
 
 if mode == "train":
 	module.train()

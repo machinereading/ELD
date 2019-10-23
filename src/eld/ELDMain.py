@@ -1,24 +1,27 @@
+import os
+import random
+from abc import ABC, abstractmethod
+
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from transformers import BertTokenizer, BertModel
 
-from .modules import SeparateEntityEncoder, JointEntityEncoder, VectorTransformer, FFNNEncoder, SelfAttentionEncoder
+from .modules import SeparateEntityEncoder, JointEntityEncoder, VectorTransformer, FFNNEncoder
 from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
-
-import os
-import random
-from transformers import BertTokenizer, BertModel
+import traceback
 
 # noinspection PyMethodMayBeStatic
-class ELDSkeleton:
+class ELDSkeleton(ABC):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		assert mode in ["train", "eval", "demo"]
 		self.model_name = model_name
 		if mode != "train":
-			self.args = ELDArgs(model_name)
+			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
+			self.load_model()
 		else:
 			try:
 				if train_new:
@@ -28,7 +31,9 @@ class ELDSkeleton:
 						self.args = ELDArgs(model_name)
 				else:
 					self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
+					self.load_model()
 			except Exception:
+				traceback.print_exc()
 				self.args = ELDArgs(model_name)
 			self.epochs = self.args.epochs
 			self.eval_per_epoch = self.args.eval_per_epoch
@@ -39,9 +44,10 @@ class ELDSkeleton:
 		self.data = DataModule(mode, self.args)
 		self.evaluator = Evaluator(self.args, self.data)
 		self.stop = self.args.early_stop
+
 	def discovery_loss(self, kb_score, new_entity_flag):
 		loss = None
-		closs = F.binary_cross_entropy_with_logits(kb_score.squeeze(), new_entity_flag.float())
+		closs = F.binary_cross_entropy_with_logits(kb_score.view(-1), new_entity_flag.float())
 		if loss is not None:
 			loss += closs
 		else:
@@ -53,9 +59,18 @@ class ELDSkeleton:
 		loss += sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
 		return loss
 
-	def posteval(self, epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
+	def posteval(self, epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
+		# if type(new_entity_labels[0]) is torch.Tensor:
+		# 	new_entity_labels = torch.cat(new_entity_labels, dim=-1).cpu()
+		# else:
+		# 	new_entity_labels = torch.tensor(new_entity_labels)
+		# if type(gold_entity_idxs[0]) is torch.Tensor:
+		# 	gold_entity_idxs = torch.cat(gold_entity_idxs, dim=-1).cpu()
+		# else:
+		# 	gold_entity_idxs = torch.tensor(gold_entity_idxs)
+
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
-		                                                                                                                                        torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
+		                                                                                                                                        torch.cat(new_entity_labels, dim=-1).cpu(), torch.cat(gold_entity_idxs, dim=-1).cpu())
 		print()
 		for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
 		                              ["Total", total_score],
@@ -67,16 +82,48 @@ class ELDSkeleton:
 		if total_score[-1] > max_score:
 			max_score = total_score[-1]
 			max_score_epoch = epoch
-			torch.save(self.transformer.state_dict(), self.model_path)
+			self.save_model()
 		gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
 		if not os.path.isdir("runs/eld/%s" % self.model_name):
 			os.mkdir("runs/eld/%s" % self.model_name)
-		jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
-		                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
+		analyze_data = self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result))
+		jsondump(analyze_data, "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
 		if epoch - max_score_epoch > self.stop:
 			gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
-			return False
-		return True
+			return False, max_score_epoch
+		return True, max_score_epoch, analyze_data
+
+	@abstractmethod
+	def save_model(self):
+		pass
+
+	@abstractmethod
+	def load_model(self):
+		pass
+
+	def predict(self, data, register=True):
+		self.transformer.eval()
+		pred_embedding = self.transformer(data)
+		pred_embedding.repeat(len(self.entity_index))
+		cos_sim = F.cosine_similarity(pred_embedding, self.entity_embedding)
+		if cos_sim.max() > self.map_threshold:
+			target_ind = cos_sim.argmax(dim=-1).cpu().data
+			target = self.i2e[target_ind]
+			if self.modify_entity_embedding:
+				pred_embedding *= self.modify_entity_embedding_weight
+				self.entity_embedding += torch.stack([torch.zeros(self.entity_embedding_dim) for _ in range(target_ind - 1)] + [pred_embedding] + [torch.zeros(self.entity_embedding_dim) for _ in range(len(self.i2e) - target_ind - 1)])
+			return target
+		if register:
+			register_form = self.register_new_entity(data, pred_embedding)
+			return register_form
+		return None
+
+	def __call__(self, data):
+		return self.predict(data)
+
+	def test(self):
+		pass
 
 class ELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
@@ -154,64 +201,53 @@ class ELD(ELDSkeleton):
 			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 
 			if epoch % self.eval_per_epoch == 0:
-				self.transformer.eval()
-				self.vector_transformer.eval()
-				self.data.reset_new_entity()
-				new_ent_preds = []
-				pred_entity_idxs = []
-				new_entity_labels = []
-				gold_entity_idxs = []
-				dev_batch_start_idx = 0
-				for batch in dev_batch:
-					ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
-					kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-					kb_score = torch.sigmoid(kb_score)
-					pred = self.vector_transformer(pred)
-					new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
-					new_ent_preds += new_ent_pred
-					pred_entity_idxs += entity_idx
-					new_entity_labels.append(new_entity_label)
-					gold_entity_idxs.append(gold_entity_idx)
-				if not self.posteval(epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs): break
-				# kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
-				#                                                                                                                                         torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
-				# print()
-				# for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
-				#                               ["Total", total_score],
-				#                               ["in-KB", in_kb_score],
-				#                               ["out KB", out_kb_score],
-				#                               ["No surface", no_surface_score]]:
-				# 	gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
-				# gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-				# if total_score[-1] > max_score:
-				# 	max_score = total_score[-1]
-				# 	max_score_epoch = epoch
-				# 	torch.save(self.transformer.state_dict(), self.model_path)
-				# gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
-				# if not os.path.isdir("runs/eld/%s" % self.model_name):
-				# 	os.mkdir("runs/eld/%s" % self.model_name)
-				# jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
-				#                            (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
-				# if epoch - max_score_epoch > self.stop:
-				# 	gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
-				# 	break
-	def predict(self, data, register=True):
-		self.transformer.eval()
-		pred_embedding = self.transformer(data)
-		pred_embedding.repeat(len(self.entity_index))
-		cos_sim = F.cosine_similarity(pred_embedding, self.entity_embedding)
-		if cos_sim.max() > self.map_threshold:
-			target_ind = cos_sim.argmax(dim=-1).cpu().data
-			target = self.i2e[target_ind]
-			if self.modify_entity_embedding:
-				pred_embedding *= self.modify_entity_embedding_weight
-				self.entity_embedding += torch.stack([torch.zeros(self.entity_embedding_dim) for _ in range(target_ind - 1)] + [pred_embedding] + [torch.zeros(self.entity_embedding_dim) for _ in range(len(self.i2e) - target_ind - 1)])
-			return target
-		if register:
-			register_form = self.register_new_entity(data, pred_embedding)
-			return register_form
-		return None
+				with torch.no_grad():
+					self.transformer.eval()
+					self.vector_transformer.eval()
+					self.data.reset_new_entity()  # ???
+					new_ent_preds = []
+					pred_entity_idxs = []
+					new_entity_labels = []
+					gold_entity_idxs = []
+					dev_batch_start_idx = 0
+					for batch in dev_batch:
+						ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
+						kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+						kb_score = torch.sigmoid(kb_score)
+						pred = self.vector_transformer(pred)
+						new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
+						new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
+						new_ent_preds += new_ent_pred
+						pred_entity_idxs += entity_idx
+						new_entity_labels.append(new_entity_label)
+						gold_entity_idxs.append(gold_entity_idx)
+					run, max_score_epoch, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					if not run:
+						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
+						break
+		self.test()
+			# kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
+			#                                                                                                                                         torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
+			# print()
+			# for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
+			#                               ["Total", total_score],
+			#                               ["in-KB", in_kb_score],
+			#                               ["out KB", out_kb_score],
+			#                               ["No surface", no_surface_score]]:
+			# 	gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
+			# gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
+			# if total_score[-1] > max_score:
+			# 	max_score = total_score[-1]
+			# 	max_score_epoch = epoch
+			# 	torch.save(self.transformer.state_dict(), self.model_path)
+			# gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
+			# if not os.path.isdir("runs/eld/%s" % self.model_name):
+			# 	os.mkdir("runs/eld/%s" % self.model_name)
+			# jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+			#                            (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
+			# if epoch - max_score_epoch > self.stop:
+			# 	gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
+			# 	break
 
 	def register_new_entity(self, surface, entity_embedding):
 		idx = len(self.entity_index)
@@ -221,38 +257,50 @@ class ELD(ELDSkeleton):
 		self.entity_embedding = torch.cat((self.entity_embedding, entity_embedding.unsqueeze(0)), 0)
 		return register_form
 
-	def __call__(self, data):
-		return self.predict(data)
-
-
+	def save_model(self):
+		torch.save(self.transformer.state_dict(), self.model_path)
+	def load_model(self):
+		transformer_map = {"separate": SeparateEntityEncoder, "joint": JointEntityEncoder}
+		args = self.args
+		self.transformer = transformer_map[args.transformer_mode] \
+			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+		try:
+			self.transformer.load_state_dict(torch.load(args.model_path))
+		except:
+			gl.logger.critical("No model exists!")
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(BertBasedELD, self).__init__(mode, model_name, train_new, train_args)
 		pretrained_weight = "bert-base-multilingual-cased"
-		self.tokenizer = BertTokenizer.from_pretrained(pretrained_weight, do_lower_case=True)
-		# self.tokenizer.add_special_tokens({"cls_token": "<CLS>", "additional_special_tokens": ["<e>", "</e>"], "sep_token": "<SEP>"})
-		print(self.device)
+		self.tokenizer = BertTokenizer.from_pretrained(pretrained_weight, do_lower_case=False)
+		self.tokenizer.add_special_tokens({"cls_token": "[CLS]", "additional_special_tokens": ["[e]", "[/e]"], "sep_token": "[SEP]"})
 		self.transformer = BertModel.from_pretrained(pretrained_weight).to(self.device)
-		# self.transformer.resize_token_embeddings(self.transformer.config.vocab_size + 4)
-		self.binary_classifier = FFNNEncoder(768, 1, 512, 2).to(self.device)
-		self.vector_transformer = FFNNEncoder(768, 300, 512, 2).to(self.device)
+		self.transformer.resize_token_embeddings(len(self.tokenizer))
+		self.binary_classifier = FFNNEncoder(768, 1, 768, 2).to(self.device)
+		self.vector_transformer = FFNNEncoder(768, 300, 768, 2).to(self.device)
 
 	def initialize_dataset(self, corpus):
 		s = []
+		pad = lambda tensor, size: F.pad(tensor, [0, size - tensor.size(0)])
 		for item in corpus.eld_items:
 			parent_sentence = item.parent_sentence
-			marked_sentence = "<CLS>" + parent_sentence.original_sentence[:item.char_ind] + "<e>" + item.surface + "</e>" + parent_sentence.original_sentence[item.char_ind + len(item.surface):] + "<SEP>"
+			marked_sentence = "[CLS] " + parent_sentence.original_sentence[:item.char_ind] + " [e] " + item.surface + " [/e] " + parent_sentence.original_sentence[item.char_ind + len(item.surface):] + " [SEP]"
 			new_entity_label = item.is_new_entity
 			target_embedding = item.entity_label_embedding
 			gold_entity_idx = item.entity_label_idx
-			s.append((marked_sentence, new_entity_label, target_embedding, gold_entity_idx))
+			encoded_sentence = pad(self.tokenizer.encode(marked_sentence, max_length=512, return_tensors="pt", add_special_tokens=True).squeeze(0), 512)
+			s.append((encoded_sentence, new_entity_label, target_embedding, gold_entity_idx))
 		return s
 
 	def train(self):
 		gl.logger.info("Train start")
-		batch_size = 32
+		batch_size = 4
 		train_corpus = self.data.train_corpus
 		dev_corpus = self.data.dev_corpus
 		tqdmloop = tqdm(range(1, self.epochs + 1))
@@ -262,7 +310,7 @@ class BertBasedELD(ELDSkeleton):
 		# initialize train and dev set
 		train_set = self.initialize_dataset(train_corpus)
 		dev_set = self.initialize_dataset(dev_corpus)
-		pad = lambda tensor, size: F.pad(tensor, [0, size - tensor.size(0)])
+
 		for epoch in tqdmloop:
 			self.transformer.train()
 			self.binary_classifier.train()
@@ -273,8 +321,9 @@ class BertBasedELD(ELDSkeleton):
 			ei = []
 			pr = []
 			for batch in split_to_batch(train_set, batch_size):
-				marked_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
-				encoded_sequence = torch.stack([pad(self.tokenizer.encode(x, max_length=512, return_tensors="pt").squeeze(0), 512) for x in marked_sentence]).to(self.device)
+				encoded_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
+				encoded_sequence = torch.stack(encoded_sentence).to(self.device)
+				# print(encoded_sequence[:][:5])
 				# print("encoded_sequence", encoded_sequence.size())
 				attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
 				# transformer_input = torch.stack(encoded_sequence).to(self.device)
@@ -298,27 +347,52 @@ class BertBasedELD(ELDSkeleton):
 				pr.append(pred)
 			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 			if epoch % self.eval_per_epoch == 0:
-				self.transformer.eval()
-				self.binary_classifier.eval()
-				self.vector_transformer.eval()
-				self.data.reset_new_entity()
-				new_ent_preds = []
-				pred_entity_idxs = []
-				new_entity_labels = []
-				gold_entity_idxs = []
-				dev_batch_start_idx = 0
-				for batch in split_to_batch(dev_set, batch_size):
-					marked_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
-					transformer_input, attention_mask = torch.stack([self.tokenizer.encode_plus(x, max_length=512, return_tensors="pt") for x in marked_sentence]).to(self.device)
-					new_entity_label = torch.stack(in_kb_label).to(self.device)
-					target_embedding = torch.stack(target_embedding).to(self.device)
-					transformer_output = self.transformer(transformer_input, attention_mask)[0][:, 0, :]
-					kb_score = self.binary_classifier(transformer_output)
-					pred = self.vector_transformer(target_embedding)
-					new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
-					new_ent_preds += new_ent_pred
-					pred_entity_idxs += entity_idx
-					new_entity_labels.append(new_entity_label)
-					gold_entity_idxs.append(gold_entity_idx)
-				if not self.posteval(epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs): break
+				with torch.no_grad():
+					self.transformer.eval()
+					self.binary_classifier.eval()
+					self.vector_transformer.eval()
+					self.data.reset_new_entity()
+					new_ent_preds = []
+					pred_entity_idxs = []
+					new_entity_labels = []
+					gold_entity_idxs = []
+					dev_batch_start_idx = 0
+					for batch in split_to_batch(dev_set, batch_size):
+						encoded_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
+						encoded_sequence = torch.stack(encoded_sentence).to(self.device)
+						attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
 
+						new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
+						# print(new_entity_label.size())
+						transformer_output = self.transformer(encoded_sequence, attention_mask)[0][:, 0, :]
+						kb_score = self.binary_classifier(transformer_output)
+
+						pred = self.vector_transformer(transformer_output)
+						new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
+						new_ent_preds += new_ent_pred
+						pred_entity_idxs += entity_idx
+						new_entity_labels.append(new_entity_label)
+						gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
+					run, max_score_epoch, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					if not run:
+						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
+						break
+		self.test()
+
+	def save_model(self):
+		torch.save({
+			"transformer": self.transformer.state_dict(),
+			"binary"     : self.binary_classifier.state_dict(),
+			"vector"     : self.vector_transformer.state_dict()
+		}, self.model_path)
+
+	def load_model(self):
+		pretrained_weight = "bert-base-multilingual-cased"
+		self.transformer = BertModel.from_pretrained(pretrained_weight).to(self.device)
+		self.transformer.resize_token_embeddings(len(self.tokenizer))
+		self.binary_classifier = FFNNEncoder(768, 1, 768, 2).to(self.device)
+		self.vector_transformer = FFNNEncoder(768, 300, 768, 2).to(self.device)
+		state_dict = torch.load(self.args.model_path)
+		self.transformer.load_state_dict(state_dict["transformer"])
+		self.binary_classifier.load_state_dict(state_dict["binary"])
+		self.vector_transformer.load_state_dict(state_dict["vector"])

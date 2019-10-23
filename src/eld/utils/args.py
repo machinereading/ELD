@@ -9,10 +9,12 @@ class ELDArgs(AbstractArgument):
 		self.train_corpus_dir = "corpus/namu_eld_handtag_train/"
 		self.dev_corpus_dir = "corpus/namu_eld_handtag_dev/"
 		self.test_corpus_dir = "corpus/namu_eld_handtag_test/"
-		self.epochs = 100
-		self.eval_per_epoch = 4
+		self.epochs = 300
+		self.eval_per_epoch = 1
 		self.early_stop = 30
-		self.corpus_limit = 1000
+		self.train_corpus_limit = 2500
+		self.dev_corpus_limit = 1000
+		self.test_corpus_limit = 1000
 
 		# transformer config
 		self.transformer_mode = "separate"  # one of "joint" or "separate"
