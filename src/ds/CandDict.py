@@ -6,7 +6,8 @@ class CandDict:
 		self._dict = init_dict
 		self._redirects = redirect_dict
 		self._calc_dict = {}  # lazy property
-		self._update_flag = False
+		self.generate_calc_dict()
+		self._update_flag = True
 
 	def add_instance(self, surface, entity):
 		if surface not in self._dict:
@@ -29,6 +30,7 @@ class CandDict:
 			except:
 				self._dict[ent] = {ent: 1}
 		for m, e in self._dict.items():
+			# e = {k: v for k, v in e.items() if k in self._kb} # filter only in-kb items
 			x = list(e.values())
 			values = np.around(x / np.sum(x), 4)
 			self._calc_dict[m] = {}

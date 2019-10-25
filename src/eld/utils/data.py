@@ -349,7 +349,7 @@ class DataModule:
 					if mapping_result[pi] not in has_cluster:
 						has_cluster[mapping_result[pi]] = []
 					has_cluster[mapping_result[pi]].append(pi)
-					pred = self.i2oe[mapping_result[pi] - len(self.e2i)] + "_%d" % has_cluster[mapping_result[pi]].index(pi)
+					pred = self.i2oe[mapping_result[pi] - len(self.e2i)]
 				else:
 					pred = ["EXPECTED_IN_KB_AS_OUT_KB", "CLUSTER_PREASSIGNED"][mapping_result[pi]]
 			else:

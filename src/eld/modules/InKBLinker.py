@@ -30,6 +30,7 @@ class PEM(InKBLinker):
 		result = []
 		for item in voca:
 			res = self.surface_ent_dict[item.surface]
+			# print(item.surface, res)
 			result.append(res[0][0] if len(res) > 0 else "NOT_IN_CANDIDATE")
 		return result
 

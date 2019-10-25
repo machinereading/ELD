@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name allattn_fifo --transformer separate --char_encoder selfattn --word_encoder selfattn --relation_encoder cnn --type_encoder selfattn --register_policy fifo --train_limit 500 --dev_limit 100
+CUDA_VISIBLE_DEVICES=0 python -m exec.ELDScript --mode train --model_name allattn_fifo --transformer separate --char_encoder selfattn --word_encoder selfattn --relation_encoder cnn --type_encoder selfattn --register_policy fifo --train_limit 2500 --dev_limit 1000

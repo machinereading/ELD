@@ -91,8 +91,8 @@ class ELDSkeleton(ABC):
 		jsondump(analyze_data, "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
 		if epoch - max_score_epoch > self.stop:
 			gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
-			return False, max_score_epoch
-		return True, max_score_epoch, analyze_data
+			return False, max_score_epoch, max_score, analyze_data
+		return True, max_score_epoch, max_score, analyze_data
 
 	@abstractmethod
 	def save_model(self):
@@ -221,7 +221,7 @@ class ELD(ELDSkeleton):
 						pred_entity_idxs += entity_idx
 						new_entity_labels.append(new_entity_label)
 						gold_entity_idxs.append(gold_entity_idx)
-					run, max_score_epoch, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 						break
@@ -373,7 +373,7 @@ class BertBasedELD(ELDSkeleton):
 						pred_entity_idxs += entity_idx
 						new_entity_labels.append(new_entity_label)
 						gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
-					run, max_score_epoch, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 						break
@@ -396,3 +396,12 @@ class BertBasedELD(ELDSkeleton):
 		self.transformer.load_state_dict(state_dict["transformer"])
 		self.binary_classifier.load_state_dict(state_dict["binary"])
 		self.vector_transformer.load_state_dict(state_dict["vector"])
+
+
+class ELDNone(ELDSkeleton):
+
+	def save_model(self):
+		pass
+
+	def load_model(self):
+		pass
