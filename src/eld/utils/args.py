@@ -10,7 +10,7 @@ class ELDArgs(AbstractArgument):
 		self.dev_corpus_dir = "corpus/namu_eld_handtag_dev/"
 		self.test_corpus_dir = "corpus/namu_eld_handtag_test/"
 		self.epochs = 300
-		self.eval_per_epoch = 5
+		self.eval_per_epoch = 1
 		self.early_stop = 30
 		self.train_corpus_limit = 2500
 		self.dev_corpus_limit = 1000

@@ -13,6 +13,7 @@ from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
 import traceback
+from tabulate import tabulate
 
 # noinspection PyMethodMayBeStatic
 class ELDSkeleton(ABC):
@@ -69,9 +70,11 @@ class ELDSkeleton(ABC):
 		# else:
 		# 	gold_entity_idxs = torch.tensor(gold_entity_idxs)
 
-		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
+		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
 		                                                                                                                                        torch.cat(new_entity_labels, dim=-1).cpu(), torch.cat(gold_entity_idxs, dim=-1).cpu())
 		print()
+
+
 		for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
 		                              ["Total", total_score],
 		                              ["in-KB", in_kb_score],
@@ -87,7 +90,7 @@ class ELDSkeleton(ABC):
 		if not os.path.isdir("runs/eld/%s" % self.model_name):
 			os.mkdir("runs/eld/%s" % self.model_name)
 		analyze_data = self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
-		                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result))
+		                           (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
 		if epoch - max_score_epoch > self.stop:
 			gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
@@ -205,10 +208,12 @@ class ELD(ELDSkeleton):
 					self.transformer.eval()
 					self.vector_transformer.eval()
 					self.data.reset_new_entity()  # ???
-					new_ent_preds = []
-					pred_entity_idxs = []
+					# new_ent_preds = []
+					# pred_entity_idxs = []
 					new_entity_labels = []
 					gold_entity_idxs = []
+					kb_scores = []
+					preds = []
 					dev_batch_start_idx = 0
 					for batch in dev_batch:
 						ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
@@ -216,11 +221,18 @@ class ELD(ELDSkeleton):
 						kb_score = torch.sigmoid(kb_score)
 						pred = self.vector_transformer(pred)
 						new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-						new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
-						new_ent_preds += new_ent_pred
-						pred_entity_idxs += entity_idx
+						for l, v in zip(gold_entity_idx, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size))):
+							# print(l, v.entity_label_idx)
+							assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
+						# new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
+						# new_ent_preds += new_ent_pred
+						# pred_entity_idxs += entity_idx
+						kb_scores.append(kb_score)
+						preds.append(pred)
 						new_entity_labels.append(new_entity_label)
 						gold_entity_idxs.append(gold_entity_idx)
+						dev_batch_start_idx += batch_size
+					new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), dev_corpus.eld_items)
 					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))

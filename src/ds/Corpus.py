@@ -187,6 +187,4 @@ class Corpus:
 
 	@property
 	def eld_items(self) -> List[Vocabulary]:
-		if len(self._eld_items) == 0:
-			self._eld_items = [x for x in self.entity_iter() if x.target]
-		return self._eld_items
+		return [x for x in self.entity_iter() if x.target]

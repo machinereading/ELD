@@ -3,10 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 # noinspection PyMethodMayBeStatic
+@DeprecationWarning
 class SynsetMine(nn.Module):
 	"""
 	Reference paper: Jiaming Shen et al., Mining Entity Synonyms with Efficient Neural Set Generation, AAAI, 2019
 	has same architecture except embedding layer of token embedding. it is replaced with entity embedding, which is given as input
+	NOT USED
 	"""
 	def __init__(self, embedding_input_dim):
 		super(SynsetMine, self).__init__()
