@@ -8,12 +8,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
-from .modules import SeparateEntityEncoder, JointEntityEncoder, VectorTransformer, FFNNEncoder
+from .modules import SeparateEntityEncoder, VectorTransformer, FFNNEncoder
 from .utils import ELDArgs, DataModule, Evaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
 import traceback
-from tabulate import tabulate
+# from tabulate import tabulate
 
 # noinspection PyMethodMayBeStatic
 class ELDSkeleton(ABC):
@@ -61,29 +61,19 @@ class ELDSkeleton(ABC):
 		return loss
 
 	def posteval(self, epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
-		# if type(new_entity_labels[0]) is torch.Tensor:
-		# 	new_entity_labels = torch.cat(new_entity_labels, dim=-1).cpu()
-		# else:
-		# 	new_entity_labels = torch.tensor(new_entity_labels)
-		# if type(gold_entity_idxs[0]) is torch.Tensor:
-		# 	gold_entity_idxs = torch.cat(gold_entity_idxs, dim=-1).cpu()
-		# else:
-		# 	gold_entity_idxs = torch.tensor(gold_entity_idxs)
-
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
 		                                                                                                                                        torch.cat(new_entity_labels, dim=-1).cpu(), torch.cat(gold_entity_idxs, dim=-1).cpu())
 		print()
-
-
-		for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
-		                              ["Total", total_score],
+		p, r, f = kb_expectation_score
+		gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % ("KB Expectation", p * 100, r * 100, f * 100))
+		for score_info, ((cp, cr, cf), (up, ur, uf)) in [["Total", total_score],
 		                              ["in-KB", in_kb_score],
 		                              ["out KB", out_kb_score],
 		                              ["No surface", no_surface_score]]:
-			gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
+			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-		if total_score[-1] > max_score:
-			max_score = total_score[-1]
+		if kb_expectation_score[-1] > max_score:
+			max_score = kb_expectation_score[-1]
 			max_score_epoch = epoch
 			self.save_model()
 		gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
@@ -105,36 +95,21 @@ class ELDSkeleton(ABC):
 	def load_model(self):
 		pass
 
-	def predict(self, data, register=True):
-		self.transformer.eval()
-		pred_embedding = self.transformer(data)
-		pred_embedding.repeat(len(self.entity_index))
-		cos_sim = F.cosine_similarity(pred_embedding, self.entity_embedding)
-		if cos_sim.max() > self.map_threshold:
-			target_ind = cos_sim.argmax(dim=-1).cpu().data
-			target = self.i2e[target_ind]
-			if self.modify_entity_embedding:
-				pred_embedding *= self.modify_entity_embedding_weight
-				self.entity_embedding += torch.stack([torch.zeros(self.entity_embedding_dim) for _ in range(target_ind - 1)] + [pred_embedding] + [torch.zeros(self.entity_embedding_dim) for _ in range(len(self.i2e) - target_ind - 1)])
-			return target
-		if register:
-			register_form = self.register_new_entity(data, pred_embedding)
-			return register_form
-		return None
+	@abstractmethod
+	def predict(self, data):
+		pass
 
 	def __call__(self, data):
 		return self.predict(data)
 
-	def test(self):
-		pass
 
 class ELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(ELD, self).__init__(mode, model_name, train_new, train_args)
-		transformer_map = {"separate": SeparateEntityEncoder, "joint": JointEntityEncoder}
+		# transformer_map = {"separate": SeparateEntityEncoder, "joint": JointEntityEncoder}
 		args = self.args
 		if mode != "train":
-			self.transformer = transformer_map[args.transformer_mode] \
+			self.transformer = SeparateEntityEncoder \
 				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
 				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
 				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
@@ -155,7 +130,7 @@ class ELD(ELDSkeleton):
 			self.entity_embedding_dim = self.entity_embedding.size()[-1]
 		self.map_threshold = args.out_kb_threshold
 
-		self.transformer = transformer_map[args.transformer_mode] \
+		self.transformer = SeparateEntityEncoder \
 			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
 			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
 			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
@@ -171,7 +146,7 @@ class ELD(ELDSkeleton):
 		batch_size = 256
 		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
-		dev_corpus = self.data.dev_corpus
+		dev_corpus = self.data.dev_dataset
 		tqdmloop = tqdm(range(1, self.epochs + 1))
 		discovery_optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
 		tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3, weight_decay=1e-4)
@@ -197,7 +172,7 @@ class ELD(ELDSkeleton):
 				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, ee_label)
 				tensor_loss_val.backward()
 				tensor_optimizer.step()
-				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, discovery_loss_val + tensor_loss_val))
+				tqdmloop.set_description("Epoch %d: Loss %.4f" % (epoch, float(discovery_loss_val + tensor_loss_val)))
 				ne.append(new_entity_label)
 				ei.append(gold_entity_idx)
 				pr.append(pred)
@@ -207,7 +182,7 @@ class ELD(ELDSkeleton):
 				with torch.no_grad():
 					self.transformer.eval()
 					self.vector_transformer.eval()
-					self.data.reset_new_entity()  # ???
+					self.data.reset_new_entity() # registered entity를 전부 지우고 다시 처음부터 등록 시퀀스 시작
 					# new_ent_preds = []
 					# pred_entity_idxs = []
 					new_entity_labels = []
@@ -221,7 +196,7 @@ class ELD(ELDSkeleton):
 						kb_score = torch.sigmoid(kb_score)
 						pred = self.vector_transformer(pred)
 						new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-						for l, v in zip(gold_entity_idx, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size))):
+						for l, v in zip(gold_entity_idx, dev_corpus.eld_items[dev_batch_start_idx:dev_batch_start_idx + batch_size]):
 							# print(l, v.entity_label_idx)
 							assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
 						# new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
@@ -233,33 +208,10 @@ class ELD(ELDSkeleton):
 						gold_entity_idxs.append(gold_entity_idx)
 						dev_batch_start_idx += batch_size
 					new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), dev_corpus.eld_items)
-					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 						break
-		self.test()
-			# kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
-			#                                                                                                                                         torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu())
-			# print()
-			# for score_info, (p, r, f) in [["KB expectation", kb_expectation_score],
-			#                               ["Total", total_score],
-			#                               ["in-KB", in_kb_score],
-			#                               ["out KB", out_kb_score],
-			#                               ["No surface", no_surface_score]]:
-			# 	gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % (score_info, p * 100, r * 100, f * 100))
-			# gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-			# if total_score[-1] > max_score:
-			# 	max_score = total_score[-1]
-			# 	max_score_epoch = epoch
-			# 	torch.save(self.transformer.state_dict(), self.model_path)
-			# gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
-			# if not os.path.isdir("runs/eld/%s" % self.model_name):
-			# 	os.mkdir("runs/eld/%s" % self.model_name)
-			# jsondump(self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
-			#                            (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result)), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
-			# if epoch - max_score_epoch > self.stop:
-			# 	gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
-			# 	break
 
 	def register_new_entity(self, surface, entity_embedding):
 		idx = len(self.entity_index)
@@ -271,10 +223,10 @@ class ELD(ELDSkeleton):
 
 	def save_model(self):
 		torch.save(self.transformer.state_dict(), self.model_path)
+
 	def load_model(self):
-		transformer_map = {"separate": SeparateEntityEncoder, "joint": JointEntityEncoder}
 		args = self.args
-		self.transformer = transformer_map[args.transformer_mode] \
+		self.transformer = SeparateEntityEncoder \
 			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
 			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
 			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
@@ -284,6 +236,24 @@ class ELD(ELDSkeleton):
 			self.transformer.load_state_dict(torch.load(args.model_path))
 		except:
 			gl.logger.critical("No model exists!")
+
+	def predict(self, data):
+		self.transformer.eval()
+		self.vector_transformer.eval()
+		data = self.data.prepare(data)
+
+		with torch.no_grad():
+			kb_scores = []
+			preds = []
+			for batch in split_to_batch(data, 512):
+				batch = [x.tensor for x in batch]
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
+				kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				kb_score = torch.sigmoid(kb_score)
+				pred = self.vector_transformer(pred)
+				kb_scores.append(kb_score)
+				preds.append(pred)
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), data)
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
@@ -410,10 +380,14 @@ class BertBasedELD(ELDSkeleton):
 		self.vector_transformer.load_state_dict(state_dict["vector"])
 
 
-class ELDNone(ELDSkeleton):
+class ELDNoDiscovery(ELDSkeleton):
 
 	def save_model(self):
 		pass
 
 	def load_model(self):
 		pass
+
+	def predict(self, data):
+		pass
+

@@ -27,18 +27,18 @@ class Evaluator:
 				if p == l:
 					target_dict["TP"] += 1
 
-		assert corpus.eld_len == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
+		assert len(corpus) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
 		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, new_ent_pred, average="binary")
 
 		# give entity uri to each cluster
-		pe_dark_id_to_ge_entity_map = {} # {pred_idx: {gold_idx: count}}
+		pe_dark_id_to_ge_entity_map = {}  # {pred_idx: {gold_idx: count}}
 
 		pred_cluster = []
 		gold_cluster = []
 		total_c, in_kb_c, out_kb_c, no_surface_c = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		total_u, in_kb_u, out_kb_u, no_surface_u = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		kb_pred = {"Total": 0, "Correct": 0}
-		for e, new_ent, idx in zip(corpus.eld_items, new_ent_pred, idx_pred):
+		for e, new_ent, idx in zip(corpus, new_ent_pred, idx_pred):
 			idx = idx.item()
 			new_ent = new_ent.item()
 			if not hasattr(e, "in_surface_dict"):
@@ -106,9 +106,9 @@ class Evaluator:
 				if idx_pred_clustered[i].item() == pred_idx:
 					idx_pred_clustered[i] = mapping_idx
 
-		in_surface_dict_flags = [x.in_surface_dict for x in corpus.eld_items]
-		new_ent_flags = [x.is_new_entity for x in corpus.eld_items]
-		for e, nep, ipc, ipu, nel, il, in_surface_dict in zip(corpus.eld_items, new_ent_pred, idx_pred_clustered, idx_pred_unclustered, new_ent_label, idx_label, in_surface_dict_flags):
+		in_surface_dict_flags = [x.in_surface_dict for x in corpus]
+		new_ent_flags = [x.is_new_entity for x in corpus]
+		for e, nep, ipc, ipu, nel, il, in_surface_dict in zip(corpus, new_ent_pred, idx_pred_clustered, idx_pred_unclustered, new_ent_label, idx_label, in_surface_dict_flags):
 			# set record targets
 			record_targets_c = [total_c]
 			record_targets_u = [total_u]
@@ -139,21 +139,34 @@ class Evaluator:
 		total_c_p = p(total_c)
 		total_c_r = r(total_c)
 		total_c_f1 = f1(total_c_p, total_c_r)
-		# total_acc = acc(total)
 
 		in_kb_c_p = p(in_kb_c)
 		in_kb_c_r = r(in_kb_c)
 		in_kb_c_f1 = f1(in_kb_c_p, in_kb_c_r)
-		# in_kb_acc = acc(in_kb)
 
 		out_kb_c_p = p(out_kb_c)
 		out_kb_c_r = r(out_kb_c)
 		out_kb_c_f1 = f1(out_kb_c_p, out_kb_c_r)
-		# out_kb_acc = acc(out_kb)
 
 		no_surface_c_p = p(no_surface_c)
 		no_surface_c_r = r(no_surface_c)
 		no_surface_c_f1 = f1(no_surface_c_p, no_surface_c_r)
+
+		total_u_p = p(total_u)
+		total_u_r = r(total_u)
+		total_u_f1 = f1(total_u_p, total_u_r)
+
+		in_kb_u_p = p(in_kb_u)
+		in_kb_u_r = r(in_kb_u)
+		in_kb_u_f1 = f1(in_kb_u_p, in_kb_u_r)
+
+		out_kb_u_p = p(out_kb_u)
+		out_kb_u_r = r(out_kb_u)
+		out_kb_u_f1 = f1(out_kb_u_p, out_kb_u_r)
+
+		no_surface_u_p = p(no_surface_u)
+		no_surface_u_r = r(no_surface_u)
+		no_surface_u_f1 = f1(no_surface_u_p, no_surface_u_r)
 		# no_surface_acc = acc(no_surface)
 		# total_p, total_r, total_f1, total_support = precision_recall_fscore_support([x.item() for x in idx_label], [x.item() for x in idx_pred], average="micro")
 		# exist_p, exist_r, exist_f1, exist_support = precision_recall_fscore_support([x.item() for x, y in zip(idx_label, new_ent_flags) if not y], [x.item() for x, y in zip(idx_pred, new_ent_flags) if not y], average="micro")
@@ -161,10 +174,10 @@ class Evaluator:
 		# no_surface_p, no_surface_r, no_surface_f1, _ = precision_recall_fscore_support([x.item() for x, y in zip(idx_label, in_surface_dict_flags) if not y], [x.item() for x, y in zip(idx_pred, in_surface_dict_flags) if not y],
 		#                                                                                average="micro")
 		return (kb_expect_prec, kb_expect_rec, kb_expect_f1), \
-		       (total_c_p, total_c_r, total_c_f1), \
-		       (in_kb_c_p, in_kb_c_r, in_kb_c_f1), \
-		       (out_kb_c_p, out_kb_c_r, out_kb_c_f1), \
-		       (no_surface_c_p, no_surface_c_r, no_surface_c_f1), \
+		       ((total_c_p, total_c_r, total_c_f1), (total_u_p, total_u_r, total_u_f1)), \
+		       ((in_kb_c_p, in_kb_c_r, in_kb_c_f1), (in_kb_u_p, in_kb_u_r, in_kb_u_f1)), \
+		       ((out_kb_c_p, out_kb_c_r, out_kb_c_f1), (out_kb_u_p, out_kb_u_r, out_kb_u_f1)), \
+		       ((no_surface_c_p, no_surface_c_r, no_surface_c_f1), (no_surface_u_p, no_surface_u_r, no_surface_u_f1)), \
 		       cluster_score_ari, \
 		       mapping_result_clustered, \
 		       mapping_result_unclustered

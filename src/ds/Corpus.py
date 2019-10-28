@@ -172,10 +172,10 @@ class Corpus:
 		for sent in self:
 			for ent in sent.entities:
 				yield ent
-
+	# for ELD
 	@property
 	def eld_len(self):
-		return len([x for x in self.entity_iter() if x.target])
+		return len(self.eld_items)
 
 	def eld_get_item(self, idx):
 		if type(idx) is int:
@@ -188,3 +188,4 @@ class Corpus:
 	@property
 	def eld_items(self) -> List[Vocabulary]:
 		return [x for x in self.entity_iter() if x.target]
+

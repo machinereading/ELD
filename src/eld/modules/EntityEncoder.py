@@ -127,23 +127,24 @@ class SeparateEntityEncoder(nn.Module):
 		attention_mask = torch.cat(attention_mask, dim=-1)
 		# ffnn_output = self.transformer(ffnn_input)
 		binary_output = self.binary_encoder(ffnn_input)
+		# print(ffnn_input.size(), binary_output.size())
 		return binary_output, ffnn_input, attention_mask
 
-class JointEntityEncoder(nn.Module):
-	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
-	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
-	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
-	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
-		super(JointEntityEncoder, self).__init__()
-
-	def forward(self, character_batch, character_len,
-	            left_word_context_batch, left_word_context_len,
-	            right_word_context_batch, right_word_context_len,
-	            left_entity_context_batch, left_entity_context_len,
-	            right_entity_context_batch, right_entity_context_len,
-	            relation_batch, relation_len,
-	            type_batch, type_len):
-		pass
+# class JointEntityEncoder(nn.Module):
+# 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
+# 	             character_encoder, word_encoder, entity_encoder, relation_encoder, type_encoder,
+# 	             character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim,
+# 	             character_encoding_dim, word_encoding_dim, entity_encoding_dim, relation_encoding_dim, type_encoding_dim):
+# 		super(JointEntityEncoder, self).__init__()
+#
+# 	def forward(self, character_batch, character_len,
+# 	            left_word_context_batch, left_word_context_len,
+# 	            right_word_context_batch, right_word_context_len,
+# 	            left_entity_context_batch, left_entity_context_len,
+# 	            right_entity_context_batch, right_entity_context_len,
+# 	            relation_batch, relation_len,
+# 	            type_batch, type_len):
+# 		pass
 
 class VectorTransformer(nn.Module):
 	def __init__(self, in_dim, out_dim, features):
