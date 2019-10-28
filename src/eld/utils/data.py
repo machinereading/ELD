@@ -34,6 +34,7 @@ class DataModule:
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float()
+		assert len(self.e2i) == self.entity_embedding.size(0)
 		# print(len(self.e2i), len(self.i2e), self.entity_embedding.shape)
 		self.new_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
 		self.new_entity_surface_dict = []
@@ -66,26 +67,23 @@ class DataModule:
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir)
+		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=5000)
 		if mode == "train":
+			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
+			self.oe2i["NOT_IN_CANDIDATE"] = 0
+			self.i2oe = {v: k for k, v in self.oe2i.items()}
+			self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
+			self.err_entity = set([])
+			self.initialize_vocabulary_tensor(self.corpus)
+			gl.logger.info("Corpus initialized")
 			self.train_dataset = ELDDataset(self.corpus, args, readfile(args.train_filter), args.train_corpus_limit)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
 			self.dev_dataset = ELDDataset(self.corpus, args, readfile(args.dev_filter), args.dev_corpus_limit)
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
 			self.test_dataset = ELDDataset(self.corpus, args, readfile(args.test_filter), args.test_corpus_limit)
-			self.err_entity = set([])
-			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
-			self.oe2i["NOT_IN_CANDIDATE"] = 0
-			self.i2oe = {v: k for k, v in self.oe2i.items()}
-			self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 
-			self.initialize_vocabulary_tensor(self.corpus)
-			gl.logger.info("Corpus initialized")
-			# self.train_corpus = Corpus.load_corpus(args.train_corpus_dir, args.train_corpus_limit)
-			# error_count = self.initialize_vocabulary_tensor(self.train_corpus)
-			# self.dev_corpus = Corpus.load_corpus(args.dev_corpus_dir, args.dev_corpus_limit)
 
-			# gl.logger.info("Dev corpus initialized, Errors: %d" % error_count)
+
 
 			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
 			args.word_limit = self.train_dataset.max_word_len_in_entity
@@ -98,7 +96,6 @@ class DataModule:
 		self.new_entity_count = 0
 		self.new_ent_threshold = args.out_kb_threshold
 		self.register_threshold = args.new_ent_threshold
-		self.register_policy = args.register_policy
 
 	@TimeUtil.measure_time
 	def initialize_vocabulary_tensor(self, corpus: Corpus):
@@ -131,7 +128,7 @@ class DataModule:
 		if self.te_flag:
 			ne_type = token.ne_type[:2].upper()
 			token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
-		if not pred:  # train mode 전용 label setting
+		if not pred and token.target:  # train mode 전용 label setting
 			if token.entity in self.e2i:
 				token.entity_label_embedding = self.entity_embedding[self.e2i[token.entity]]
 				token.entity_label_idx = self.e2i[token.entity]
@@ -165,14 +162,13 @@ class DataModule:
 				emb_map[i].append(e)
 		for k, v in emb_map.items():
 			self.train_oe_embedding[k - len(self.e2i)] = sum(v) / len(v)
-		for token in self.corpus.eld_items:
+		for token in self.train_dataset.eld_items:
 			if token.target and token.entity in self.oe2i:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()
 
 	def reset_new_entity(self):
 		self.new_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
 		self.new_entity_surface_dict = []
-		print(self.new_entity_embedding.size())
 
 	@TimeUtil.measure_time
 	def predict_entity(self, new_ent_pred, pred_embedding, target_voca_list):
@@ -188,8 +184,6 @@ class DataModule:
 
 		result = []
 		new_ent_flags = []
-		add_idx_queue = []
-		add_tensor_queue = []
 		in_kb_idx_queue = []
 		in_kb_voca_queue = []
 
@@ -216,6 +210,7 @@ class DataModule:
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
 				new_ent_flag = max_sim < self.register_threshold
 
+			print(new_ent_flag, max_sim, pred_idx)
 			# out-kb에 대한 registration & result generation
 			if new_ent_flag:  # out-kb
 				if len(v.surface) > 3:  # heuristic
@@ -227,12 +222,10 @@ class DataModule:
 								pred_idx = new_ent_idx
 								max_sim = 1
 								out_flag = True
-								print(pred_idx, "by surface form")
 								break
 
 				if max_sim < self.register_threshold:  # entity registeration
 					# if self.register_policy == "fifo":  # register immediately
-					print("New entity:", v.surface)
 					pred_idx = self.new_entity_embedding.size(0)
 					self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
 					self.new_entity_surface_dict.append({v.surface})
@@ -240,7 +233,7 @@ class DataModule:
 					print(len(self.new_entity_surface_dict), self.new_entity_embedding.size(0))
 					assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
 				else:
-					print(pred_idx, len(self.new_entity_surface_dict))
+					assert pred_idx >= 0
 					self.new_entity_surface_dict[pred_idx].add(v.surface)
 				result.append(len(self.e2i) + pred_idx)
 			# elif self.register_policy == "pre_cluster":  # register after clustering batch wise

@@ -47,18 +47,12 @@ class ELDSkeleton(ABC):
 		self.stop = self.args.early_stop
 
 	def discovery_loss(self, kb_score, new_entity_flag):
-		loss = None
-		closs = F.binary_cross_entropy_with_logits(kb_score.view(-1), new_entity_flag.float())
-		if loss is not None:
-			loss += closs
-		else:
-			loss = closs
-		return loss
+		return F.binary_cross_entropy_with_logits(kb_score.view(-1), new_entity_flag.float())
 
 	def out_kb_loss(self, pred, new_entity_flag, label):
-		loss = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
-		loss += sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
-		return loss
+		# l1 = sum([F.mse_loss(p, g) if t == 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])
+		# l2 = sum([F.mse_loss(p, g) if t == 1 and torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for t, p, g in zip(new_entity_flag, pred, label)])  # zero tensor는 일단 거름
+		return sum([F.mse_loss(p, g) for t, p, g in zip(new_entity_flag, pred, label) if torch.sum(g) != 0])
 
 	def posteval(self, epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs),
@@ -106,7 +100,6 @@ class ELDSkeleton(ABC):
 class ELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(ELD, self).__init__(mode, model_name, train_new, train_args)
-		# transformer_map = {"separate": SeparateEntityEncoder, "joint": JointEntityEncoder}
 		args = self.args
 		if mode != "train":
 			self.transformer = SeparateEntityEncoder \
@@ -168,7 +161,7 @@ class ELD(ELDSkeleton):
 				discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
 				discovery_loss_val.backward()
 				discovery_optimizer.step()
-				pred = self.vector_transformer(pred.detach())
+				pred = self.vector_transformer(pred.detach()) # TODO why zero tensor?
 				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, ee_label)
 				tensor_loss_val.backward()
 				tensor_optimizer.step()
@@ -179,10 +172,10 @@ class ELD(ELDSkeleton):
 			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr))
 
 			if epoch % self.eval_per_epoch == 0:
+				self.transformer.eval()
+				self.vector_transformer.eval()
+				self.data.reset_new_entity() # registered entity를 전부 지우고 다시 처음부터 등록 시퀀스 시작
 				with torch.no_grad():
-					self.transformer.eval()
-					self.vector_transformer.eval()
-					self.data.reset_new_entity() # registered entity를 전부 지우고 다시 처음부터 등록 시퀀스 시작
 					# new_ent_preds = []
 					# pred_entity_idxs = []
 					new_entity_labels = []
@@ -194,11 +187,11 @@ class ELD(ELDSkeleton):
 						ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
 						kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 						kb_score = torch.sigmoid(kb_score)
-						pred = self.vector_transformer(pred)
+						pred = self.vector_transformer(pred.detach()) # TODO
 						new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-3:]]
-						for l, v in zip(gold_entity_idx, dev_corpus.eld_items[dev_batch_start_idx:dev_batch_start_idx + batch_size]):
-							# print(l, v.entity_label_idx)
-							assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
+						# for l, v in zip(gold_entity_idx, dev_corpus.eld_items[dev_batch_start_idx:dev_batch_start_idx + batch_size]):
+						# 	# print(l, v.entity_label_idx)
+						# 	assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
 						# new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
 						# new_ent_preds += new_ent_pred
 						# pred_entity_idxs += entity_idx

@@ -11,7 +11,7 @@ class ELDArgs(AbstractArgument):
 		self.dev_filter = "corpus/namu_handtag_only_dev"
 		self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
-		self.eval_per_epoch = 5
+		self.eval_per_epoch = 2
 		self.early_stop = 30
 		self.train_corpus_limit = 2500
 		self.dev_corpus_limit = 1000
@@ -42,16 +42,19 @@ class ELDArgs(AbstractArgument):
 		self.character_embedding_file = "data/eld/character_embedding.npy"
 		self.word_file = "data/embedding/wiki_stem.word"
 		self.word_embedding_file = "data/embedding/wiki_stem.npy"
-		# self.entity_file = "data/embedding/entity_kbox_gl.word"
-		self.entity_file = "data/eld/handtag_only.word"
-		# self.entity_embedding_file = "data/embedding/entity_kbox_gl.npy"
-		self.entity_embedding_file = "data/eld/handtag_only.npy"
+		self.entity_file = "data/eld/entities"
+		# self.entity_file = "data/eld/handtag_only.word"
+		self.entity_embedding_file = "data/eld/entity_embeddings.npy"
+		# self.entity_embedding_file = "data/eld/handtag_only.npy"
 		self.relation_file = "data/eld/relations"
 		self.type_file = "data/eld/types"
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
 		self.in_kb_linker = "pem"
+
+		self.kb_type_file = None
+		self.kb_type_list = None
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100

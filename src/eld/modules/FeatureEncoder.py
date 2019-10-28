@@ -117,7 +117,7 @@ class FFNNEncoder(nn.Module):
 	def __init__(self, input_dim, output_dim, hidden_dim, num_layers):
 		super(FFNNEncoder, self).__init__()
 		layers = [nn.Linear(input_dim, output_dim), nn.ReLU(), nn.Dropout()] if num_layers < 2 else \
-			[nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout()] + [nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout()] * (num_layers - 2) + [nn.Linear(hidden_dim, output_dim), nn.ReLU(), nn.Dropout()]
+			[nn.Linear(input_dim, hidden_dim), nn.ReLU(), nn.Dropout()] + [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(), nn.Dropout()] * (num_layers - 2) + [nn.Linear(hidden_dim, output_dim), nn.ReLU(), nn.Dropout()]
 		self.nn = torch.nn.Sequential(*layers)
 
 	def forward(self, input_tensor, *args):

@@ -5,6 +5,7 @@ import torch
 from . import Relation
 from ..utils.KoreanUtil import decompose_sent
 
+
 class Vocabulary:
 	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
 		self.surface: str = surface
@@ -129,3 +130,6 @@ class Vocabulary:
 	@property
 	def is_new_entity(self):
 		return self.entity.startswith("namu_")
+
+	def get_relative_token(self, relative_idx):
+		return self.parent_sentence.entities[self.entity_idx + relative_idx]
