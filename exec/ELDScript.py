@@ -17,6 +17,7 @@ parser.add_argument("--type_encoder", type=str, default="ffnn", choices=["none",
 parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
+parser.add_argument("--modify_entity_embedding", action="store_true")
 args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
@@ -48,6 +49,7 @@ else:
 eld_args.new_ent_threshold = args.register_threshold
 eld_args.train_corpus_limit = args.train_limit
 eld_args.dev_corpus_limit = args.dev_limit
+eld_args.modify_entity_embedding = args.modify_entity_embedding
 if model_name.startswith("bert"):
 	module = BertBasedELD(mode, model_name, train_args=eld_args)
 else:

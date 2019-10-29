@@ -28,6 +28,9 @@ class DataModule:
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
+		self.modify_entity_embedding = args.modify_entity_embedding
+		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
+
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
 		self.e2i["NOT_IN_CANDIDATE"] = 0
 		self.new_entity_idx = {}
@@ -235,6 +238,8 @@ class DataModule:
 				else:
 					assert pred_idx >= 0
 					self.new_entity_surface_dict[pred_idx].add(v.surface)
+					if self.modify_entity_embedding:
+						self.new_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.new_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
 				result.append(len(self.e2i) + pred_idx)
 			# elif self.register_policy == "pre_cluster":  # register after clustering batch wise
 			# 	add_idx_queue.append(idx)
