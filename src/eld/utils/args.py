@@ -11,7 +11,7 @@ class ELDArgs(AbstractArgument):
 		self.dev_filter = "corpus/namu_handtag_only_dev"
 		self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
-		self.eval_per_epoch = 2
+		self.eval_per_epoch = 5
 		self.early_stop = 30
 		self.train_corpus_limit = 2500
 		self.dev_corpus_limit = 1000

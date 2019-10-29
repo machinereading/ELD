@@ -140,13 +140,9 @@ class DataModule:
 				token.target = False
 		return token
 
-	def update_new_entity_embedding(self, new_entity_flag, gold_idx, pred_emb):
+	def update_new_entity_embedding(self, new_entity_flag, gold_idx, pred_emb, epoch):
 		"""
 		Train 과정에서 label별로 entity embedding을 업데이트 하는 함수, prediction에서는 안쓰임
-		:param new_entity_flag:
-		:param gold_idx: 
-		:param pred_emb:
-		:return:
 		"""
 		assert self.mode == "train"
 		emb_map = {}
@@ -157,7 +153,15 @@ class DataModule:
 					emb_map[i] = []
 				emb_map[i].append(e)
 		for k, v in emb_map.items():
-			self.train_oe_embedding[k - len(self.e2i)] = sum(v) / len(v)
+			idx = k - len(self.e2i)
+			result = sum(v) / len(v)
+			# print("UPDATED", k - len(self.e2i), self.i2oe[k - len(self.e2i)], result)
+			target = self.train_oe_embedding[idx]
+			self.train_oe_embedding[idx] = result
+			# if sum(target) == 0:
+			# 	self.train_oe_embedding[idx] = result
+			# else:
+			# 	self.train_oe_embedding[idx] = result * (0.5 - epoch * 0.001)  + target * (0.5 + epoch * 0.001) # stabilize
 		for token in self.train_dataset.eld_items:
 			if token.target and token.entity in self.oe2i:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()

@@ -88,7 +88,7 @@ class ELDDataset(Dataset):
 			te = target.type_embedding
 			tl = te.size()[0]
 
-		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx
+		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx, index
 
 	def __len__(self):
 		return len(self.eld_items)

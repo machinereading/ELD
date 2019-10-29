@@ -165,3 +165,22 @@ class VectorTransformer2(nn.Module):
 		if eval: print("final", result)
 		return result
 
+class VectorTransformer3(nn.Module):
+	def __init__(self, in_dim, out_dim, features):
+		super(VectorTransformer3, self).__init__()
+		self.features = features
+		self.in_dim = in_dim
+		self.transformer = CNNEncoder(in_dim, features, features, 3)
+		out_size = self.transformer.out_size
+		self.dropout = nn.Dropout(p=0.2)
+		self.linear = nn.Linear(out_size, out_dim)
+
+	def forward(self, vec, eval=False):
+		assert vec.size(-1) == self.features * self.in_dim
+		transformed = vec.view(-1, self.features, self.in_dim)
+		if eval: print("CNN-before", transformed)
+		transformed = self.transformer(transformed)
+		if eval: print("CNN-after", transformed)
+		result = self.linear(self.dropout(transformed))
+		if eval: print("CNN-result", result)
+		return result
