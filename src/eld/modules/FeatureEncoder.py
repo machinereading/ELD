@@ -92,7 +92,7 @@ class SelfAttentionEncoder(nn.Module):
 		if self.apply_ffnn:
 			self.ffnn = nn.Linear(input_size * features, output_dim)
 
-	def forward(self, hidden_state, attention_mask=None, head_mask=None, *args):
+	def forward(self, hidden_state, attention_mask=None, head_mask=None, eval=False, *args):
 		if attention_mask is None:
 			attention_mask = torch.ones([hidden_state.size(0), self.num_attention_heads, self.separate, self.separate]).to(hidden_state.device)
 		# print(hidden_state.size())
@@ -101,9 +101,12 @@ class SelfAttentionEncoder(nn.Module):
 			head_mask = [None] * self.config.num_hidden_layers
 		# attention_mask = attention_mask.view(-1, self.separate, self.input_size)
 		# print(hidden_state.size())
+		if eval: print("Attn_hidden", hidden_state)
 		output = self.encoder(hidden_state, attention_mask, head_mask)
+		if eval: print("Attn after encoder", output)
 		if self.apply_ffnn:
 			output = F.relu(self.ffnn(F.dropout(output[0].view(-1, self.separate * self.input_size))))
+			if eval: print("Attn after ffnn", output)
 		return output
 
 class Ident(nn.Module):

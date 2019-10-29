@@ -67,7 +67,7 @@ class DataModule:
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=5000)
+		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=2000)
 		if mode == "train":
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
@@ -81,10 +81,6 @@ class DataModule:
 			self.dev_dataset = ELDDataset(self.corpus, args, readfile(args.dev_filter), args.dev_corpus_limit)
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
 			self.test_dataset = ELDDataset(self.corpus, args, readfile(args.test_filter), args.test_corpus_limit)
-
-
-
-
 			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
 			args.word_limit = self.train_dataset.max_word_len_in_entity
 
@@ -210,7 +206,7 @@ class DataModule:
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
 				new_ent_flag = max_sim < self.register_threshold
 
-			print(new_ent_flag, max_sim, pred_idx)
+			# print(new_ent_flag, max_sim, pred_idx)
 			# out-kb에 대한 registration & result generation
 			if new_ent_flag:  # out-kb
 				if len(v.surface) > 3:  # heuristic
@@ -230,7 +226,7 @@ class DataModule:
 					self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
 					self.new_entity_surface_dict.append({v.surface})
 
-					print(len(self.new_entity_surface_dict), self.new_entity_embedding.size(0))
+					# print(len(self.new_entity_surface_dict), self.new_entity_embedding.size(0))
 					assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
 				else:
 					assert pred_idx >= 0

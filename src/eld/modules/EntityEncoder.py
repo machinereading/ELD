@@ -96,39 +96,31 @@ class SeparateEntityEncoder(nn.Module):
 	            relation_batch, relation_len,
 	            type_batch, type_len):
 		mid_features = []
-		attention_mask = []
 		if self.ce_flag:
 			ce = self.character_encoder(character_batch) # batch * max_character * embedding_size
 			mid_features.append(F.pad(ce, [0, self.max_input_dim - self.ce_dim]))
-			attention_mask.append(F.pad(torch.ones_like(ce), [0, self.max_input_dim - self.ce_dim]))
 		if self.we_flag:
 			we = self.word_encoder(word_batch)
 			mid_features.append(F.pad(we, [0, self.max_input_dim - self.we_dim]))
-			attention_mask.append(F.pad(torch.ones_like(we), [0, self.max_input_dim - self.we_dim]))
 		if self.wce_flag:
 			wce = self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len)
 			mid_features.append(F.pad(wce, [0, self.max_input_dim - self.wce_dim]))
-			attention_mask.append(F.pad(torch.ones_like(wce), [0, self.max_input_dim - self.wce_dim]))
 		if self.ee_flag:
 			ece = self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len)
 			mid_features.append(F.pad(ece, [0, self.max_input_dim - self.ee_dim]))
-			attention_mask.append(F.pad(torch.ones_like(ece), [0, self.max_input_dim - self.ee_dim]))
 		if self.re_flag:
 			re = self.relation_encoder(relation_batch)
 			mid_features.append(F.pad(re, [0, self.max_input_dim - self.re_dim]))
-			attention_mask.append(F.pad(torch.ones_like(re), [0, self.max_input_dim - self.re_dim]))
 		if self.te_flag:
 			te = self.type_encoder(type_batch)
 			# print(self.type_encoder.out_size, te.size())
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
-			attention_mask.append(F.pad(torch.ones_like(te), [0, self.max_input_dim - self.te_dim]))
 		# for item in mid_features: print(item.size())
 		ffnn_input = torch.cat(mid_features, dim=-1)
-		attention_mask = torch.cat(attention_mask, dim=-1)
 		# ffnn_output = self.transformer(ffnn_input)
 		binary_output = self.binary_encoder(ffnn_input)
 		# print(ffnn_input.size(), binary_output.size())
-		return binary_output, ffnn_input, attention_mask
+		return binary_output, ffnn_input
 
 # class JointEntityEncoder(nn.Module):
 # 	def __init__(self, use_character_embedding, use_word_context_embedding, use_entity_context_embedding, use_relation_embedding, use_type_embedding,
@@ -150,12 +142,26 @@ class VectorTransformer(nn.Module):
 	def __init__(self, in_dim, out_dim, features):
 		super(VectorTransformer, self).__init__()
 		self.transformer = FFNNEncoder(in_dim * features, out_dim, out_dim, 3)
-		# self.dropout = nn.Dropout()
-		# self.linear = nn.Linear(in_dim * features, out_dim)
-		# self.linear_in_dim = in_dim * features
+
 
 	def forward(self, vec, attention_mask=None):
 		return self.transformer(vec)
-		# transformed = self.transformer(vec, attention_mask)[0]
-		# transformed = transformed.view(-1, self.linear_in_dim)
-		# return self.linear(self.dropout(transformed))
+
+class VectorTransformer2(nn.Module):
+	def __init__(self, in_dim, out_dim, features):
+		super(VectorTransformer2, self).__init__()
+		self.transformer = SelfAttentionEncoder(in_dim, 5, 4, features)
+		self.dropout = nn.Dropout(p=0.2)
+		self.linear = nn.Linear(in_dim * features, out_dim)
+		self.linear_in_dim = in_dim * features
+
+	def forward(self, vec, attention_mask=None, eval=False):
+		if eval: print("vec", vec)
+		transformed = self.transformer(vec, attention_mask, eval=eval)[0]
+		if eval: print("transformed", transformed)
+		transformed = transformed.view(-1, self.linear_in_dim)
+		if eval: print("transformed2", transformed)
+		result = self.linear(self.dropout(transformed))
+		if eval: print("final", result)
+		return result
+
