@@ -1,2 +1,7 @@
-CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_fifo --transformer separate --char_encoder cnn --word_encoder cnn --relation_encoder cnn --type_encoder ffnn --register_policy fifo --train_limit 2500 --dev_limit 1000
-CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_precluster --transformer separate --char_encoder cnn --word_encoder cnn --relation_encoder cnn --type_encoder ffnn --register_policy pre_cluster --train_limit 2500 --dev_limit 1000
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_all
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_nochar --char_encoder none
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_noword --word_encoder none
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_nowordctx --word_context_encoder none
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_noentctx --entity_context_encoder none
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_norel --relation_encoder none
+CUDA_VISIBLE_DEVICES=1 python -m exec.ELDScript --mode train --model_name noattn_notype --type_encoder none

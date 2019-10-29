@@ -67,7 +67,7 @@ class DataModule:
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=2000)
+		self.corpus = Corpus.load_corpus(args.corpus_dir)
 		if mode == "train":
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
@@ -154,14 +154,14 @@ class DataModule:
 				emb_map[i].append(e)
 		for k, v in emb_map.items():
 			idx = k - len(self.e2i)
-			result = sum(v) / len(v)
+			result = (sum(v) / len(v)).to(self.device)
 			# print("UPDATED", k - len(self.e2i), self.i2oe[k - len(self.e2i)], result)
-			target = self.train_oe_embedding[idx]
-			self.train_oe_embedding[idx] = result
-			# if sum(target) == 0:
-			# 	self.train_oe_embedding[idx] = result
-			# else:
-			# 	self.train_oe_embedding[idx] = result * (0.5 - epoch * 0.001)  + target * (0.5 + epoch * 0.001) # stabilize
+			target = self.train_oe_embedding[idx].to(self.device)
+			# self.train_oe_embedding[idx] = result
+			if sum(target) == 0:
+				self.train_oe_embedding[idx] = result
+			else:
+				self.train_oe_embedding[idx] = (result * (0.5 - epoch * 0.001)  + target * (0.5 + epoch * 0.001)).clone().detach() # stabilize
 		for token in self.train_dataset.eld_items:
 			if token.target and token.entity in self.oe2i:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()

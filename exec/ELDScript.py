@@ -8,27 +8,43 @@ from src.utils.TimeUtil import time_analysis
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", type=str, choices=["train", "pred", "demo"], required=True)
 parser.add_argument("--model_name", type=str, required=True)
-parser.add_argument("--char_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
-parser.add_argument("--word_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
-# parser.add_argument("word_context_encoder")
-parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["cnn", "selfattn"])
-parser.add_argument("--type_encoder", type=str, default="cnn", choices=["ffnn", "selfattn"])
-parser.add_argument("--register_policy", type=str, default="fifo", choices=["fifo", "pre_cluster"])
+parser.add_argument("--char_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
+parser.add_argument("--word_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
+parser.add_argument("--word_context_encoder", type=str, default="bilstm", choices=["none", "bilstm"])
+parser.add_argument("--entity_context_encoder", type=str, default="bilstm", choices=["none", "bilstm"])
+parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
+parser.add_argument("--type_encoder", type=str, default="ffnn", choices=["none", "ffnn", "selfattn"])
 parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
-
 eld_args = ELDArgs(model_name)
-# eld_args.transformer_mode = args.transformer
-eld_args.character_encoder = args.char_encoder
-eld_args.word_encoder = args.word_encoder
-eld_args.relation_encoder = args.relation_encoder
-eld_args.type_encoder = args.type_encoder
-eld_args.register_policy = args.register_policy
+if args.char_encoder == "none":
+	eld_args.use_character_embedding = False
+else:
+	eld_args.character_encoder = args.char_encoder
+if args.word_encoder == "none":
+	eld_args.use_word_embedding = False
+else:
+	eld_args.word_encoder = args.word_encoder
+if args.word_context_encoder == "none":
+	eld_args.use_word_context_embedding = False
+else:
+	eld_args.word_context_encoder = args.word_context_encoder
+if args.entity_context_encoder == "none":
+	eld_args.use_entity_context_embedding = False
+else:
+	eld_args.entity_context_encoder = args.entity_context_encoder
+if args.relation_encoder == "none":
+	eld_args.use_relation_embedding = False
+else:
+	eld_args.relation_encoder = args.relation_encoder
+if args.type_encoder == "none":
+	eld_args.use_type_embedding = False
+else:
+	eld_args.type_encoder = args.type_encoder
 eld_args.new_ent_threshold = args.register_threshold
 eld_args.train_corpus_limit = args.train_limit
 eld_args.dev_corpus_limit = args.dev_limit
