@@ -56,8 +56,10 @@ class ELDArgs(AbstractArgument):
 		self.type_prediction = False
 		self.kb_type_file = "data/eld/typerefer/entity_types.json"
 		self.kb_type_list = "data/eld/typerefer/dbpedia_types"
-		self.domain_restriction_file = "data/eld/typerefer/domain.tsv"
-		self.range_restriction_file = "data/eld/typerefer/range.tsv"
+		# self.domain_restriction_file = ["data/eld/typerefer/domain.tsv"]
+		# self.range_restriction_file = ["data/eld/typerefer/range.tsv"]
+		self.domain_restriction_file = ["data/eld/typerefer/inst-d.tsv"]
+		self.range_restriction_file = ["data/eld/typerefer/inst-r.tsv"]
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100

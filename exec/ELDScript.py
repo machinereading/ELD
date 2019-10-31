@@ -6,7 +6,7 @@ from src.eld.utils import ELDArgs
 from src.utils.TimeUtil import time_analysis
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode", type=str, choices=["train", "pred", "demo"], required=True)
+parser.add_argument("--mode", type=str, choices=["train", "pred", "typeeval", "demo"], required=True)
 parser.add_argument("--model_name", type=str, required=True)
 parser.add_argument("--char_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
 parser.add_argument("--word_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
@@ -22,6 +22,8 @@ args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
 eld_args = ELDArgs(model_name)
+if mode == "typeeval":
+	eld_args.type_prediction = True
 if args.char_encoder == "none":
 	eld_args.use_character_embedding = False
 else:
@@ -65,3 +67,5 @@ if mode == "demo":
 	pass
 
 
+if mode == "typeeval":
+	module.evaluate_type()

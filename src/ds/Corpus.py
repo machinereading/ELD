@@ -7,7 +7,7 @@ from typing import Iterator, List
 from .Cluster import Cluster
 from .Sentence import Sentence
 from .Vocabulary import Vocabulary
-from ..utils import jsonload, TimeUtil, diriter
+from ..utils import jsonload, TimeUtil, diriter, readfile
 
 class Corpus:
 	def __init__(self):

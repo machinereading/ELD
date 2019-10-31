@@ -31,7 +31,13 @@ class DataModule:
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		self.modify_entity_embedding = args.modify_entity_embedding
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
-
+		self.type_predict = args.type_prediction
+		# load corpus and se
+		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=5000)
+		if self.type_predict:
+			self.typegiver = TypeGiver(args)
+			if mode == "typeeval":
+				return
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
 		self.e2i["NOT_IN_CANDIDATE"] = 0
 		self.new_entity_idx = {}
@@ -71,11 +77,7 @@ class DataModule:
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
 
-		self.type_predict = args.type_prediction
-		if self.type_predict:
-			self.typegiver = TypeGiver(args)
-		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir)
+
 		if mode == "train":
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0

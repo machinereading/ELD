@@ -9,8 +9,9 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
+from ..ds import Corpus
 from .modules import SeparateEntityEncoder, FFNNEncoder, VectorTransformer3
-from .utils import ELDArgs, DataModule, Evaluator
+from .utils import ELDArgs, DataModule, Evaluator, TypeEvaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
 
@@ -19,9 +20,9 @@ from ..utils import jsondump, split_to_batch
 # noinspection PyMethodMayBeStatic
 class ELDSkeleton(ABC):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
-		assert mode in ["train", "eval", "demo"]
+
 		self.model_name = model_name
-		if mode != "train":
+		if mode not in  ["train", "typeeval"]:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
 		else:
@@ -44,7 +45,11 @@ class ELDSkeleton(ABC):
 
 		self.args.mode = mode
 		self.data = DataModule(mode, self.args)
+		if self.args.type_prediction:
+			self.type_evaluator = TypeEvaluator()
+			if mode == "typeeval": return
 		self.evaluator = Evaluator(self.args, self.data)
+
 		self.stop = self.args.early_stop
 		self.stop_train_discovery = False
 
@@ -104,10 +109,18 @@ class ELDSkeleton(ABC):
 	def __call__(self, data):
 		return self.predict(data)
 
+	def evaluate_type(self): # hard-coded for type prediction # TODO Temporary code
+		if not self.args.type_prediction: return
+		preds = self.data.typegiver(*self.data.corpus.eld_items)
+		labels = self.data.typegiver.get_gold(*self.data.corpus.eld_items)
+		print(TypeEvaluator()(self.data.corpus.eld_items, preds, labels))
+
 class ELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(ELD, self).__init__(mode, model_name, train_new, train_args)
 		args = self.args
+		if mode == "typeeval":
+			return
 		if mode != "train":
 			self.transformer = SeparateEntityEncoder \
 				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
@@ -289,6 +302,8 @@ class ELD(ELDSkeleton):
 				preds.append(pred)
 			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), data)
 		return new_ent_preds, pred_entity_idxs
+
+
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
