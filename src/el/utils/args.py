@@ -28,13 +28,18 @@ class ELArgs(AbstractArgument):
 		self.ent_list_path = "data/el/kb_entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-		self.word_voca_path = 'data/el/embeddings/dict.word'
-		self.word_embedding_path = 'data/el/embeddings/word_embeddings.npy'
-		self.snd_word_voca_path = 'data/el/embeddings/glove/dict_no_pos.word'
-		self.snd_word_embedding_path = 'data/el/embeddings/glove/word_embeddings.npy'
-
-		self.entity_voca_path = 'data/el/embeddings/dict.entity'
-		self.entity_embedding_path = 'data/el/embeddings/entity_embeddings.npy'
+		# self.word_voca_path = 'data/el/embeddings/dict.word'
+		# self.word_embedding_path = 'data/el/embeddings/word_embeddings.npy'
+		# self.snd_word_voca_path = 'data/el/embeddings/glove/dict_no_pos.word'
+		# self.snd_word_embedding_path = 'data/el/embeddings/glove/word_embeddings.npy'
+		# self.entity_voca_path = 'data/el/embeddings/dict.entity'
+		# self.entity_embedding_path = 'data/el/embeddings/entity_embeddings.npy'
+		self.word_voca_path = "data/el/en/dict.word"
+		self.word_embedding_path = "data/el/en/word_embeddings.npy"
+		self.snd_word_voca_path = "data/el/en/glove/dict.word"
+		self.snd_word_embedding_path = "data/el/en/glove/word_embeddings.npy"
+		self.entity_voca_path = "data/el/en/dict.entity"
+		self.entity_embedding_path = "data/el/en/entity_embeddings.npy"
 
 	@property
 	def model_path(self):

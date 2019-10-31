@@ -52,7 +52,11 @@ class EL:
 		gl.logger.info("Start training")
 		self.ranker.train(train_data, [("dev", dev_data)],
 		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
-
+	def train_with_conll(self, tc, tt, dc, dt):
+		train_data = D.generate_dataset_from_str(tc, tt)
+		dev_data = D.generate_dataset_from_str(dc, dt)
+		self.ranker.train(train_data, [("dev", dev_data)],
+		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
 	def predict(self, sentences, delete_candidate=True):
 		# type_list = [type(x) for x in sentences]
 		# assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(

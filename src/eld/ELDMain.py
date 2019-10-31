@@ -430,6 +430,14 @@ class BertBasedELD(ELDSkeleton):
 		self.vector_transformer.load_state_dict(state_dict["vector"])
 
 class ELDNoDiscovery(ELDSkeleton):
+	def __init__(self, mode, args):
+		super(ELDNoDiscovery, self).__init__(mode, "nodiscovery", train_new=True, train_args=args)
+		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
+
+		dev_corpus = self.data.dev_dataset
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus)
+
+		run, max_score_epoch, max_score, analysis = self.posteval(0, 0, 0, dev_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 
 	def save_model(self):
 		pass
@@ -439,3 +447,10 @@ class ELDNoDiscovery(ELDSkeleton):
 
 	def predict(self, data):
 		pass
+	def eval(self, corpus: Corpus):
+		new_entity_labels = [x.is_new_entity for x in corpus.eld_items]
+		gold_entity_idxs = [x.entity_label_idx for x in corpus.eld_items]
+		kb_scores = [0 for _ in corpus.eld_items]
+		preds = [torch.zeros(1, 300).to(self.device, dtype=torch.float) for _ in corpus.eld_items]
+		new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.tensor(kb_scores), torch.cat(preds), corpus.eld_items)
+		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs

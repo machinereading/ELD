@@ -1,5 +1,4 @@
 import argparse
-import os
 
 from src.eld import ELD, BertBasedELD
 from src.eld.utils import ELDArgs
@@ -52,6 +51,7 @@ eld_args.new_ent_threshold = args.register_threshold
 eld_args.train_corpus_limit = args.train_limit
 eld_args.dev_corpus_limit = args.dev_limit
 eld_args.modify_entity_embedding = args.modify_entity_embedding
+
 if model_name.startswith("bert"):
 	module = BertBasedELD(mode, model_name, train_args=eld_args)
 else:
@@ -65,7 +65,6 @@ if mode == "pred":
 
 if mode == "demo":
 	pass
-
 
 if mode == "typeeval":
 	module.evaluate_type()
