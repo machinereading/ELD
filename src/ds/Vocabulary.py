@@ -28,11 +28,11 @@ class Vocabulary:
 
 		# reserved for ELD
 		self.target = False
-		self.char_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
-		self.word_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)  # embedding of self.surface
-		self.entity_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)  # embedding of self.entity
-		self.relation_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
-		self.type_embedding: torch.Tensor = torch.zeros(1, dtype=torch.double)
+		self.char_embedding: torch.Tensor = torch.zeros(1, dtype=torch.float)
+		self.word_embedding: torch.Tensor = torch.zeros(1, dtype=torch.float)  # embedding of self.surface
+		self.entity_embedding: torch.Tensor = torch.zeros(1, dtype=torch.float)  # embedding of self.entity
+		self.relation_embedding: torch.Tensor = torch.zeros(1, dtype=torch.float)
+		self.type_embedding: torch.Tensor = torch.zeros(1, dtype=torch.float)
 		self.eld_tensor_initialized: bool = False
 		self.entity_label_embedding: torch.Tensor = None
 		self.entity_label_idx: int = -1

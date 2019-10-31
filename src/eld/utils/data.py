@@ -9,6 +9,7 @@ from .Dataset import ELDDataset
 from .args import ELDArgs
 from .datafunc import text_to_etri, etri_to_ne_dict
 from ..modules.InKBLinker import MulRel, PEM, Dist, InKBLinker
+from ..modules.TypePred import TypeGiver
 from ... import GlobalValues as gl
 from ...ds import *
 from ...utils import readfile, pickleload, TimeUtil, one_hot, KoreanUtil
@@ -20,7 +21,7 @@ class DataModule:
 		self.mode = mode
 		self.device = args.device
 		self.ce_flag = args.use_character_embedding
-		self.we_flag = args.use_word_context_embedding
+		self.we_flag = args.use_word_context_embedding or args.use_word_embedding
 		self.ee_flag = args.use_entity_context_embedding
 		self.re_flag = args.use_relation_embedding
 		self.te_flag = args.use_type_embedding
@@ -69,6 +70,10 @@ class DataModule:
 
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
+
+		self.type_predict = args.type_prediction
+		if self.type_predict:
+			self.typegiver = TypeGiver(args)
 		# load corpus and se
 		self.corpus = Corpus.load_corpus(args.corpus_dir)
 		if mode == "train":

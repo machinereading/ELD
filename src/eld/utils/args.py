@@ -12,7 +12,7 @@ class ELDArgs(AbstractArgument):
 		self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
 		self.eval_per_epoch = 5
-		self.early_stop = 30
+		self.early_stop = 50
 		self.train_corpus_limit = 2500
 		self.dev_corpus_limit = 1000
 		self.test_corpus_limit = 1000
@@ -53,8 +53,11 @@ class ELDArgs(AbstractArgument):
 		self.redirects_path = "data/el/redirects.pickle"
 		self.in_kb_linker = "pem"
 
-		self.kb_type_file = None
-		self.kb_type_list = None
+		self.type_prediction = False
+		self.kb_type_file = "data/eld/typerefer/entity_types.json"
+		self.kb_type_list = "data/eld/typerefer/dbpedia_types"
+		self.domain_restriction_file = "data/eld/typerefer/domain.tsv"
+		self.range_restriction_file = "data/eld/typerefer/range.tsv"
 		# embedding config
 		self.relation_limit = 5
 		self.jamo_limit = 100

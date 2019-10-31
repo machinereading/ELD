@@ -69,6 +69,9 @@ class ELDDataset(Dataset):
 			rwl = rwe.size()[0]
 			lwe = pad(lwe, self.window_size)
 			rwe = pad(rwe, self.window_size)
+		else:
+			lwe = torch.zeros(1, dtype=torch.float)
+			rwe = torch.zeros(1, dtype=torch.float)
 		if self.ee_flag:
 			if len(lee) == 0:
 				lee = [torch.zeros(1, self.ee_dim, dtype=torch.float)]
@@ -80,6 +83,9 @@ class ELDDataset(Dataset):
 			rel = ree.size()[0]
 			lee = pad(lee, self.window_size)
 			ree = pad(ree, self.window_size)
+		else:
+			lee = torch.zeros(1, dtype=torch.float)
+			ree = torch.zeros(1, dtype=torch.float)
 		if self.re_flag:
 			re = target.relation_embedding
 			rl = re.size()[0]
