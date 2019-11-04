@@ -168,6 +168,7 @@ class ELD(ELDSkeleton):
 		# optimizer = torch.optim.SGD(params, lr=0.001, weight_decay=1e-4)
 		max_score = 0
 		max_score_epoch = 0
+		analysis = {}
 		for epoch in tqdmloop:
 			self.transformer.train()
 			self.vector_transformer.train()
@@ -207,6 +208,7 @@ class ELD(ELDSkeleton):
 					jsondump(analysis, "runs/eld/%s/%s_best_eval.json" % (self.model_name, self.model_name))
 					break
 		else:
+			analysis["epoch"] = max_score_epoch
 			jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 		# test
 		self.load_model()  # load best
@@ -227,7 +229,9 @@ class ELD(ELDSkeleton):
 		                                                 ["No surface", no_surface_score]]:
 			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-
+		analyze_data = self.data.analyze(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
+		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 	# def register_new_entity(self, surface, entity_embedding):
 	# 	idx = len(self.entity_index)
 	# 	register_form = "__" + surface.replace(" ", "_")
@@ -307,6 +311,9 @@ class ELD(ELDSkeleton):
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
+	def predict(self, data):
+		pass
+
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		super(BertBasedELD, self).__init__(mode, model_name, train_new, train_args)
 		pretrained_weight = "bert-base-multilingual-cased"
@@ -322,7 +329,7 @@ class BertBasedELD(ELDSkeleton):
 		pad = lambda tensor, size: F.pad(tensor, [0, size - tensor.size(0)])
 		for item in corpus.eld_items:
 			parent_sentence = item.parent_sentence
-			marked_sentence = "[CLS] " + parent_sentence.original_sentence[:item.char_ind] + " [e] " + item.surface + " [/e] " + parent_sentence.original_sentence[item.char_ind + len(item.surface):] + " [SEP]"
+			marked_sentence = "[CLS] " + parent_sentence.original_sentence[:item.char_ind] + " [e] " + item.surface + " [/e] " + parent_sentence.original_sentence[item.char_ind + len(item.surface):]
 			new_entity_label = item.is_new_entity
 			target_embedding = item.entity_label_embedding
 			gold_entity_idx = item.entity_label_idx
@@ -333,15 +340,20 @@ class BertBasedELD(ELDSkeleton):
 	def train(self):
 		gl.logger.info("Train start")
 		batch_size = 4
-		train_corpus = self.data.train_corpus
-		dev_corpus = self.data.dev_corpus
+		train_corpus = self.data.train_dataset
+		train_set = self.initialize_dataset(train_corpus)
+		dev_corpus = self.data.dev_dataset
+		dev_set = self.initialize_dataset(dev_corpus)
+
 		tqdmloop = tqdm(range(1, self.epochs + 1))
-		optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
+		# discovery_optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
+		# tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3)
+		params = list(self.binary_classifier.parameters()) + list(self.vector_transformer.parameters()) + list(self.transformer.parameters())
+		optimizer = torch.optim.Adam(params, lr=1e-3, weight_decay=1e-4)
+		# optimizer = torch.optim.SGD(params, lr=0.001, weight_decay=1e-4)
 		max_score = 0
 		max_score_epoch = 0
-		# initialize train and dev set
-		train_set = self.initialize_dataset(train_corpus)
-		dev_set = self.initialize_dataset(dev_corpus)
+		analysis = {}
 
 		for epoch in tqdmloop:
 			self.transformer.train()
@@ -357,12 +369,12 @@ class BertBasedELD(ELDSkeleton):
 				encoded_sequence = torch.stack(encoded_sentence).to(self.device)
 				# print(encoded_sequence[:][:5])
 				# print("encoded_sequence", encoded_sequence.size())
-				attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
+				# attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
 				# transformer_input = torch.stack(encoded_sequence).to(self.device)
 
 				new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
 				target_embedding = torch.stack(target_embedding).to(self.device)
-				transformer_output = self.transformer(encoded_sequence, attention_mask)[0][:, 0, :]
+				transformer_output = self.transformer(encoded_sequence)[0][:, 0, :]
 				# print("transformer_output", transformer_output.size())
 				kb_score = self.binary_classifier(transformer_output)
 				# print("kb_score, new_ent", kb_score.size(), new_entity_label.size())
@@ -384,33 +396,54 @@ class BertBasedELD(ELDSkeleton):
 					self.binary_classifier.eval()
 					self.vector_transformer.eval()
 					self.data.reset_new_entity()
-					new_ent_preds = []
-					pred_entity_idxs = []
-					new_entity_labels = []
-					gold_entity_idxs = []
-					dev_batch_start_idx = 0
-					for batch in split_to_batch(dev_set, batch_size):
-						encoded_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
-						encoded_sequence = torch.stack(encoded_sentence).to(self.device)
-						attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
-
-						new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
-						# print(new_entity_label.size())
-						transformer_output = self.transformer(encoded_sequence, attention_mask)[0][:, 0, :]
-						kb_score = self.binary_classifier(transformer_output)
-
-						pred = self.vector_transformer(transformer_output)
-						new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
-						new_ent_preds += new_ent_pred
-						pred_entity_idxs += entity_idx
-						new_entity_labels.append(new_entity_label)
-						gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
+					# new_ent_preds = []
+					# pred_entity_idxs = []
+					# new_entity_labels = []
+					# gold_entity_idxs = []
+					# dev_batch_start_idx = 0
+					# for batch in split_to_batch(dev_set, batch_size):
+					# 	encoded_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
+					# 	encoded_sequence = torch.stack(encoded_sentence).to(self.device)
+					# 	# attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
+					#
+					# 	new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
+					# 	# print(new_entity_label.size())
+					# 	transformer_output = self.transformer(encoded_sequence)[0][:, 0, :]
+					# 	kb_score = self.binary_classifier(transformer_output)
+					#
+					# 	pred = self.vector_transformer(transformer_output)
+					# 	new_ent_pred, entity_idx = self.data.predict_entity(kb_score, pred, dev_corpus.eld_get_item(slice(dev_batch_start_idx, dev_batch_start_idx + batch_size)))
+					# 	new_ent_preds += new_ent_pred
+					# 	pred_entity_idxs += entity_idx
+					# 	new_entity_labels.append(new_entity_label)
+					# 	gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
+					new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus, dev_set)
 					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 						break
-		self.test()
 
+		self.load_model()  # load best
+		test_corpus = self.data.test_dataset
+		test_set = self.initialize_dataset(test_corpus)
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_set)
+		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus, torch.tensor(new_ent_preds).view(-1),
+		                                                                                                                                                                              torch.tensor(pred_entity_idxs),
+		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).cpu(),
+		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).cpu())
+		print()
+		p, r, f = kb_expectation_score
+		gl.logger.info("Test score")
+		gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % ("KB Expectation", p * 100, r * 100, f * 100))
+		for score_info, ((cp, cr, cf), (up, ur, uf)) in [["Total", total_score],
+		                                                 ["in-KB", in_kb_score],
+		                                                 ["out KB", out_kb_score],
+		                                                 ["No surface", no_surface_score]]:
+			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
+		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
+		analyze_data = self.data.analyze(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
+		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 	def save_model(self):
 		torch.save({
 			"transformer": self.transformer.state_dict(),
@@ -429,6 +462,34 @@ class BertBasedELD(ELDSkeleton):
 		self.binary_classifier.load_state_dict(state_dict["binary"])
 		self.vector_transformer.load_state_dict(state_dict["vector"])
 
+	def eval(self, corpus, batchs, batch_size=4):
+		with torch.no_grad():
+			self.transformer.eval()
+			self.binary_classifier.eval()
+			self.vector_transformer.eval()
+			self.data.reset_new_entity()
+			new_entity_labels = []
+			gold_entity_idxs = []
+			kb_scores = []
+			preds = []
+			for batch in split_to_batch(batchs, batch_size):
+				encoded_sentence, in_kb_label, target_embedding, gold_entity_idx = zip(*batch)
+				encoded_sequence = torch.stack(encoded_sentence).to(self.device)
+				# attention_mask = torch.where(encoded_sequence > 0, torch.ones_like(encoded_sequence), torch.zeros_like(encoded_sequence))
+
+				new_entity_label = torch.ByteTensor(in_kb_label).to(self.device)
+				# print(new_entity_label.size())
+				transformer_output = self.transformer(encoded_sequence)[0][:, 0, :]
+				kb_score = self.binary_classifier(transformer_output)
+
+				pred = self.vector_transformer(transformer_output)
+				kb_scores.append(kb_score)
+				preds.append(pred)
+
+				new_entity_labels.append(new_entity_label)
+				gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(kb_scores, preds, corpus.eld_items)
+		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 class ELDNoDiscovery(ELDSkeleton):
 	def __init__(self, args):
 		super(ELDNoDiscovery, self).__init__("train", "nodiscovery", train_new=True, train_args=args)

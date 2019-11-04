@@ -45,7 +45,11 @@ class ELDDataset(Dataset):
 		def pad(tensor, pad_size):
 			if tensor.dim() == 1:
 				tensor = tensor.unsqueeze(0)
-			return F.pad(tensor, [0, 0, 0, pad_size - tensor.size()[0]])
+			add_size = pad_size - tensor.size(0)
+			if add_size >= 0:
+				return F.pad(tensor, [0, 0, 0, pad_size - tensor.size(0)])
+			else:
+				return tensor[:pad_size, :]
 
 		# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
 		target = self.eld_items[index]
@@ -58,6 +62,8 @@ class ELDDataset(Dataset):
 		if self.we_flag:
 			wl = we.size()[0]
 			we = pad(we, self.max_word_len_in_entity)
+		else:
+			we = torch.zeros(1, dtype=torch.float)
 		if self.wce_flag:
 			if len(lwe) == 0:
 				lwe = [torch.zeros(1, self.we_dim, dtype=torch.float)]
@@ -93,6 +99,8 @@ class ELDDataset(Dataset):
 		if self.te_flag:
 			te = target.type_embedding
 			tl = te.size()[0]
+		else:
+			te = torch.zeros(1, dtype=torch.float)
 
 		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx, index
 

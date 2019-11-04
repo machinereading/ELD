@@ -1,8 +1,5 @@
 from ...ds import Vocabulary
 from ...utils import readfile, jsonload
-from ..utils import ELDArgs
-
-from tqdm import tqdm
 
 class TypeGiver:
 	def __init__(self, kbt, t, d, r, top_filter=0):

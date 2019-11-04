@@ -21,8 +21,8 @@ class SeparateEntityEncoder(nn.Module):
 		self.ee_flag = use_entity_context_embedding
 		self.re_flag = use_relation_embedding
 		self.te_flag = use_type_embedding
-		assert self.ce_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
-		print(self.ce_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag)
+		assert self.ce_flag or self.we_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
+		print(self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag)
 		self.transformer_layer = 2
 
 		self.transformer_hidden_dim = 300

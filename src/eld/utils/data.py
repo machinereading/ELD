@@ -84,7 +84,7 @@ class DataModule:
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
 			self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 			self.err_entity = set([])
-			self.initialize_vocabulary_tensor(self.corpus)
+			self.initialize_corpus_tensor(self.corpus)
 			gl.logger.info("Corpus initialized")
 			self.train_dataset = ELDDataset(self.corpus, args, readfile(args.train_filter), args.train_corpus_limit)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
@@ -104,7 +104,7 @@ class DataModule:
 		self.register_threshold = args.new_ent_threshold
 
 	@TimeUtil.measure_time
-	def initialize_vocabulary_tensor(self, corpus: Corpus):
+	def initialize_corpus_tensor(self, corpus: Corpus):
 		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
 			self.initialize_token_tensor(token, pred=False)
 
@@ -346,7 +346,7 @@ class DataModule:
 				item = func(item)
 			buf.append(item)
 		corpus = Corpus.load_corpus(buf)
-		self.initialize_vocabulary_tensor(corpus)
+		self.initialize_corpus_tensor(corpus)
 		return [x for x in corpus.entity_iter()]
 
 # def hierarchical_clustering(tensors: torch.Tensor):
