@@ -12,15 +12,21 @@ names = ["ontology", "inst", "inst-ms"]
 x = [[0], [1],[2],[0,1],[0,2]]
 
 labels = TypeGiver(kbt, t, [], []).get_gold(*corpus.eld_items)
+evaluator = TypeEvaluator()
 preds = []
+scores = []
+result = [{}]
+
 for item in x:
 	dd = [d[y] for y in item]
 	rr = [r[y] for y in item]
 	name = "+".join([names[y] for y in item])
-	typegiver = TypeGiver(kbt, t, dd, rr, top_filter=10)
-	preds.append(typegiver(*corpus.eld_items))
-
-result = []
+	typegiver = TypeGiver(kbt, t, dd, rr)
+	pred = typegiver(*corpus.eld_items)
+	preds.append(pred)
+	score = evaluator(corpus.eld_items, pred, labels)
+	result[0][name] = list(score)
+	print(score)
 
 for x in zip(corpus.eld_items, labels, *preds):
 	try:
