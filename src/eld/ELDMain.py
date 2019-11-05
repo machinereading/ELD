@@ -9,7 +9,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
-from ..ds import Corpus
 from .modules import SeparateEntityEncoder, FFNNEncoder, VectorTransformer3
 from .utils import ELDArgs, DataModule, Evaluator, TypeEvaluator
 from .. import GlobalValues as gl
@@ -23,9 +22,8 @@ class ELDSkeleton(ABC):
 		self.model_name = model_name
 		self.device = "cuda" if torch.cuda.is_available() and mode != "demo" else "cpu"
 		self.is_best_model = False
-		if mode not in  ["train", "typeeval"]:
+		if mode not in ["train", "typeeval"]:
 			gl.logger.info("Loading model")
-			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
 			self.is_best_model = True
 		else:
@@ -112,7 +110,7 @@ class ELDSkeleton(ABC):
 	def __call__(self, data):
 		return self.predict(data)
 
-	def evaluate_type(self): # hard-coded for type prediction # TODO Temporary code
+	def evaluate_type(self):  # hard-coded for type prediction # TODO Temporary code
 		if not self.args.type_prediction: return
 		preds = self.data.typegiver(*self.data.corpus.eld_items)
 		labels = self.data.typegiver.get_gold(*self.data.corpus.eld_items)
@@ -124,19 +122,19 @@ class ELD(ELDSkeleton):
 		args = self.args
 		if mode == "typeeval":
 			return
-		if mode != "train":
-			self.transformer = SeparateEntityEncoder \
-				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-			try:
-				self.transformer.load_state_dict(torch.load(args.model_path))
-			except:
-				gl.logger.critical("No model exists!")
-			self.modify_entity_embedding = args.modify_entity_embedding
-			self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
+		# if mode != "train":
+		# 	self.transformer = SeparateEntityEncoder \
+		# 		(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+		# 		 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+		# 		 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+		# 		 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+		# 		 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+		# 	try:
+		# 		self.transformer.load_state_dict(torch.load(args.model_path))
+		# 	except:
+		# 		gl.logger.critical("No model exists!")
+		# 	self.modify_entity_embedding = args.modify_entity_embedding
+		# 	self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
 		self.entity_index = {}
 		self.i2e = {v: k for k, v in self.entity_index.items()}
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
@@ -145,16 +143,16 @@ class ELD(ELDSkeleton):
 		# 	self.entity_embedding = self.data.entity_embedding.weight
 		# 	self.entity_embedding_dim = self.entity_embedding.size()[-1]
 		self.map_threshold = args.out_kb_threshold
-
-		self.transformer = SeparateEntityEncoder \
-			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-		self.vector_transformer = VectorTransformer3(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
-		jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
-		gl.logger.info("ELD Model load complete")
+		if mode == "train":
+			self.transformer = SeparateEntityEncoder \
+				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+			self.vector_transformer = VectorTransformer3(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
+			jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
+			gl.logger.info("ELD Model load complete")
 
 	def train(self):
 		gl.logger.info("Train start")
@@ -216,6 +214,7 @@ class ELD(ELDSkeleton):
 			jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 		# test
 		self.test()
+
 	# def register_new_entity(self, surface, entity_embedding):
 	# 	idx = len(self.entity_index)
 	# 	register_form = "__" + surface.replace(" ", "_")
@@ -225,9 +224,14 @@ class ELD(ELDSkeleton):
 	# 	return register_form
 
 	def save_model(self):
-		torch.save(self.transformer.state_dict(), self.model_path)
+		torch.save({
+			"transformer": self.transformer.state_dict(),
+			"vector": self.vector_transformer.state_dict()
+		}, self.model_path)
+		gl.logger.info("Model saved")
 
 	def load_model(self):
+		self.args = ELDArgs.from_json("models/eld/%s_args.json" % self.model_name)
 		args = self.args
 		self.transformer = SeparateEntityEncoder \
 			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
@@ -235,10 +239,15 @@ class ELD(ELDSkeleton):
 			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
 			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+		self.vector_transformer = VectorTransformer3(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 		try:
-			self.transformer.load_state_dict(torch.load(args.model_path))
+			load = torch.load(args.model_path)
+			self.transformer.load_state_dict(load["transformer"])
+			self.vector_transformer.load_state_dict(load["vector"])
 		except:
+			traceback.print_exc()
 			gl.logger.critical("No model exists!")
+		gl.logger.info("Loading complete")
 
 	def eval(self, corpus, dataset):
 		self.transformer.eval()
@@ -276,7 +285,7 @@ class ELD(ELDSkeleton):
 		if not self.is_best_model:
 			self.load_model()  # load best
 		test_corpus = self.data.test_dataset
-		test_batch = DataLoader(dataset=self.data.test_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+		test_batch = DataLoader(dataset=test_corpus, batch_size=batch_size, shuffle=False, num_workers=8)
 		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus.eld_items,
 		                                                                                                                                                                              torch.tensor(new_ent_preds).view(-1),
@@ -315,8 +324,6 @@ class ELD(ELDSkeleton):
 				preds.append(pred)
 			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), data)
 		return new_ent_preds, pred_entity_idxs
-
-
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
@@ -453,6 +460,7 @@ class BertBasedELD(ELDSkeleton):
 		analyze_data = self.data.analyze(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
+
 	def save_model(self):
 		torch.save({
 			"transformer": self.transformer.state_dict(),
@@ -499,6 +507,7 @@ class BertBasedELD(ELDSkeleton):
 				gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
 			new_ent_preds, pred_entity_idxs = self.data.predict_entity(kb_scores, preds, corpus.eld_items)
 		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
+
 class ELDNoDiscovery(ELDSkeleton):
 	def __init__(self, args):
 		super(ELDNoDiscovery, self).__init__("train", "nodiscovery", train_new=True, train_args=args)
@@ -517,6 +526,7 @@ class ELDNoDiscovery(ELDSkeleton):
 
 	def predict(self, data):
 		pass
+
 	def eval(self, corpus):
 		new_entity_labels = [x.is_new_entity for x in corpus.eld_items]
 		gold_entity_idxs = [x.entity_label_idx for x in corpus.eld_items]

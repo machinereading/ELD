@@ -33,7 +33,7 @@ class DataModule:
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
 		self.type_predict = args.type_prediction
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir, limit=5000)
+		self.corpus = Corpus.load_corpus(args.corpus_dir)
 		if self.type_predict:
 			self.typegiver = TypeGiver(args)
 			if mode == "typeeval":

@@ -22,7 +22,6 @@ class SeparateEntityEncoder(nn.Module):
 		self.re_flag = use_relation_embedding
 		self.te_flag = use_type_embedding
 		assert self.ce_flag or self.we_flag or self.wce_flag or self.ee_flag or self.re_flag or self.te_flag  # use at least one flag
-		print(self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag)
 		self.transformer_layer = 2
 
 		self.transformer_hidden_dim = 300
@@ -30,7 +29,6 @@ class SeparateEntityEncoder(nn.Module):
 
 		self.transformer_input_dim = 0
 		separate_layers = len([x for x in [self.ce_flag, self.we_flag, self.wce_flag, self.ee_flag, self.re_flag, self.te_flag] if x])
-		print(separate_layers)
 		self.ce_dim = self.we_dim = self.wce_dim = self.ee_dim = self.re_dim = self.te_dim = 0
 		# print(character_embedding_dim, word_embedding_dim, entity_embedding_dim, relation_embedding_dim, type_embedding_dim)
 		if self.ce_flag:
