@@ -19,6 +19,7 @@ class DataModule:
 		# index 0: not in dictionary
 		# initialize embedding
 		self.mode = mode
+		self.args = args
 		self.device = args.device
 		self.ce_flag = args.use_character_embedding
 		self.we_flag = args.use_word_context_embedding or args.use_word_embedding
@@ -33,7 +34,6 @@ class DataModule:
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
 		self.type_predict = args.type_prediction
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir) # TODO Limit is here
 		if self.type_predict:
 			self.typegiver = TypeGiver(args)
 			if mode == "typeeval":
@@ -79,6 +79,7 @@ class DataModule:
 
 
 		if mode in ["train", "test"]:
+			self.corpus = Corpus.load_corpus(args.corpus_dir)  # TODO Limit is here
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
@@ -86,16 +87,14 @@ class DataModule:
 			self.err_entity = set([])
 			self.initialize_corpus_tensor(self.corpus)
 			gl.logger.info("Corpus initialized")
-			self.train_dataset = ELDDataset(self.corpus, args, readfile(args.train_filter), args.train_corpus_limit)
+			self.train_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.train_filter)], args.train_corpus_limit)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
-			self.dev_dataset = ELDDataset(self.corpus, args, readfile(args.dev_filter), args.dev_corpus_limit)
+			self.dev_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.dev_filter)], args.dev_corpus_limit)
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
-			self.test_dataset = ELDDataset(self.corpus, args, readfile(args.test_filter), args.test_corpus_limit)
+			self.test_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.test_filter)], args.test_corpus_limit)
 			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
 			args.word_limit = self.train_dataset.max_word_len_in_entity
 
-		else:
-			raise NotImplementedError()
 		# self.corpus = Corpus.load_corpus(args.corpus_dir)
 		# self.initialize_vocabulary_tensor(self.corpus)
 		# self.test_dataset = ELDDataset(self.corpus, args)
@@ -104,9 +103,9 @@ class DataModule:
 		self.register_threshold = args.new_ent_threshold
 
 	@TimeUtil.measure_time
-	def initialize_corpus_tensor(self, corpus: Corpus):
+	def initialize_corpus_tensor(self, corpus: Corpus, pred=False):
 		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
-			self.initialize_token_tensor(token, pred=False)
+			self.initialize_token_tensor(token, pred)
 
 	def initialize_token_tensor(self, token, pred=False):
 		if token.is_entity:
@@ -132,7 +131,7 @@ class DataModule:
 			else:
 				token.relation_embedding = torch.zeros(1, self.re_dim, dtype=torch.float)
 		if self.te_flag:
-			ne_type = token.ne_type[:2].upper()
+			ne_type = token.ne_type[:2].upper() if token.ne_type is not None else None
 			token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
 		if not pred and token.target:  # train mode 전용 label setting
 			if token.entity in self.e2i:
@@ -181,7 +180,7 @@ class DataModule:
 		self.new_entity_surface_dict = []
 
 	@TimeUtil.measure_time
-	def predict_entity(self, new_ent_pred, pred_embedding, target_voca_list):
+	def predict_entity(self, new_ent_pred, pred_embedding, target_voca_list, output_as_idx=True):
 		# batchwise prediction, with entity registeration
 
 		def get_pred(tensor, emb):
@@ -193,6 +192,7 @@ class DataModule:
 			return sim, index
 
 		result = []
+		ent_result = []
 		new_ent_flags = []
 		in_kb_idx_queue = []
 		in_kb_voca_queue = []
@@ -203,8 +203,8 @@ class DataModule:
 
 			# get max similarity and index prediction
 			if self.use_explicit_kb_classifier:  # in-KB score를 사용할 경우
-				new_ent_flag = v.is_new_entity # oracle test
-				# new_ent_flag = i > self.new_ent_threshold
+				# new_ent_flag = v.is_new_entity # oracle test
+				new_ent_flag = i > self.new_ent_threshold
 				if new_ent_flag:  # out-kb
 					if self.new_entity_embedding.size(0) > 0:  # out-kb similarity
 						max_sim, pred_idx = get_pred(e, self.new_entity_embedding)
@@ -216,6 +216,7 @@ class DataModule:
 					in_kb_idx_queue.append(idx)
 					in_kb_voca_queue.append(v)
 					result.append(pred_idx)
+					ent_result.append(self.i2e[pred_idx])
 			# result.append(-2)
 			else:  # in-KB score를 사용하지 않고 direct 비교
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
@@ -229,14 +230,15 @@ class DataModule:
 					for new_ent_idx, ent_dict in enumerate(self.new_entity_surface_dict):
 						if out_flag: break
 						for ent_cand in ent_dict:
-							if v.surface in ent_cand:  # 완벽포함관계
+							if v.surface in ent_cand or ent_cand in v.surface:  # 완벽포함관계
 								pred_idx = new_ent_idx
 								max_sim = 1
 								out_flag = True
+								# print(v.surface, F.cosine_similarity(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze() - F.pairwise_distance(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze())
 								break
-					else: # surface only
-						max_sim = 0
-						pred_idx = -1
+					# else: # surface only
+					# 	max_sim = 0
+					# 	pred_idx = -1
 
 				if max_sim < self.register_threshold:  # entity registeration
 					# if self.register_policy == "fifo":  # register immediately
@@ -252,6 +254,7 @@ class DataModule:
 					if self.modify_entity_embedding:
 						self.new_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.new_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
 				result.append(len(self.e2i) + pred_idx)
+				ent_result.append(pred_idx)
 			# elif self.register_policy == "pre_cluster":  # register after clustering batch wise
 			# 	add_idx_queue.append(idx)
 			# 	add_tensor_queue.append(e)
@@ -274,12 +277,27 @@ class DataModule:
 			assert len(ents) == len(in_kb_voca_queue) == len(in_kb_idx_queue)
 			for idx, e, v in zip(in_kb_idx_queue, ents, target_voca_list):
 				result[idx] = self.e2i[e] if e in self.e2i and e != "NOT_IN_CANDIDATE" else result[idx]
+				ent_result[idx] = e
 		# print(target_voca_list[idx].surface, target_voca_list[idx].entity, e)
 
 		assert len([x for x in result if x == -2]) == 0
 		assert len(new_ent_pred) == len(result)
 		assert len(new_ent_flags) == len(result)
 		# print(self.new_entity_embedding.size(0))
+		if not output_as_idx:
+			surface_count = {}
+			for f, r, v in zip(new_ent_flags, ent_result, target_voca_list):
+				if f:
+					if r not in surface_count:
+						surface_count[r] = {}
+					if v.surface not in surface_count[r]:
+						surface_count[r][v.surface] = 0
+					surface_count[r][v.surface] += 1
+			surface_count = {k: sorted(v.items(), key=lambda x: x[1], reverse=True)[0][1] for k, v in surface_count.items()}
+			for i in range(len(ent_result)):
+				if new_ent_flags[i] and ent_result[i] in surface_count:
+					ent_result[i] = surface_count[ent_result[i]]
+			return new_ent_flags, ent_result
 		return new_ent_flags, result
 
 	def analyze(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label, evaluation_result):
@@ -336,11 +354,11 @@ class DataModule:
 			})
 		return result
 
-	def prepare(self, *data) -> List[Vocabulary]:  # for prediction mode
+	def prepare(self, mode, *data) -> ELDDataset:  # for prediction mode
 		if type(data[0]) is str:
 			func_chain = [text_to_etri, etri_to_ne_dict]
 		elif type(data[0] is dict):
-			func_chain = [etri_to_ne_dict]
+			func_chain = []
 		else:
 			func_chain = []
 
@@ -350,8 +368,10 @@ class DataModule:
 				item = func(item)
 			buf.append(item)
 		corpus = Corpus.load_corpus(buf)
-		self.initialize_corpus_tensor(corpus)
-		return [x for x in corpus.entity_iter()]
+		for entity in corpus.entity_iter():
+			entity.target = len(entity.relation) > 0 # To set as ELD item
+		self.initialize_corpus_tensor(corpus, pred=True)
+		return ELDDataset(mode, corpus, self.args)
 
 # def hierarchical_clustering(tensors: torch.Tensor):
 # 	iteration = 0

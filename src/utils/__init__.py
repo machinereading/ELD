@@ -19,11 +19,9 @@ def printfunc(s):
 
 # useful macros
 def jsonload(fname):
-	try:
-		with open(fname, encoding="UTF8") as f:
-			j = json.load(f)
-		return j
-	except: return None
+	with open(fname, encoding="UTF8") as f:
+		j = json.load(f)
+	return j
 
 def jsondump(obj, fname):
 	with open(fname, "w", encoding="UTF8") as f:

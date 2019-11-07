@@ -36,6 +36,8 @@ class ELDArgs(AbstractArgument):
 		self.relation_encoder = "cnn"
 		self.type_encoder = "ffnn"
 
+		self.vector_transformer = "cnn"
+
 		# data path config
 		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"
 		self.character_file = "data/eld/char"

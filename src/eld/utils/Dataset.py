@@ -8,7 +8,10 @@ from ..utils import ELDArgs
 from ...utils import TimeUtil
 
 class ELDDataset(Dataset):
-	def __init__(self, corpus: Corpus, args: ELDArgs, filter_list: List, limit=None):
+	def __init__(self, mode, corpus: Corpus, args: ELDArgs, filter_list=None, limit=None):
+		if filter_list is None:
+			filter_list = []
+		self.mode = mode
 		self.corpus = corpus
 		self.max_jamo_len_in_word = args.jamo_limit
 		self.max_word_len_in_entity = args.word_limit
@@ -29,14 +32,16 @@ class ELDDataset(Dataset):
 		self.te_flag = args.use_type_embedding
 
 		self.r_limit = args.relation_limit
-		self.filter_entities = [x for x in filter_list]
 		self.eld_items = []
 		limit = 0 if limit is None or type(limit) is not int or limit < 0 else limit
-		for token in self.corpus.eld_items:
-			if token.entity in self.filter_entities:
-				self.eld_items.append(token)
-				if 0 < limit <= len(self.eld_items):
-					break
+		if len(filter_list) > 0:
+			for token in self.corpus.eld_items:
+				if token.entity in filter_list:
+					self.eld_items.append(token)
+					if 0 < limit <= len(self.eld_items):
+						break
+		else:
+			self.eld_items = self.corpus.eld_items
 
 	@TimeUtil.measure_time
 	def __getitem__(self, index):
@@ -53,7 +58,9 @@ class ELDDataset(Dataset):
 
 		# return torch.cat((tensor, torch.zeros(pad_size - tensor.size()[0], emb_dim, dtype=torch.float64)))
 		target = self.eld_items[index]
-
+		for item in target.tensor[:-3]:
+			if item is None:
+				print(target.tensor)
 		ce, we, lwe, rwe, lee, ree, re, te, new_ent, ee_label, eidx = target.tensor
 		cl = wl = lwl = rwl = lel = rel = rl = tl = 0
 		if self.ce_flag:
@@ -101,8 +108,10 @@ class ELDDataset(Dataset):
 			tl = te.size()[0]
 		else:
 			te = torch.zeros(1, dtype=torch.float)
-
-		return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx, index
+		if self.mode in ["train", "test"]:
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, new_ent, ee_label, eidx, index
+		else:
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl
 
 	def __len__(self):
 		return len(self.eld_items)

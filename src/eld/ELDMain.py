@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
-from .modules import SeparateEntityEncoder, FFNNEncoder, VectorTransformer3
+from .modules import SeparateEntityEncoder, FFNNEncoder, VectorTransformer, VectorTransformer2, VectorTransformer3
 from .utils import ELDArgs, DataModule, Evaluator, TypeEvaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
@@ -48,6 +48,7 @@ class ELDSkeleton(ABC):
 		if self.args.type_prediction:
 			self.type_evaluator = TypeEvaluator()
 			if mode == "typeeval": return
+		if mode in ["pred", "demo"]: return
 		self.evaluator = Evaluator(self.args, self.data)
 
 		self.stop = self.args.early_stop
@@ -104,11 +105,11 @@ class ELDSkeleton(ABC):
 		pass
 
 	@abstractmethod
-	def predict(self, data):
+	def predict(self, *data):
 		pass
 
-	def __call__(self, data):
-		return self.predict(data)
+	def __call__(self, *data):
+		return self.predict(*data)
 
 	def evaluate_type(self):  # hard-coded for type prediction # TODO Temporary code
 		if not self.args.type_prediction: return
@@ -150,7 +151,8 @@ class ELD(ELDSkeleton):
 				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
 				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-			self.vector_transformer = VectorTransformer3(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
+			mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
+			self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 			jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
 			gl.logger.info("ELD Model load complete")
 
@@ -239,7 +241,8 @@ class ELD(ELDSkeleton):
 			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
 			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-		self.vector_transformer = VectorTransformer3(self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
+		mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
+		self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 		try:
 			load = torch.load(args.model_path)
 			self.transformer.load_state_dict(load["transformer"])
@@ -304,26 +307,29 @@ class ELD(ELDSkeleton):
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
 		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
-		jsondump(analyze_data, "runs/eld/%s/%s_test_oracle_surface_only.json" % (self.model_name, self.model_name))
+		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-	def predict(self, data):
+	def predict(self, *data, batch_size=512):
 		self.transformer.eval()
 		self.vector_transformer.eval()
-		data = self.data.prepare(data)
+		dataset = self.data.prepare("pred", *data)
+		data = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 
 		with torch.no_grad():
 			kb_scores = []
 			preds = []
-			for batch in split_to_batch(data, 512):
-				batch = [x.tensor for x in batch]
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-3]]
-				kb_score, pred, attn_mask = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+			for batch in data:
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				kb_score = torch.sigmoid(kb_score)
 				pred = self.vector_transformer(pred)
 				kb_scores.append(kb_score)
 				preds.append(pred)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), data)
-		return new_ent_preds, pred_entity_idxs
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), dataset.eld_items, output_as_idx=False)
+		result = []
+		for v, n, p in zip(dataset.eld_items, new_ent_preds, pred_entity_idxs):
+			result.append([v.surface, v.entity, n, p])
+		return result
 
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):

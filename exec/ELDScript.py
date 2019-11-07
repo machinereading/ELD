@@ -13,6 +13,7 @@ parser.add_argument("--word_context_encoder", type=str, default="bilstm", choice
 parser.add_argument("--entity_context_encoder", type=str, default="bilstm", choices=["none", "bilstm"])
 parser.add_argument("--relation_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
 parser.add_argument("--type_encoder", type=str, default="ffnn", choices=["none", "ffnn", "selfattn"])
+parser.add_argument("--vector_transformer", type=str, default="cnn", choices=["cnn", "attn", "ffnn"])
 parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
@@ -47,6 +48,7 @@ if args.type_encoder == "none":
 	eld_args.use_type_embedding = False
 else:
 	eld_args.type_encoder = args.type_encoder
+eld_args.vector_transformer = args.vector_transformer
 eld_args.new_ent_threshold = args.register_threshold
 eld_args.train_corpus_limit = args.train_limit
 eld_args.dev_corpus_limit = args.dev_limit
