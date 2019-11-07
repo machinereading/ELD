@@ -33,7 +33,7 @@ class DataModule:
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
 		self.type_predict = args.type_prediction
 		# load corpus and se
-		self.corpus = Corpus.load_corpus(args.corpus_dir)
+		self.corpus = Corpus.load_corpus(args.corpus_dir) # TODO Limit is here
 		if self.type_predict:
 			self.typegiver = TypeGiver(args)
 			if mode == "typeeval":
@@ -203,7 +203,8 @@ class DataModule:
 
 			# get max similarity and index prediction
 			if self.use_explicit_kb_classifier:  # in-KB score를 사용할 경우
-				new_ent_flag = i > self.new_ent_threshold
+				new_ent_flag = v.is_new_entity # oracle test
+				# new_ent_flag = i > self.new_ent_threshold
 				if new_ent_flag:  # out-kb
 					if self.new_entity_embedding.size(0) > 0:  # out-kb similarity
 						max_sim, pred_idx = get_pred(e, self.new_entity_embedding)
@@ -233,6 +234,9 @@ class DataModule:
 								max_sim = 1
 								out_flag = True
 								break
+					else: # surface only
+						max_sim = 0
+						pred_idx = -1
 
 				if max_sim < self.register_threshold:  # entity registeration
 					# if self.register_policy == "fifo":  # register immediately

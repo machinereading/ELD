@@ -304,7 +304,7 @@ class ELD(ELDSkeleton):
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
 		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
-		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
+		jsondump(analyze_data, "runs/eld/%s/%s_test_oracle_surface_only.json" % (self.model_name, self.model_name))
 
 	def predict(self, data):
 		self.transformer.eval()
@@ -509,14 +509,14 @@ class BertBasedELD(ELDSkeleton):
 		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 
 class ELDNoDiscovery(ELDSkeleton):
-	def __init__(self, args):
+	def __init__(self, args=None):
 		super(ELDNoDiscovery, self).__init__("train", "nodiscovery", train_new=True, train_args=args)
 		# dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
 
-		dev_corpus = self.data.dev_dataset
-		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus)
+		test_corpus = self.data.test_dataset
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus)
 
-		run, max_score_epoch, max_score, analysis = self.posteval(0, 0, 0, dev_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+		run, max_score_epoch, max_score, analysis = self.posteval(0, 0, 0, test_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 
 	def save_model(self):
 		pass
