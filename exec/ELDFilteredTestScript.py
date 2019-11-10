@@ -3,7 +3,7 @@ import sys
 from src.eld import ELD
 from src.utils import readfile, jsonload, writefile
 
-filter_entity = [x for x in readfile("ambiguous_entities")]
+filter_entity = [x for x in readfile("various_form_entities")]
 files = []
 j = jsonload("corpus/namu_entity_filenames.json")
 for item in filter_entity:

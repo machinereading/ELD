@@ -42,7 +42,10 @@ class CandDict:
 	def __getitem__(self, item):
 		if not self._update_flag:
 			self.generate_calc_dict()
-
+		if type(item) is tuple:
+			item, limit = item
+		else:
+			limit = 0
 		candidates = self._calc_dict[item] if item in self._calc_dict else {}
 		cand_list = []
 		for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
@@ -50,6 +53,9 @@ class CandDict:
 			if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
 				score, cid = cand_score
 				cand_list.append((cand_name, cid, score))
+
+		if limit > 0:
+			cand_list = cand_list[:limit]
 		return cand_list
 
 	def __contains__(self, item):

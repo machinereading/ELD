@@ -20,6 +20,7 @@ class ELDArgs(AbstractArgument):
 		# transformer config
 		# self.transformer_mode = "separate"  # one of "joint" or "separate"
 		self.use_explicit_kb_classifier = True
+		self.use_separate_feature_encoder = False
 		self.train_embedding = False
 		self.use_character_embedding = True
 		self.use_word_embedding = True

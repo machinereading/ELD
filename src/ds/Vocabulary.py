@@ -38,7 +38,7 @@ class Vocabulary:
 		self.entity_label_idx: int = -1
 		self.relation: List[Relation] = []
 		self.eld_pred_entity = None
-
+		self.candidiate_entity_embedding = torch.zeros(1, dtype=torch.float)
 		# some properties that will be initialized later
 		self.lctxw_ind = None
 		self.rctxw_ind = None

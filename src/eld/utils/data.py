@@ -87,11 +87,11 @@ class DataModule:
 			self.err_entity = set([])
 			self.initialize_corpus_tensor(self.corpus)
 			gl.logger.info("Corpus initialized")
-			self.train_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.train_filter)], args.train_corpus_limit)
+			self.train_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.train_filter)], limit=args.train_corpus_limit)
 			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
-			self.dev_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.dev_filter)], args.dev_corpus_limit)
+			self.dev_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.dev_filter)], limit=args.dev_corpus_limit)
 			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
-			self.test_dataset = ELDDataset(self.corpus, mode, args, [x for x in readfile(args.test_filter)], args.test_corpus_limit)
+			self.test_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.test_filter)], limit=args.test_corpus_limit)
 			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
 			args.word_limit = self.train_dataset.max_word_len_in_entity
 
@@ -371,7 +371,7 @@ class DataModule:
 		for entity in corpus.entity_iter():
 			entity.target = len(entity.relation) > 0 # To set as ELD item
 		self.initialize_corpus_tensor(corpus, pred=True)
-		return ELDDataset(mode, corpus, self.args)
+		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
 # def hierarchical_clustering(tensors: torch.Tensor):
 # 	iteration = 0

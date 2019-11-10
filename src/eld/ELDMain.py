@@ -151,6 +151,13 @@ class ELD(ELDSkeleton):
 				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
 				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
 				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+			if args.use_separate_feature_encoder:
+				self.transformer2 = SeparateEntityEncoder \
+					(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+					 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+					 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+					 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+					 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
 			mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
 			self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 			jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
@@ -165,7 +172,10 @@ class ELD(ELDSkeleton):
 		dev_corpus = self.data.dev_dataset
 		tqdmloop = tqdm(range(1, self.epochs + 1))
 		discovery_optimizer = torch.optim.Adam(self.transformer.parameters(), lr=1e-3, weight_decay=1e-4)
-		tensor_optimizer = torch.optim.Adam(self.vector_transformer.parameters(), lr=1e-3)
+		tensor_params = list(self.vector_transformer.parameters())
+		if self.args.use_separate_feature_encoder:
+			tensor_params += list(self.transformer2.parameters())
+		tensor_optimizer = torch.optim.Adam(tensor_params, lr=1e-3)
 		# params = list(self.vector_transformer.parameters()) + list(self.transformer.parameters())
 		# optimizer = torch.optim.Adam(params, lr=1e-3, weight_decay=1e-4)
 		# optimizer = torch.optim.SGD(params, lr=0.001, weight_decay=1e-4)
@@ -175,6 +185,8 @@ class ELD(ELDSkeleton):
 		for epoch in tqdmloop:
 			self.transformer.train()
 			self.vector_transformer.train()
+			if self.args.use_separate_feature_encoder:
+				self.transformer2.train()
 			ne = []
 			ei = []
 			pr = []
@@ -182,7 +194,7 @@ class ELD(ELDSkeleton):
 				discovery_optimizer.zero_grad()
 				tensor_optimizer.zero_grad()
 				# optimizer.zero_grad()
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-4]]
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-4]]
 				new_entity_label, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-4:-1]]
 				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				discovery_loss_val = torch.tensor(0)
@@ -190,7 +202,11 @@ class ELD(ELDSkeleton):
 					discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
 					discovery_loss_val.backward()
 					discovery_optimizer.step()
-				pred = self.vector_transformer(pred.detach())
+				if self.args.use_separate_feature_encoder:
+					_, pred = self.transformer2(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+					pred = self.vector_transformer(pred)
+				else:
+					pred = self.vector_transformer(pred.detach())
 				tensor_loss_val = self.out_kb_loss(pred, new_entity_label, ee_label)
 				# loss = discovery_loss_val + tensor_loss_val
 				# loss.backward()
@@ -226,10 +242,13 @@ class ELD(ELDSkeleton):
 	# 	return register_form
 
 	def save_model(self):
-		torch.save({
+		d = {
 			"transformer": self.transformer.state_dict(),
 			"vector": self.vector_transformer.state_dict()
-		}, self.model_path)
+		}
+		if self.args.use_separate_feature_encoder:
+			d["transformer2"] = self.transformer2.state_dict()
+		torch.save(d, self.model_path)
 		gl.logger.info("Model saved")
 
 	def load_model(self):
@@ -243,10 +262,18 @@ class ELD(ELDSkeleton):
 			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
 		mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
 		self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
+		if self.args.use_separate_feature_encoder:
+			self.transformer2 = SeparateEntityEncoder \
+				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
+				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
+				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
+				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
+				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
 		try:
 			load = torch.load(args.model_path)
 			self.transformer.load_state_dict(load["transformer"])
 			self.vector_transformer.load_state_dict(load["vector"])
+			if self.args.use_separate_feature_encoder: self.transformer2.load_State_dict(load["transformer2"])
 		except:
 			traceback.print_exc()
 			gl.logger.critical("No model exists!")
@@ -255,6 +282,8 @@ class ELD(ELDSkeleton):
 	def eval(self, corpus, dataset):
 		self.transformer.eval()
 		self.vector_transformer.eval()
+		if self.args.use_separate_feature_encoder:
+			self.transformer2.eval()
 		self.data.reset_new_entity()  # registered entity를 전부 지우고 다시 처음부터 등록 시퀀스 시작
 		with torch.no_grad():
 			new_entity_labels = []
@@ -263,7 +292,7 @@ class ELD(ELDSkeleton):
 			preds = []
 			dev_idxs = []
 			for batch in dataset:
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
 				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				kb_score = torch.sigmoid(kb_score)
 				# print(pred)
@@ -312,6 +341,9 @@ class ELD(ELDSkeleton):
 	def predict(self, *data, batch_size=512):
 		self.transformer.eval()
 		self.vector_transformer.eval()
+		if self.args.use_separate_feature_encoder:
+			self.transformer2.eval()
+
 		dataset = self.data.prepare("pred", *data)
 		data = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 
@@ -319,9 +351,11 @@ class ELD(ELDSkeleton):
 			kb_scores = []
 			preds = []
 			for batch in data:
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
 				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				kb_score = torch.sigmoid(kb_score)
+				if self.args.use_separate_feature_encoder:
+					_, pred = self.transformer2(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 				pred = self.vector_transformer(pred)
 				kb_scores.append(kb_score)
 				preds.append(pred)
