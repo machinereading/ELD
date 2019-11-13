@@ -1,5 +1,8 @@
+from typing import List
+
 from sklearn.metrics import precision_recall_fscore_support, adjusted_rand_score
 
+from src.ds import Vocabulary
 from . import DataModule
 from ..utils import ELDArgs
 from ...ds import CandDict
@@ -9,13 +12,13 @@ class Evaluator:
 	def __init__(self, args: ELDArgs, data: DataModule):
 		self.ent_list = data.ent_list
 		self.redirects = pickleload(args.redirects_path)
-		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
-		self.out_kb_threhold = args.out_kb_threshold
+		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects) # need original canddict
 		self.e2i = data.e2i
-		self.oe2i = data.oe2i
+		if hasattr(data, "oe2i"):
+			self.oe2i = data.oe2i
 
 	@TimeUtil.measure_time
-	def evaluate(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label):
+	def evaluate(self, eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
 
 		def record(target_dict, p, l):
 			target_dict["Total"] += 1
@@ -27,7 +30,7 @@ class Evaluator:
 				if p == l:
 					target_dict["TP"] += 1
 
-		assert len(corpus) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
+		assert len(eld_items) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
 		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, new_ent_pred, average="binary")
 
 		# give entity uri to each cluster
@@ -38,7 +41,7 @@ class Evaluator:
 		total_c, in_kb_c, out_kb_c, no_surface_c = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		total_u, in_kb_u, out_kb_u, no_surface_u = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		kb_pred = {"Total": 0, "Correct": 0}
-		for e, new_ent, idx in zip(corpus, new_ent_pred, idx_pred):
+		for e, new_ent, idx in zip(eld_items, new_ent_pred, idx_pred):
 			idx = idx.item()
 			new_ent = new_ent.item()
 			if not hasattr(e, "in_surface_dict"):
@@ -106,9 +109,9 @@ class Evaluator:
 				if idx_pred_clustered[i].item() == pred_idx:
 					idx_pred_clustered[i] = mapping_idx
 
-		in_surface_dict_flags = [x.in_surface_dict for x in corpus]
-		new_ent_flags = [x.is_new_entity for x in corpus]
-		for e, nep, ipc, ipu, nel, il, in_surface_dict in zip(corpus, new_ent_pred, idx_pred_clustered, idx_pred_unclustered, new_ent_label, idx_label, in_surface_dict_flags):
+		in_surface_dict_flags = [x.in_surface_dict for x in eld_items]
+		new_ent_flags = [x.is_new_entity for x in eld_items]
+		for e, nep, ipc, ipu, nel, il, in_surface_dict in zip(eld_items, new_ent_pred, idx_pred_clustered, idx_pred_unclustered, new_ent_label, idx_label, in_surface_dict_flags):
 			# set record targets
 			record_targets_c = [total_c]
 			record_targets_u = [total_u]
@@ -181,3 +184,47 @@ class Evaluator:
 		       cluster_score_ari, \
 		       mapping_result_clustered, \
 		       mapping_result_unclustered
+
+	def evaluate_by_form(self, pred: List[str], gold: List[str]):
+		def record(target_dict, p, l):
+			target_dict["Total"] += 1
+			target_dict["R"] += 1
+			if p == l:
+				target_dict["Correct"] += 1
+			if p != "NOT_IN_CANDIDATE":
+				target_dict["P"] += 1
+				if p == l:
+					target_dict["TP"] += 1
+		assert len(pred) == len(gold)
+		total, in_kb, out_kb= [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(3)]
+		kb_expectation = []
+		kb_gold = []
+		for p, g in zip(pred, gold):
+			target = [total]
+			newent_flag = g not in self.e2i
+			if newent_flag:
+				target.append(out_kb)
+			else:
+				target.append(in_kb)
+			kb_gold.append(newent_flag)
+			kb_expectation.append(p not in self.e2i)
+			for item in target:
+				record(item, p, g)
+
+		p = lambda d: d["TP"] / d["P"] if d["P"] > 0 else 0
+		r = lambda d: d["TP"] / d["R"] if d["R"] > 0 else 0
+		f1 = lambda p, r: (2 * p * r / (p + r) if p + r > 0 else 0)
+		discovery_p, discovery_r ,discovery_f, _ = precision_recall_fscore_support(kb_gold, kb_expectation, average="binary")
+		total_p = p(total)
+		total_r = r(total)
+		total_f1 = f1(total_p, total_r)
+
+		in_kb_p = p(in_kb)
+		in_kb_r = r(in_kb)
+		in_kb_f1 = f1(in_kb_p, in_kb_r)
+
+		out_kb_p = p(out_kb)
+		out_kb_r = r(out_kb)
+		out_kb_f1 = f1(out_kb_p, out_kb_r)
+
+		return (discovery_p, discovery_r ,discovery_f), (total_p, total_r, total_f1), (in_kb_p, in_kb_r, in_kb_f1), (out_kb_p, out_kb_r, out_kb_f1)

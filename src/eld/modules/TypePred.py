@@ -32,7 +32,7 @@ class TypeGiver:
 					self.range_restriction[s] = set([])
 				self.range_restriction[s].add(o)
 
-	def __call__(self, *tokens: Vocabulary):
+	def __call__(self, *tokens: Vocabulary): # TODO 교집합
 		result = []
 		for token in tokens:
 			if self.use_dr:

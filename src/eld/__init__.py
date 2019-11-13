@@ -1,1 +1,1 @@
-from .ELDMain import ELD, BertBasedELD
+from .ELDMain import VectorBasedELD, BertBasedELD

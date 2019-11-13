@@ -9,7 +9,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
-from .modules import SeparateEntityEncoder, FFNNEncoder, VectorTransformer, VectorTransformer2, VectorTransformer3
+from src.ds import Corpus
+from .modules import SeparateEntityEncoder, FFNNEncoder, FFNNVectorTransformer, SelfAttnVectorTransformer, CNNVectorTransformer
 from .utils import ELDArgs, DataModule, Evaluator, TypeEvaluator
 from .. import GlobalValues as gl
 from ..utils import jsondump, split_to_batch
@@ -20,12 +21,15 @@ from ..utils import jsondump, split_to_batch
 class ELDSkeleton(ABC):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
 		self.model_name = model_name
+		self.mode = mode
 		self.device = "cuda" if torch.cuda.is_available() and mode != "demo" else "cpu"
 		self.is_best_model = False
+		self.args = None
 		if mode not in ["train", "typeeval"]:
 			gl.logger.info("Loading model")
 			self.load_model()
 			self.is_best_model = True
+			gl.logger.info("Loading finished")
 		else:
 			try:
 				if train_new:
@@ -42,6 +46,9 @@ class ELDSkeleton(ABC):
 			self.epochs = self.args.epochs
 			self.eval_per_epoch = self.args.eval_per_epoch
 			self.model_path = self.args.model_path
+		if self.args is None:
+			self.args = ELDArgs() if train_args is None else train_args
+
 		self.args.device = self.device
 		self.args.mode = mode
 		self.data = DataModule(mode, self.args)
@@ -109,7 +116,14 @@ class ELDSkeleton(ABC):
 		pass
 
 	def __call__(self, *data):
-		return self.predict(*data)
+		if self.mode == "demo":
+			data = data[0]["content"]
+			result = self.predict(data)
+			return self.postprocess(result)
+		else:
+			result = self.predict(*data)
+			return result
+
 
 	def evaluate_type(self):  # hard-coded for type prediction # TODO Temporary code
 		if not self.args.type_prediction: return
@@ -117,9 +131,39 @@ class ELDSkeleton(ABC):
 		labels = self.data.typegiver.get_gold(*self.data.corpus.eld_items)
 		print(TypeEvaluator()(self.data.corpus.eld_items, preds, labels))
 
-class ELD(ELDSkeleton):
+	def postprocess(self, corpus):
+		from ..demo.postprocess import postprocess
+		# formatting
+		result = []
+		for sentence in corpus:
+			buf = {
+				"text"       : sentence.original_sentence,
+				"entities"   : [],
+				"dark_entity": []
+			}
+			for entity in sentence.entities:
+				entity = postprocess(entity)
+				voca = {
+					"text": entity.surface,
+					"start_offset": entity.char_ind,
+					"end_offset": entity.char_ind + len(entity.surface),
+					"ne_type": entity.ne_type,
+					"type": entity.type,
+					"score": 0,
+					"confidence": entity.confidence_score,
+					"uri": "http://kbox.kaist.ac.kr/resource/" + entity.entity,
+					"en_entity": entity.en_entity
+				}
+				if entity.is_dark_entity:
+					buf["dark_entity"].append(voca)
+				else:
+					buf["entities"].append(voca)
+			result.append(buf)
+		return result
+# noinspection PyUnresolvedReferences
+class VectorBasedELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
-		super(ELD, self).__init__(mode, model_name, train_new, train_args)
+		super(VectorBasedELD, self).__init__(mode, model_name, train_new, train_args)
 		args = self.args
 		if mode == "typeeval":
 			return
@@ -145,20 +189,10 @@ class ELD(ELDSkeleton):
 		# 	self.entity_embedding_dim = self.entity_embedding.size()[-1]
 		self.map_threshold = args.out_kb_threshold
 		if mode == "train":
-			self.transformer = SeparateEntityEncoder \
-				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+			self.transformer = SeparateEntityEncoder(args).to(self.device)
 			if args.use_separate_feature_encoder:
-				self.transformer2 = SeparateEntityEncoder \
-					(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-					 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-					 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-					 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-					 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-			mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
+				self.transformer2 = SeparateEntityEncoder(args).to(self.device)
+			mapping = {"cnn": CNNVectorTransformer, "ffnn": FFNNVectorTransformer, "attn": SelfAttnVectorTransformer}
 			self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 			jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
 			gl.logger.info("ELD Model load complete")
@@ -244,7 +278,7 @@ class ELD(ELDSkeleton):
 	def save_model(self):
 		d = {
 			"transformer": self.transformer.state_dict(),
-			"vector": self.vector_transformer.state_dict()
+			"vector"     : self.vector_transformer.state_dict()
 		}
 		if self.args.use_separate_feature_encoder:
 			d["transformer2"] = self.transformer2.state_dict()
@@ -254,30 +288,19 @@ class ELD(ELDSkeleton):
 	def load_model(self):
 		self.args = ELDArgs.from_json("models/eld/%s_args.json" % self.model_name)
 		args = self.args
-		self.transformer = SeparateEntityEncoder \
-			(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-			 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-			 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-			 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-			 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
-		mapping = {"cnn": VectorTransformer3, "attn": VectorTransformer, "ffnn": VectorTransformer2}
+		self.transformer = SeparateEntityEncoder(args).to(self.device)
+		mapping = {"cnn": CNNVectorTransformer, "ffnn": FFNNVectorTransformer, "attn": SelfAttnVectorTransformer}
 		self.vector_transformer = mapping[self.args.vector_transformer](self.transformer.max_input_dim, args.e_emb_dim, args.flags).to(self.device)
 		if self.args.use_separate_feature_encoder:
-			self.transformer2 = SeparateEntityEncoder \
-				(args.use_character_embedding, args.use_word_embedding, args.use_word_context_embedding, args.use_entity_context_embedding, args.use_relation_embedding, args.use_type_embedding,
-				 args.character_encoder, args.word_encoder, args.word_context_encoder, args.entity_context_encoder, args.relation_encoder, args.type_encoder,
-				 args.c_emb_dim, args.w_emb_dim, args.e_emb_dim, args.r_emb_dim, args.t_emb_dim,
-				 args.c_enc_dim, args.w_enc_dim, args.wc_enc_dim, args.ec_enc_dim, args.r_enc_dim, args.t_enc_dim,
-				 args.jamo_limit, args.word_limit, args.relation_limit).to(self.device)
+			self.transformer2 = SeparateEntityEncoder(args).to(self.device)
 		try:
 			load = torch.load(args.model_path)
 			self.transformer.load_state_dict(load["transformer"])
 			self.vector_transformer.load_state_dict(load["vector"])
-			if self.args.use_separate_feature_encoder: self.transformer2.load_State_dict(load["transformer2"])
+			if self.args.use_separate_feature_encoder: self.transformer2.load_state_dict(load["transformer2"])
 		except:
 			traceback.print_exc()
 			gl.logger.critical("No model exists!")
-		gl.logger.info("Loading complete")
 
 	def eval(self, corpus, dataset):
 		self.transformer.eval()
@@ -310,7 +333,7 @@ class ELD(ELDSkeleton):
 					v = corpus.eld_items[i]
 					assert v.entity_label_idx == l
 				assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), corpus.eld_items)
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.cat(kb_scores), torch.cat(preds))
 		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 
 	def test(self, batch_size=512):
@@ -359,7 +382,7 @@ class ELD(ELDSkeleton):
 				pred = self.vector_transformer(pred)
 				kb_scores.append(kb_score)
 				preds.append(pred)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.cat(kb_scores), torch.cat(preds), dataset.eld_items, output_as_idx=False)
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(dataset.eld_items, torch.cat(kb_scores), torch.cat(preds), output_as_idx=False)
 		result = []
 		for v, n, p in zip(dataset.eld_items, new_ent_preds, pred_entity_idxs):
 			result.append([v.surface, v.entity, n, p])
@@ -545,12 +568,12 @@ class BertBasedELD(ELDSkeleton):
 
 				new_entity_labels.append(new_entity_label)
 				gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(kb_scores, preds, corpus.eld_items)
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, kb_scores, preds, )
 		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 
 class ELDNoDiscovery(ELDSkeleton):
-	def __init__(self, args=None):
-		super(ELDNoDiscovery, self).__init__("train", "nodiscovery", train_new=True, train_args=args)
+	def __init__(self, mode, args=None):
+		super(ELDNoDiscovery, self).__init__(mode, "nodiscovery", train_new=True, train_args=args)
 		# dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
 
 		test_corpus = self.data.test_dataset
@@ -572,5 +595,34 @@ class ELDNoDiscovery(ELDSkeleton):
 		gold_entity_idxs = [x.entity_label_idx for x in corpus.eld_items]
 		kb_scores = [0 for _ in corpus.eld_items]
 		preds = [torch.zeros(1, 300).to(self.device, dtype=torch.float) for _ in corpus.eld_items]
-		new_ent_preds, pred_entity_idxs = self.data.predict_entity(torch.tensor(kb_scores), torch.cat(preds), corpus.eld_items)
+		new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.tensor(kb_scores), torch.cat(preds))
 		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
+
+class DictBasedELD(ELDSkeleton):
+	"""
+	개체 연결 -> 실패 -> 등록 -> 재연결 시도
+	"""
+
+	def __init__(self, mode, args):
+		super(DictBasedELD, self).__init__(mode, "dictbased", train_args=args)
+
+	def save_model(self):
+		pass
+
+	def load_model(self):
+		pass
+
+	def predict(self, *data):
+		dataset = self.data.prepare(self.mode, *data, namu_only=True)
+		for ent in dataset.eld_items:
+			_, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
+			link_result = link_result[0]
+			if link_result == "NOT_IN_CANDIDATE":
+				self.data.surface_ent_dict.add_instance(ent.surface, ent.surface)
+				link_result = ent.surface
+
+			ent.eld_pred_entity = link_result
+		if type(data[0]) is Corpus:
+			return data[0]
+
+		return [x.to_json() for x in dataset.eld_items]

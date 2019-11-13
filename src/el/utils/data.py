@@ -9,10 +9,10 @@ from ...ds import *
 from ...utils import KoreanUtil, readfile, pickleload
 
 class DataModule:
-	def __init__(self, args):
+	def __init__(self, args, surface_ent_dict=None):
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
-		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects) if surface_ent_dict is None else surface_ent_dict
 		self.word_voca, self.word_embedding = U.load_voca_embs(args.word_voca_path, args.word_embedding_path)
 		self.snd_word_voca, self.snd_word_embedding = U.load_voca_embs(args.snd_word_voca_path,
 		                                                               args.snd_word_embedding_path)

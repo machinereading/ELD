@@ -1,6 +1,6 @@
 import sys
 
-from src.eld import ELD
+from src.eld import VectorBasedELD
 from src.utils import readfile, jsonload, writefile
 
 filter_entity = [x for x in readfile("various_form_entities")]
@@ -10,7 +10,7 @@ for item in filter_entity:
 	files += j[item]
 model_name = sys.argv[1]
 
-eld = ELD("pred", model_name)
+eld = VectorBasedELD("pred", model_name)
 corpus = [jsonload(x) for x in files]
 processed = []
 for item in corpus:

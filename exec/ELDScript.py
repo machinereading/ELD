@@ -1,6 +1,6 @@
 import argparse
 
-from src.eld import ELD, BertBasedELD
+from src.eld import VectorBasedELD, BertBasedELD
 from src.eld.utils import ELDArgs
 from src.utils.TimeUtil import time_analysis
 
@@ -16,6 +16,8 @@ parser.add_argument("--type_encoder", type=str, default="ffnn", choices=["none",
 parser.add_argument("--vector_transformer", type=str, default="cnn", choices=["cnn", "attn", "ffnn"])
 parser.add_argument("--register_threshold", type=float, default=0.3)
 parser.add_argument("--use_separate_feature_encoder", action="store_true")
+parser.add_argument("--use_surface_info", action="store_true")
+parser.add_argument("--use_candidate_info", action="store_true")
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
 parser.add_argument("--modify_entity_embedding", action="store_true")
@@ -55,10 +57,12 @@ eld_args.train_corpus_limit = args.train_limit
 eld_args.dev_corpus_limit = args.dev_limit
 eld_args.modify_entity_embedding = args.modify_entity_embedding
 eld_args.use_separate_feature_encoder = args.use_separate_feature_encoder
+eld_args.use_surface_info = args.use_surface_info
+eld_args.use_candidate_info = args.use_candidate_info
 if model_name.startswith("bert"):
 	module = BertBasedELD(mode, model_name, train_args=eld_args)
 else:
-	module = ELD(mode, model_name, train_args=eld_args)
+	module = VectorBasedELD(mode, model_name, train_args=eld_args)
 
 if mode == "train":
 	module.train()

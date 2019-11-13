@@ -215,12 +215,13 @@ def eval(testset, system_pred):
 		if g == p and p not in ['NIL', "NOT_IN_CANDIDATE"]:
 			true_pos += 1
 
-	# precision = true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]])
-	# recall = true_pos / len(gold)
-	# print(precision)
-	# print(recall)
-	# f1 = 2 * precision * recall / (precision + recall) if precision+recall >0 else 0
-	return true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]]) # only accuracy
+	precision = true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]])
+	recall = true_pos / len(gold)
+	print(precision)
+	print(recall)
+	f1 = 2 * precision * recall / (precision + recall) if precision+recall >0 else 0
+	return f1
+	# return true_pos / len([p for p in pred if p not in ['NIL', "NOT_IN_CANDIDATE"]]) # only accuracy
 
 
 

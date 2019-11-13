@@ -1,8 +1,8 @@
 import sys
 
 from src.el import EL
-from src.utils import diriter, readfile, jsonload, jsondump
-
+from src.utils import diriter, readfile, jsonload, jsondump, writefile
+import csv
 def split_to_sentence(j):
 	sentences = j["text"].split("\n")
 	stlens = list(map(len, sentences))
@@ -93,7 +93,7 @@ def fix_entity_index(j):
 			assert not overlap(item["start"], item["end"], item2["start"], item2["end"]), "entity overlap %d / %d" % (item["start"], item2["start"])
 	return j
 
-def el2re(j):
+def el2re(j, targets):
 	text = j["text"]
 	lastidx = 0
 	sentences = text.split("\n")
@@ -149,6 +149,7 @@ def merge_re(result, re_input, js):
 	buf = []
 	for i, (r1, r2) in enumerate(zip(result, re_input)):
 		_, file_id, _, _, _ = r2
+		file_id = int(file_id)
 		if lid != -1 and lid != file_id:
 			try:
 				target_json = js[lid]
@@ -187,47 +188,69 @@ def merge_re(result, re_input, js):
 					pivot_entity["relation"].append((idx_diff, relation, score, "incoming" if ent_idx == 1 else "outgoing"))
 				yield target_json
 				buf = []
-			except Exception:
+			except Exception as e:
+				import traceback
+				traceback.print_exc()
 				buf = []
 		buf.append([r1, r2])
 		lid = file_id
 if __name__ == '__main__':
 	import argparse
 	parser = argparse.ArgumentParser()
-	parser.add_argument("target_entity_file", type=str)
-	parser.add_argument("output_file", type=str, default="data.json")
+	parser.add_argument("mode", choices=["re_input", "re_merge", "entity_mapping"])
+	parser.add_argument("input_file", type=str)
+	parser.add_argument("output_file", type=str)
+	parser.add_argument("--mapping_file", type=str)
 	args = parser.parse_args()
-	NAMU_RAW_HOME = "/home/minho/namu/cpages/"
-	target_entities = [x for x in readfile(args.target_entity_file)]
-	targets = []
-	el = EL()
-	print("Filtering target entities")
-	for j in map(jsonload, diriter(NAMU_RAW_HOME)):
-		for part in split_to_sentence(j):
-			for entity in part["entities"]:
-				if entity["entity"] in target_entities:
-					targets.append(part)
-					break
-	print("Running EL")
-	el_result = el(*[x["text"] for x in targets])
-	merged = []
-	print("Merging EL result")
-	for original, item in zip(targets, el_result):
-		merged.append(merge_el(original, item))
-	print("Fixing index")
-	fixed = list(map(fix_json_keys, merged))
-	fixed = list(map(fix_entity_index, fixed))
-	print("Preparing RE")
-	re_input = []
-	for i, j in enumerate(fixed):
-		for sentence_id, entity_id, pivot_id, txt in el2re(j):
-			re_input.append([txt, i, sentence_id, entity_id, pivot_id])
+	if args.mode == "re_input":
+		NAMU_RAW_HOME = "/home/minho/namu/cpages/"
+		target_entities = [x for x in readfile(args.input_file)]
+		targets = []
+		print("Filtering target entities")
+		for j in map(jsonload, diriter(NAMU_RAW_HOME)):
+			for part in split_to_sentence(j):
+				for entity in part["entities"]:
+					if entity["entity"] in target_entities:
+						targets.append(part)
+						break
+		print("Running EL")
+		el = EL()
+		el_result = el(*[x["text"] for x in targets])
+		merged = []
+		print("Merging EL result")
+		for original, item in zip(targets, el_result):
+			merged.append(merge_el(original, item))
+		print("Fixing index")
+		fixed = list(map(fix_json_keys, merged))
+		fixed = list(map(fix_entity_index, fixed))
+		print("Preparing RE")
+		re_input = []
+		for i, j in enumerate(fixed):
+			for sentence_id, entity_id, pivot_id, txt in el2re(j, target_entities):
+				re_input.append([txt, i, sentence_id, entity_id, pivot_id])
+		with open("re_input.csv", "w", encoding="UTF8") as f:
+			writer = csv.writer(f, delimiter=",")
+			for item in re_input:
+				writer.writerow(item)
+		jsondump(fixed, "re_json_input.json")
+	elif args.mode == "re_merge":
+		with open("re_output.csv", encoding="UTF8") as f:
+			reader = csv.reader(f, delimiter=",")
+			re_result = [x for x in reader]
+		with open("re_input.csv", encoding="UTF8") as f:
+			reader = csv.reader(f, delimiter=",")
+			re_input = [x for x in reader]
+		fixed = jsonload("re_json_input.json")
+		print("Merging RE result")
+		print(len(re_result), len(re_input), len(fixed))
+		re_merged = [j for j in merge_re(re_result, re_input, fixed)]
 
-	print("Running RE")
-
-	re_result = []# TODO
-
-	print("Merging RE result")
-	re_merged = [j for j in merge_re(re_result, re_input, fixed)]
-
-	jsondump(re_merged, args.output_file)
+		jsondump(re_merged, args.output_file)
+	else:
+		mapping = jsonload(args.mapping_file)
+		j = jsonload(args.input_file)
+		for item in j:
+			for ent in item["entities"]:
+				if ent["entity"] in mapping:
+					ent["entity"] = mapping[ent["entity"]]
+		jsondump(j, args.output_file)

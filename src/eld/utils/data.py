@@ -72,11 +72,10 @@ class DataModule:
 
 		if self.te_flag:  # one-hot?
 			self.t2i = {w: i + 1 for i, w in enumerate(readfile(args.type_file))}
-			self.te_dim = args.t_emb_dim = len(self.t2i)
+			self.te_dim = args.t_emb_dim = len(self.t2i) + 1
 
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
-		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args)
-
+		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
 			self.corpus = Corpus.load_corpus(args.corpus_dir)  # TODO Limit is here
@@ -180,7 +179,7 @@ class DataModule:
 		self.new_entity_surface_dict = []
 
 	@TimeUtil.measure_time
-	def predict_entity(self, new_ent_pred, pred_embedding, target_voca_list, output_as_idx=True):
+	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, output_as_idx=True, mark_nil=False):
 		# batchwise prediction, with entity registeration
 
 		def get_pred(tensor, emb):
@@ -190,7 +189,10 @@ class DataModule:
 			sim = torch.max(cos_sim - dist)
 			index = torch.argmax(cos_sim - dist, dim=-1).item()
 			return sim, index
-
+		if new_ent_pred is None:
+			new_ent_pred = torch.zeros(len(target_voca_list), dtype=torch.uint8)
+		if pred_embedding is None:
+			pred_embedding = torch.zeros(len(target_voca_list), self.ee_dim, dtype=torch.float)
 		result = []
 		ent_result = []
 		new_ent_flags = []
@@ -276,7 +278,8 @@ class DataModule:
 			ents = self.in_kb_linker(*in_kb_voca_queue)
 			assert len(ents) == len(in_kb_voca_queue) == len(in_kb_idx_queue)
 			for idx, e, v in zip(in_kb_idx_queue, ents, target_voca_list):
-				result[idx] = self.e2i[e] if e in self.e2i and e != "NOT_IN_CANDIDATE" else result[idx]
+				nil_idx = 0 if mark_nil else result[idx]
+				result[idx] = self.e2i[e] if e in self.e2i and e != "NOT_IN_CANDIDATE" else nil_idx
 				ent_result[idx] = e
 		# print(target_voca_list[idx].surface, target_voca_list[idx].entity, e)
 
@@ -354,11 +357,16 @@ class DataModule:
 			})
 		return result
 
-	def prepare(self, mode, *data) -> ELDDataset:  # for prediction mode
+	def prepare(self, mode, *data, namu_only=False) -> ELDDataset:  # for prediction mode
 		if type(data[0]) is str:
 			func_chain = [text_to_etri, etri_to_ne_dict]
-		elif type(data[0] is dict):
+		elif type(data[0]) is dict:
 			func_chain = []
+		elif type(data[0]) is Corpus and len(data) == 1:
+			for entity in data[0].entity_iter():
+				entity.target = len(entity.relation) > 0  # 나무위키 전용
+			self.initialize_corpus_tensor(data[0], pred=True)
+			return ELDDataset(mode, data[0], self.args, cand_dict=self.surface_ent_dict, namu_only=namu_only)
 		else:
 			func_chain = []
 
@@ -368,8 +376,9 @@ class DataModule:
 				item = func(item)
 			buf.append(item)
 		corpus = Corpus.load_corpus(buf)
+
 		for entity in corpus.entity_iter():
-			entity.target = len(entity.relation) > 0 # To set as ELD item
+			entity.target = len(entity.relation) > 0 # 나무위키 전용
 		self.initialize_corpus_tensor(corpus, pred=True)
 		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 

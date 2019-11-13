@@ -9,7 +9,7 @@ from ..utils import *
 from ..ds import Sentence
 
 class EL:
-	def __init__(self, mode="test", model_name="no_okt_ent_emb"):
+	def __init__(self, mode="test", model_name="no_okt_ent_emb", surface_ent_dict=None):
 		gl.logger.info("Initializing EL Module")
 		with TimeUtil.TimeChecker("EL_init"):
 			if mode == "train":
@@ -83,7 +83,7 @@ class EL:
 			result = merge_item_with_corpus(sentences, result)
 		jsondump(jj, "debug/el_prepare.json")
 		jsondump(ee, "debug/el_result_dict.json")
-		print(len(sentences), len(result))
+		# print(len(sentences), len(result))
 		return result
 
 	def __call__(self, *sentences):

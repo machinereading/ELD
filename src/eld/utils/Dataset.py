@@ -8,7 +8,7 @@ from ..utils import ELDArgs
 from ...utils import TimeUtil
 
 class ELDDataset(Dataset):
-	def __init__(self, mode, corpus: Corpus, args: ELDArgs, *, cand_dict: CandDict=None, ent_emb = None, e2i = None, filter_list=None, limit=None):
+	def __init__(self, mode, corpus: Corpus, args: ELDArgs, *, cand_dict: CandDict=None, ent_emb = None, e2i = None, filter_list=None, limit=None, namu_only=False):
 		if filter_list is None:
 			filter_list = []
 		self.mode = mode
@@ -37,15 +37,18 @@ class ELDDataset(Dataset):
 
 		self.r_limit = args.relation_limit
 		self.eld_items = []
-		limit = 0 if limit is None or type(limit) is not int or limit < 0 else limit
-		if len(filter_list) > 0:
-			for token in self.corpus.eld_items:
-				if token.entity in filter_list:
-					self.eld_items.append(token)
-					if 0 < limit <= len(self.eld_items):
-						break
+		if namu_only or self.mode in ["train", "test"]:
+			limit = 0 if limit is None or type(limit) is not int or limit < 0 else limit
+			if len(filter_list) > 0:
+				for token in self.corpus.eld_items:
+					if token.entity in filter_list:
+						self.eld_items.append(token)
+						if 0 < limit <= len(self.eld_items):
+							break
+			else:
+				self.eld_items = self.corpus.eld_items
 		else:
-			self.eld_items = self.corpus.eld_items
+			self.eld_items = [x for x in self.corpus.entity_iter()]
 
 	@TimeUtil.measure_time
 	def __getitem__(self, index):
@@ -130,3 +133,15 @@ class ELDDataset(Dataset):
 
 	def __len__(self):
 		return len(self.eld_items)
+
+
+class TFIDFDataset(Dataset):
+	def __init__(self, mode, corpus: Corpus, args: ELDArgs,):
+		self.corpus = corpus
+
+
+	def __getitem__(self, item):
+		pass
+
+	def __len__(self):
+		pass

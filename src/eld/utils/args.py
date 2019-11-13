@@ -21,6 +21,8 @@ class ELDArgs(AbstractArgument):
 		# self.transformer_mode = "separate"  # one of "joint" or "separate"
 		self.use_explicit_kb_classifier = True
 		self.use_separate_feature_encoder = False
+		self.use_surface_info = False
+		self.use_candidate_info = False
 		self.train_embedding = False
 		self.use_character_embedding = True
 		self.use_word_embedding = True
@@ -54,7 +56,7 @@ class ELDArgs(AbstractArgument):
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-		self.in_kb_linker = "pem"
+		self.in_kb_linker = "mulrel"
 
 		self.type_prediction = False
 		self.kb_type_file = "data/eld/typerefer/entity_types.json"

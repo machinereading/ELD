@@ -36,6 +36,9 @@ class Sentence:
 	def __getitem__(self, ind):
 		return self.tagged_tokens[ind]
 
+	def get_token_idx(self, idx):
+		return self.tokens[idx]
+
 	@property
 	def entities(self):
 		return [x for x in self.tokens if x.is_entity]
@@ -112,11 +115,11 @@ class Sentence:
 		# if len(entities) > 1000:
 		# 	print(cw_form["fileName"])
 		for entity in entities:
-			if "entity" not in entity or entity["entity"] == "": continue
+			# if "entity" not in entity or entity["entity"] == "": continue
 			try:
 				cluster_id = entity["cluster"] if "cluster" in entity else -1
 				relation = entity["relation"] if "relation" in entity else None
-				new_ent = sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"], cluster_id, relation)
+				new_ent = sentence.add_ne(entity["start"], entity["end"], entity["surface"], entity["entity"] if "entity" in entity else "", cluster_id, relation)
 				# exclusive for ELD
 				if "is_target_entity" in entity:
 					new_ent.target = entity["is_target_entity"]
@@ -124,7 +127,7 @@ class Sentence:
 					new_ent.target = False
 				if "ne_type" not in entity:
 					new_ent.ne_type = "NA"
-				elif entity["ne_type"] != "namu":
+				elif entity["ne_type"] != "namu" and "dataType" in entity:
 					new_ent.ne_type = entity["dataType"][:2]
 				else:
 					new_ent.ne_type = entity["ne_type"]
