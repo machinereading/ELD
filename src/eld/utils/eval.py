@@ -134,8 +134,8 @@ class Evaluator:
 			for x in record_targets_u:
 				record(x, ipu, il)
 
-		for f, l in zip(new_ent_flags, new_ent_label):
-			assert (not f) == (not l)  # tensor value와 int 비교를 위해 not 넣음
+		# for f, l in zip(new_ent_flags, new_ent_label):
+		# 	assert (not f) == (not l)  # tensor value와 int 비교를 위해 not 넣음
 		p = lambda d: d["TP"] / d["P"] if d["P"] > 0 else 0
 		r = lambda d: d["TP"] / d["R"] if d["R"] > 0 else 0
 		f1 = lambda p, r: (2 * p * r / (p + r) if p + r > 0 else 0)
