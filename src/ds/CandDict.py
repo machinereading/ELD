@@ -30,11 +30,14 @@ class CandDict:
 			except:
 				self._dict[ent] = {ent: 1}
 			ent_key = ent.replace(" ", "_").split("_(")[0]
-			if ent_key in self._dict:
+			try:
+				s = sum(self._dict[ent_key])
 				if ent in self._dict[ent_key]:
-					self._dict[ent_key][ent] += 1
+					self._calc_dict[ent_key][ent] += s // 5
 				else:
-					self._dict[ent_key][ent] = 1
+					self._calc_dict[ent_key][ent] = max(s // 5, 1)
+			except:
+				self._dict[ent_key] = {ent: 1}
 		for m, e in self._dict.items():
 			# e = {k: v for k, v in e.items() if k in self._kb} # filter only in-kb items
 			x = list(e.values())
@@ -45,14 +48,14 @@ class CandDict:
 				idx += 1
 		self._update_flag = True
 
-	def __getitem__(self, item):
+	def __getitem__(self, surface):
 		if not self._update_flag:
 			self.generate_calc_dict()
-		if type(item) is tuple:
-			item, limit = item
+		if type(surface) is tuple:
+			surface, limit = surface
 		else:
 			limit = 0
-		candidates = self._calc_dict[item] if item in self._calc_dict else {}
+		candidates = self._calc_dict[surface] if surface in self._calc_dict else {}
 		cand_list = []
 		for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
 			cand_name = self._redirects[cand_name] if cand_name in self._redirects else cand_name
@@ -64,5 +67,5 @@ class CandDict:
 			cand_list = cand_list[:limit]
 		return cand_list
 
-	def __contains__(self, item):
-		return len(self[item]) == 0
+	def __contains__(self, surface):
+		return len(self[surface]) == 0

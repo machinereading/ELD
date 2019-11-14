@@ -160,6 +160,32 @@ class ELDSkeleton(ABC):
 					buf["entities"].append(voca)
 			result.append(buf)
 		return result
+
+	def test(self, test_dataset=None, batch_size=512):
+		if not self.is_best_model:
+			self.load_model()  # load best
+		test_corpus = self.data.test_dataset if test_dataset is None else test_dataset
+		test_batch = DataLoader(dataset=test_corpus, batch_size=batch_size, shuffle=False, num_workers=8)
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
+		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus.eld_items,
+		                                                                                                                                                                              torch.tensor(new_ent_preds).view(-1).to("cpu", dtype=torch.uint8),
+		                                                                                                                                                                              torch.tensor(pred_entity_idxs).to("cpu", dtype=torch.int32),
+		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).to("cpu", dtype=torch.uint8),
+		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).to("cpu", dtype=torch.int32))
+		print()
+		p, r, f = kb_expectation_score
+		gl.logger.info("Test score")
+		gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % ("KB Expectation", p * 100, r * 100, f * 100))
+		for score_info, ((cp, cr, cf), (up, ur, uf)) in [["Total", total_score],
+		                                                 ["in-KB", in_kb_score],
+		                                                 ["out KB", out_kb_score],
+		                                                 ["No surface", no_surface_score]]:
+			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
+		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
+		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
+		jsondump(analyze_data, "runs/eld/%s_test.json" % self.model_name)
+
 # noinspection PyUnresolvedReferences
 class VectorBasedELD(ELDSkeleton):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
@@ -391,6 +417,9 @@ class VectorBasedELD(ELDSkeleton):
 		result = []
 		for v, n, p in zip(dataset.eld_items, new_ent_preds, pred_entity_idxs):
 			result.append([v.surface, v.entity, n, p])
+			v.eld_pred_entity = p
+		if type(data[0]) is Corpus:
+			return data[0]
 		return result
 
 	def prepare_input(self, batch):
@@ -604,7 +633,7 @@ class ELDNoDiscovery(ELDSkeleton):
 	def load_model(self):
 		pass
 
-	def eval(self, corpus):
+	def eval(self, corpus, dataset):
 		new_entity_labels = [x.is_new_entity for x in corpus.eld_items]
 		gold_entity_idxs = [x.entity_label_idx for x in corpus.eld_items]
 		kb_scores = [0 for _ in corpus.eld_items]
@@ -647,3 +676,59 @@ class DictBasedELD(ELDSkeleton):
 			return data[0]
 
 		return [x.to_json() for x in dataset.eld_items]
+
+	def eval(self, corpus, dataset):
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = [[] for _ in range(4)]
+		mapping = {}
+		for ent in corpus.eld_items:
+			if ent.entity not in mapping:
+				mapping[ent.entity] = len(mapping)
+			new_ent_pred = [0 if ent.surface in self.data.surface_ent_dict else 1]
+			_, link_result = self.data.predict_entity([ent], new_ent_pred=new_ent_pred)
+			link_result = link_result[0]
+			new_ent_label = ent.entity in self.data.e2i
+			gold_entity_idxs.append(self.data.e2i[ent.entity] if new_ent_label else mapping[ent.entity] + len(self.data.e2i))
+			new_entity_labels.append(new_ent_label)
+			new_ent_preds.append(new_ent_pred)
+			pred_entity_idxs.append(link_result)
+		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
+
+class ELBasedELD(ELDSkeleton):
+	def save_model(self):
+		pass
+
+	def load_model(self):
+		pass
+
+	def predict(self, *data):
+		dataset = self.data.prepare(self.mode, *data, namu_only=True)
+		for ent in dataset.eld_items:
+			_, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
+			link_result = link_result[0]
+			if link_result == "NOT_IN_CANDIDATE":
+				self.data.surface_ent_dict.add_instance(ent.surface, ent.surface)
+				link_result = ent.surface
+
+			ent.eld_pred_entity = link_result
+		if type(data[0]) is Corpus:
+			return data[0]
+
+		return [x.to_json() for x in dataset.eld_items]
+
+	def __init__(self, mode, args):
+		args.in_kb_linker = "mulrel"
+		super(ELBasedELD, self).__init__(mode, "ELBased", False, args)
+
+	def eval(self, corpus, dataset):
+		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = [[] for _ in range(4)]
+		mapping = {}
+		_, link_result = self.data.predict_entity(corpus.test_dataset.eld_items, mark_nil=True)
+		new_ent_preds = [1 if lr == 0 else 0 for lr in link_result]
+		_, pred_entity_idxs = self.data.predict_entity(corpus.test_dataset.eld_items, new_ent_pred=new_ent_preds, mark_nil=True)
+		for ent, nep in corpus.test_dataset.eld_items:
+			if ent.entity not in mapping:
+				mapping[ent.entity] = len(mapping)
+			new_ent_label = ent.entity in self.data.e2i
+			gold_entity_idxs.append(self.data.e2i[ent.entity] if new_ent_label else mapping[ent.entity] + len(self.data.e2i))
+			new_entity_labels.append(new_ent_label)
+		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
