@@ -10,18 +10,25 @@ class Graph:
 			return
 		self.nodes[name] = Node(name)
 
-	def add_edge(self, from_name, relation, to_name):
+	def add_edge(self, from_name, relation, to_name, add_node=True):
 		edge = Edge(from_name, relation, to_name)
 		if edge in self.edges: return
+		if add_node and from_name not in self.nodes:
+			self.add_node(from_name)
+		if add_node and to_name not in self.nodes:
+			self.add_node(to_name)
 		self.nodes[from_name].add_edge(edge)
 		self.nodes[to_name].add_edge(edge)
 		self.edges.add(edge)
 
 	def __getitem__(self, item):
 		if type(item) is str:
-			return self.nodes[item]
+			return self.nodes[item] if item in self.nodes else None
 		e1, e2 = item
 		return self.nodes[e1][e2]
+
+	def __contains__(self, item):
+		return item in self.nodes
 
 	def add_kb_file(self, graph, add_new_node=True):
 		object_prefix = "http://ko.dbpedia.org/resource/"
@@ -75,6 +82,10 @@ class Node:
 			for item in x:
 				result.append(str(item))
 		return "\n".join(result)
+
+	@property
+	def degree(self):
+		return len(self.outgoing_edges) + len(self.incoming_edges)
 
 class Edge:
 	def __init__(self, e1, r, e2):

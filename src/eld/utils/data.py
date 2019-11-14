@@ -38,6 +38,12 @@ class DataModule:
 			self.typegiver = TypeGiver(args)
 			if mode == "typeeval":
 				return
+		self.use_kb_relation_info = args.use_kb_relation_info
+		if self.use_kb_relation_info:
+			self.kg = Graph()
+			for line in readfile(args.kb_relation_file):
+				s, p, o = line.split("\t")
+				self.kg.add_edge(s, p, o)
 		self.e2i = {w: i + 1 for i, w in enumerate(readfile(args.entity_file))}
 		self.e2i["NOT_IN_CANDIDATE"] = 0
 		self.new_entity_idx = {}
@@ -106,9 +112,12 @@ class DataModule:
 		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
 			self.initialize_token_tensor(token, pred)
 
-	def initialize_token_tensor(self, token, pred=False):
+	def initialize_token_tensor(self, token: Vocabulary, pred=False):
 		if token.is_entity:
 			token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
+			if self.use_kb_relation_info:
+				node = self.kg[token.entity]
+				token.degree = node.degree if node is not None else 0
 		if self.ce_flag:
 			token.char_embedding = self.character_embedding(torch.tensor([self.c2i[x] if x in self.c2i else 0 for x in token.jamo]))
 		if self.we_flag:
@@ -363,8 +372,11 @@ class DataModule:
 		elif type(data[0]) is dict:
 			func_chain = []
 		elif type(data[0]) is Corpus and len(data) == 1:
-			for entity in data[0].entity_iter():
-				entity.target = len(entity.relation) > 0  # 나무위키 전용
+			if namu_only:
+				for entity in data[0].entity_iter():
+					entity.target = len(entity.relation) > 0  # 나무위키 전용
+			else:
+				for entity in data[0].entity_iter(): entity.target = True
 			self.initialize_corpus_tensor(data[0], pred=True)
 			return ELDDataset(mode, data[0], self.args, cand_dict=self.surface_ent_dict, namu_only=namu_only)
 		else:

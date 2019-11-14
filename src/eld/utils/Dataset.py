@@ -3,9 +3,9 @@ from typing import List
 import torch
 from torch.utils.data import Dataset
 import torch.nn.functional as F
-from ...ds import Corpus, CandDict
+from ...ds import Corpus, CandDict, Graph
 from ..utils import ELDArgs
-from ...utils import TimeUtil
+from ...utils import TimeUtil, readfile
 
 class ELDDataset(Dataset):
 	def __init__(self, mode, corpus: Corpus, args: ELDArgs, *, cand_dict: CandDict=None, ent_emb = None, e2i = None, filter_list=None, limit=None, namu_only=False):
@@ -37,6 +37,7 @@ class ELDDataset(Dataset):
 
 		self.r_limit = args.relation_limit
 		self.eld_items = []
+
 		if namu_only or self.mode in ["train", "test"]:
 			limit = 0 if limit is None or type(limit) is not int or limit < 0 else limit
 			if len(filter_list) > 0:
@@ -126,10 +127,12 @@ class ELDDataset(Dataset):
 
 		is_in_cand_dict = target.in_cand_dict
 		candidate_embeddings = target.candidiate_entity_embedding
+		l = len(target.lctx_ent + target.rctx_ent)
+		avg_degree = sum([x.degree for x in target.lctx_ent + target.rctx_ent]) / l if l > 0 else 0
 		if self.mode in ["train", "test"]:
-			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_embeddings, new_ent, ee_label, eidx, index
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_embeddings, avg_degree, new_ent, ee_label, eidx, index
 		else:
-			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_embeddings
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_embeddings, avg_degree
 
 	def __len__(self):
 		return len(self.eld_items)

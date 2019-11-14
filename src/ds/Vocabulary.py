@@ -41,6 +41,7 @@ class Vocabulary:
 		self.candidiate_entity_embedding = torch.zeros(1, dtype=torch.float)
 		self.is_dark_entity = False
 		self.confidence_score = 0
+
 		# some properties that will be initialized later
 		self.lctxw_ind = None
 		self.rctxw_ind = None
@@ -48,7 +49,7 @@ class Vocabulary:
 		self.rctxe_ind = None
 		self.jamo_ind = None
 		self.tagged = False
-
+		self.degree = 0
 	def __str__(self):
 		return self.surface
 

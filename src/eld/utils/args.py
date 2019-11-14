@@ -23,6 +23,7 @@ class ELDArgs(AbstractArgument):
 		self.use_separate_feature_encoder = False
 		self.use_surface_info = False
 		self.use_candidate_info = False
+		self.use_kb_relation_info = False
 		self.train_embedding = False
 		self.use_character_embedding = True
 		self.use_word_embedding = True
@@ -56,9 +57,10 @@ class ELDArgs(AbstractArgument):
 		self.ent_list_path = "data/eld/entities"
 		self.entity_dict_path = "data/el/wiki_entity_dict.pickle"
 		self.redirects_path = "data/el/redirects.pickle"
-		self.in_kb_linker = "mulrel"
+		self.in_kb_linker = "pem"
 
 		self.type_prediction = False
+		self.kb_relation_file = "data/eld/kb_relations"
 		self.kb_type_file = "data/eld/typerefer/entity_types.json"
 		self.kb_type_list = "data/eld/typerefer/dbpedia_types"
 		# self.domain_restriction_file = ["data/eld/typerefer/domain.tsv"]

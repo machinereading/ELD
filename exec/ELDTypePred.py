@@ -9,35 +9,58 @@ t = "data/eld/typerefer/dbpedia_types"
 d = ["data/eld/typerefer/domain.tsv", "data/eld/typerefer/inst-d.tsv", "data/eld/typerefer/inst-d-ms.tsv"]
 r = ["data/eld/typerefer/range.tsv", "data/eld/typerefer/inst-r.tsv", "data/eld/typerefer/inst-r-ms.tsv"]
 names = ["ontology", "inst", "inst-ms"]
-x = [[0], [1],[2],[0,1],[0,2]]
+dr = [True, False]
+ne = [True, False]
+hierarchy = [True, False]
+x = [[0], [1], [2], [0, 1], [0, 2]]
 
 labels = TypeGiver(kbt, t, [], []).get_gold(*corpus.eld_items)
 evaluator = TypeEvaluator()
 preds = []
 scores = []
 result = [{}]
+n = []
 
-for item in x:
-	dd = [d[y] for y in item]
-	rr = [r[y] for y in item]
-	name = "+".join([names[y] for y in item])
-	typegiver = TypeGiver(kbt, t, dd, rr)
-	pred = typegiver(*corpus.eld_items)
-	preds.append(pred)
-	score = evaluator(corpus.eld_items, pred, labels)
-	result[0][name] = list(score)
-	print(score)
+for use_dr in dr:
+	for use_ne in ne:
+		for use_hierarchy in hierarchy:
+			for item in x:
+				for mode in ["union", "intersect"]:
+					dd = [d[y] for y in item]
+					rr = [r[y] for y in item]
+					name = "+".join([str(x) for x in [use_dr, use_ne, use_hierarchy, *[names[y] for y in item], mode]])
+					typegiver = TypeGiver(kbt, t, dd, rr, use_dr=use_dr, use_ne=use_ne, use_hierarchy=use_hierarchy, mode=mode)
+					pred = typegiver(*corpus.eld_items)
+					preds.append(pred)
+					score = evaluator(corpus.eld_items, pred, labels)
+					result[0][name] = list(score)
+					n.append(name)
+					print(score)
 
-for x in zip(corpus.eld_items, labels, *preds):
-	try:
-		result.append({
-			"entity": x[0].entity,
-			"sentence": x[0].parent_sentence.original_sentence,
-			"relation": [[y.relation, y.outgoing, x[0].parent_sentence.entities[x[0].entity_idx + y.relative_index].entity] for y in x[0].relation],
-			"answer": x[1],
-			"ontology": x[2],
-			"inst": x[3],
-			"inst-ms": x[4]
-		})
-	except: continue
+# for item in x:
+# 	for mode in ["union", "intersect"]:
+# 		dd = [d[y] for y in item]
+# 		rr = [r[y] for y in item]
+# 		name = "+".join([names[y] for y in item] + [mode])
+# 		typegiver = TypeGiver(kbt, t, dd, rr, use_dr=True, mode=mode)
+# 		pred = typegiver(*corpus.eld_items)
+# 		preds.append(pred)
+# 		score = evaluator(corpus.eld_items, pred, labels)
+# 		result[0][name] = list(score)
+# 		n.append(name)
+# 		print(score)
+
+# for x in zip(corpus.eld_items, labels, *preds):
+# 	try:
+# 		result.append({
+# 			"entity"  : x[0].entity,
+# 			"sentence": x[0].parent_sentence.original_sentence,
+# 			"relation": [[y.relation, y.outgoing, x[0].parent_sentence.entities[x[0].entity_idx + y.relative_index].entity] for y in x[0].relation],
+# 			"answer"  : x[1],
+# 			"ontology": x[2],
+# 			"inst"    : x[3],
+# 			"inst-ms" : x[4]
+# 		})
+# 	except:
+# 		continue
 jsondump(result, "type_analysis.json")

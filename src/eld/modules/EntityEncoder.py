@@ -67,10 +67,13 @@ class SeparateEntityEncoder(nn.Module):
 			elif args.type_encoder.lower() == "selfattn":
 				self.type_encoder = SelfAttentionEncoder(args.t_emb_dim, 6, 5, 1, output_dim=args.t_enc_dim)
 				self.te_dim = args.t_enc_dim
-
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
 		self.transformer_input_dim = self.max_input_dim * separate_layers
-
+		if args.use_surface_info:
+			self.transformer_input_dim += 1
+		if args.use_kb_relation_info:
+			self.transformer_input_dim += 1
+		# self.transformer_input_dim = sum([self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim])
 		# seq = [nn.Linear(self.transformer_input_dim, self.transformer_output_dim), nn.Dropout()] if self.transformer_layer < 2 else \
 		# 	[nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
 		# 		nn.Linear(self.transformer_hidden_dim, self.transformer_output_dim),
@@ -80,6 +83,7 @@ class SeparateEntityEncoder(nn.Module):
 		# self.transformer = SelfAttentionEncoder(self.max_input_dim, 4, 4, separate_layers)
 
 		self.encoder_output = None
+
 		binary_encoder_seq = [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] + [nn.Linear(self.transformer_input_dim, self.transformer_hidden_dim), nn.Dropout()] * (self.transformer_layer - 2) + [
 			nn.Linear(self.transformer_hidden_dim, 1), nn.Dropout()]
 		self.binary_encoder = nn.Sequential(*binary_encoder_seq)
@@ -91,8 +95,8 @@ class SeparateEntityEncoder(nn.Module):
 	            left_entity_context_batch, left_entity_context_len,
 	            right_entity_context_batch, right_entity_context_len,
 	            relation_batch, relation_len,
-	            type_batch, type_len, *,
-	            surface_dict_flag=None, cand_entities=None):
+	            type_batch, type_len,
+	            surface_dict_flag=None, cand_entities=None, avg_degree=None):
 		mid_features = []
 		if self.ce_flag:
 			ce = self.character_encoder(character_batch) # batch * max_character * embedding_size
@@ -113,15 +117,20 @@ class SeparateEntityEncoder(nn.Module):
 			te = self.type_encoder(type_batch)
 			# print(self.type_encoder.out_size, te.size())
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
+		additional_features = []
 		if surface_dict_flag is not None:
-			mid_features.append(surface_dict_flag)
+			additional_features.append(surface_dict_flag.view(-1, 1))
+		if avg_degree is not None:
+			additional_features.append(avg_degree.view(-1, 1))
 		if cand_entities is None:
+			# for item in mid_features:
+			# 	print(item.size())
 			# for item in mid_features: print(item.size())
-			ffnn_input = torch.cat(mid_features, dim=-1)
+			ffnn_input = torch.cat(mid_features + additional_features, dim=-1)
 			# ffnn_output = self.transformer(ffnn_input)
 			binary_output = self.binary_encoder(ffnn_input)
 			# print(ffnn_input.size(), binary_output.size())
-			return binary_output, ffnn_input
+			return binary_output, torch.cat(mid_features, dim=-1)
 		else:
 			pass
 

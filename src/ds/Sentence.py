@@ -125,10 +125,12 @@ class Sentence:
 					new_ent.target = entity["is_target_entity"]
 				else:
 					new_ent.target = False
-				if "ne_type" not in entity:
+				
+				# elif entity["ne_type"] != "namu" and "dataType" in entity: # TODO 이거 밑줄로 바꿔서 뭔가 side effect 날 수도 있음. 문제 생기면 주석 해제할 것
+				if "dataType" in entity:
+					new_ent.ne_type = entity["dataType"]
+				elif "ne_type" not in entity:
 					new_ent.ne_type = "NA"
-				elif entity["ne_type"] != "namu" and "dataType" in entity:
-					new_ent.ne_type = entity["dataType"][:2]
 				else:
 					new_ent.ne_type = entity["ne_type"]
 			except Exception as e:

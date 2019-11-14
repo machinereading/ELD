@@ -228,9 +228,12 @@ class VectorBasedELD(ELDSkeleton):
 				discovery_optimizer.zero_grad()
 				tensor_optimizer.zero_grad()
 				# optimizer.zero_grad()
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-4]]
+				# ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb, avg_degree = [x.to(self.device, torch.float) if x is not None else None for x in batch[:-4]]
+				args, kwargs = self.prepare_input(batch)
 				new_entity_label, ee_label, gold_entity_idx = [x.to(self.device) for x in batch[-4:-1]]
-				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+
+
+				kb_score, pred = self.transformer(*args, **kwargs)
 				discovery_loss_val = torch.tensor(0)
 				if not self.stop_train_discovery:
 					discovery_loss_val = self.discovery_loss(kb_score, new_entity_label)
@@ -315,8 +318,9 @@ class VectorBasedELD(ELDSkeleton):
 			preds = []
 			dev_idxs = []
 			for batch in dataset:
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
-				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				# ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
+				args, kwargs = self.prepare_input(batch)
+				kb_score, pred = self.transformer(*args, **kwargs)
 				kb_score = torch.sigmoid(kb_score)
 				# print(pred)
 				pred = self.vector_transformer(pred.detach(), eval=False)  # TODO why all same tensor?
@@ -374,8 +378,9 @@ class VectorBasedELD(ELDSkeleton):
 			kb_scores = []
 			preds = []
 			for batch in data:
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
-				kb_score, pred = self.transformer(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				# ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+				args, kwargs = self.prepare_input(batch)
+				kb_score, pred = self.transformer(*args, **kwargs)
 				kb_score = torch.sigmoid(kb_score)
 				if self.args.use_separate_feature_encoder:
 					_, pred = self.transformer2(ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
@@ -388,6 +393,18 @@ class VectorBasedELD(ELDSkeleton):
 			result.append([v.surface, v.entity, n, p])
 		return result
 
+	def prepare_input(self, batch):
+		if self.mode in ["train", "test"]:
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
+		else:
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+		args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+		kwargs = {"surface_dict_flag": None, "cand_entities": None, "avg_degree": None}
+		if self.args.use_surface_info:
+			kwargs["surface_dict_flag"] = in_cand_dict_flag
+		if self.args.use_kb_relation_info:
+			kwargs["avg_degree"] = avg_degree
+		return args, kwargs
 # noinspection PyMethodMayBeStatic
 class BertBasedELD(ELDSkeleton):
 	def predict(self, data):
@@ -576,18 +593,15 @@ class ELDNoDiscovery(ELDSkeleton):
 		super(ELDNoDiscovery, self).__init__(mode, "nodiscovery", train_new=True, train_args=args)
 		# dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=256, shuffle=False, num_workers=8)
 
-		test_corpus = self.data.test_dataset
-		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus)
+		# test_corpus = self.data.test_dataset
+		# new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus)
 
-		run, max_score_epoch, max_score, analysis = self.posteval(0, 0, 0, test_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+		# run, max_score_epoch, max_score, analysis = self.posteval(0, 0, 0, test_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 
 	def save_model(self):
 		pass
 
 	def load_model(self):
-		pass
-
-	def predict(self, data):
 		pass
 
 	def eval(self, corpus):
@@ -597,6 +611,13 @@ class ELDNoDiscovery(ELDSkeleton):
 		preds = [torch.zeros(1, 300).to(self.device, dtype=torch.float) for _ in corpus.eld_items]
 		new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.tensor(kb_scores), torch.cat(preds))
 		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
+
+	def predict(self, *data):
+		dataset = self.data.prepare(self.mode, *data, namu_only=True)
+		_, link_result = self.data.predict_entity(dataset.eld_items, output_as_idx=False, mark_nil=True)
+		for item, lr in zip(dataset.eld_items, link_result):
+			item.eld_pred_entity = lr
+		return data[0]
 
 class DictBasedELD(ELDSkeleton):
 	"""
@@ -613,7 +634,7 @@ class DictBasedELD(ELDSkeleton):
 		pass
 
 	def predict(self, *data):
-		dataset = self.data.prepare(self.mode, *data, namu_only=True)
+		dataset = self.data.prepare(self.mode, *data, namu_only=True )
 		for ent in dataset.eld_items:
 			_, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
 			link_result = link_result[0]
