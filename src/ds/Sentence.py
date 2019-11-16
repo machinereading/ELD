@@ -18,8 +18,8 @@ class Sentence:
 
 		for i, token in enumerate(self.tokens):
 			try:
-				token.char_ind = self.original_sentence.index(token.surface, lastind)
-				lastind = token.char_ind + len(token.surface)
+				token.char_idx = self.original_sentence.index(token.surface, lastind)
+				lastind = token.char_idx + len(token.surface)
 			except:
 				print(sentence, token)
 
@@ -53,34 +53,34 @@ class Sentence:
 
 	def find_token_by_index(self, ind):
 		for item in self.tokens:
-			if item.char_ind == ind:
+			if item.char_idx == ind:
 				return item
 		return None
 
 	def add_ne(self, sin, ein, surface, entity=None, cluster_id=-1, relation=None):
 		def split_token(nt, t, sent):
-			sidx = nt.char_ind
-			eidx = nt.char_ind + len(nt.surface)
-			token_start = t.char_ind
-			token_end = t.char_ind + len(t.surface)
+			sidx = nt.char_idx
+			eidx = nt.char_idx + len(nt.surface)
+			token_start = t.char_idx
+			token_end = t.char_idx + len(t.surface)
 			if sidx <= token_start and token_end <= eidx: return [nt]
 			if sidx > token_end: return [t]
-			if eidx <= t.char_ind: return [t]
+			if eidx <= t.char_idx: return [t]
 			# case 1: token start / sin / token end
-			if t.char_ind < sidx < token_end:
-				tok1 = Vocabulary(t.surface[:sidx - t.char_ind], sent, char_ind=t.char_ind)
+			if t.char_idx < sidx < token_end:
+				tok1 = Vocabulary(t.surface[:sidx - t.char_idx], sent, char_idx=t.char_idx)
 				return [tok1, nt]
 			# case 2: token start / ein / token end
-			if t.char_ind < eidx < token_end:
-				tok1 = Vocabulary(t.surface[eidx - t.char_ind:], sent, char_ind=eidx)
+			if t.char_idx < eidx < token_end:
+				tok1 = Vocabulary(t.surface[eidx - t.char_idx:], sent, char_idx=eidx)
 				return [nt, tok1]
 			# case 3: token start / sin / ein / token end
-			tok1 = Vocabulary(t.surface[:sidx - t.char_ind], sent, char_ind=t.char_ind)
-			tok2 = Vocabulary(t.surface[eidx - t.char_ind:], sent, char_ind=eidx)
+			tok1 = Vocabulary(t.surface[:sidx - t.char_idx], sent, char_idx=t.char_idx)
+			tok2 = Vocabulary(t.surface[eidx - t.char_idx:], sent, char_idx=eidx)
 			return [tok1, nt, tok2]
 		assert sin < ein
 		assert self.original_sentence[sin:ein] == surface
-		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_ind=sin)
+		new_token = Vocabulary(self.original_sentence[sin:ein], self, char_idx=sin)
 		new_token.ec_cluster_id = cluster_id
 		new_token.is_entity = True
 		new_token.entity = entity
@@ -141,14 +141,13 @@ class Sentence:
 		# if error_count > 0:
 		# print(error_count, len(entities))
 		# postprocess
-		sentence.tokens = sorted(list(set(sentence.tokens)), key=lambda x: x.char_ind)
+		sentence.tokens = sorted(list(set(sentence.tokens)), key=lambda x: x.char_idx)
 		return sentence
 
 	def to_json(self):
 		return {
 			"text"  : self.original_sentence,
-			"id"    : self.id,
-			"tokens": [x.to_json() for x in self.tokens]
+			"entities": [x.to_json() for x in self.entities]
 		}
 
 	@classmethod

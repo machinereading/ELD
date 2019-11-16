@@ -20,6 +20,7 @@ from ..utils import jsondump, split_to_batch
 # noinspection PyMethodMayBeStatic
 class ELDSkeleton(ABC):
 	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
+		gl.logger.info("Initializing ELD Module")
 		self.model_name = model_name
 		self.mode = mode
 		self.device = "cuda" if torch.cuda.is_available() and mode != "demo" else "cpu"
@@ -84,8 +85,8 @@ class ELDSkeleton(ABC):
 		                                                 ["No surface", no_surface_score]]:
 			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-		if total_score[0][-1] > max_score:
-			max_score = total_score[0][-1]
+		if kb_expectation_score[-1] > max_score:
+			max_score = kb_expectation_score[-1]
 			max_score_epoch = epoch
 			self.save_model()
 			self.is_best_model = True
@@ -98,7 +99,7 @@ class ELDSkeleton(ABC):
 		if kb_expectation_score[-1] > 0.8 and not self.stop_train_discovery:
 			self.stop_train_discovery = True
 			print("Stop train discovery")
-		if epoch - max_score_epoch > self.stop:
+		if epoch - max_score_epoch >= self.stop:
 			gl.logger.info("No better performance for %d epoch - Training stop" % self.stop)
 			return False, max_score_epoch, max_score, analyze_data
 		return True, max_score_epoch, max_score, analyze_data
@@ -115,13 +116,13 @@ class ELDSkeleton(ABC):
 	def predict(self, *data):
 		pass
 
-	def __call__(self, *data):
+	def __call__(self, *data, no_in_kb_link=False):
 		if self.mode == "demo":
 			data = data[0]["content"]
 			result = self.predict(data)
 			return self.postprocess(result)
 		else:
-			result = self.predict(*data)
+			result = self.predict(*data, no_in_kb_link=no_in_kb_link)
 			return result
 
 
@@ -188,7 +189,7 @@ class ELDSkeleton(ABC):
 
 # noinspection PyUnresolvedReferences
 class VectorBasedELD(ELDSkeleton):
-	def __init__(self, mode: str, model_name: str, train_new=True, train_args: ELDArgs = None):
+	def __init__(self, mode: str="pred", model_name: str="noattn_full_fixed", train_new=True, train_args: ELDArgs = None):
 		super(VectorBasedELD, self).__init__(mode, model_name, train_new, train_args)
 		args = self.args
 		if mode == "typeeval":
@@ -225,7 +226,7 @@ class VectorBasedELD(ELDSkeleton):
 
 	def train(self):
 		gl.logger.info("Train start")
-		batch_size = 256
+		batch_size = 512
 		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=batch_size, shuffle=True, num_workers=8)
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 
@@ -391,19 +392,19 @@ class VectorBasedELD(ELDSkeleton):
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-	def predict(self, *data, batch_size=512):
+	def predict(self, *data, batch_size=512, no_in_kb_link=False):
 		self.transformer.eval()
 		self.vector_transformer.eval()
 		if self.args.use_separate_feature_encoder:
 			self.transformer2.eval()
 
 		dataset = self.data.prepare("pred", *data)
-		data = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+		dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 
 		with torch.no_grad():
 			kb_scores = []
 			preds = []
-			for batch in data:
+			for batch in dataloader:
 				# ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
 				args, kwargs = self.prepare_input(batch)
 				kb_score, pred = self.transformer(*args, **kwargs)
@@ -413,13 +414,16 @@ class VectorBasedELD(ELDSkeleton):
 				pred = self.vector_transformer(pred)
 				kb_scores.append(kb_score)
 				preds.append(pred)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(dataset.eld_items, torch.cat(kb_scores), torch.cat(preds), output_as_idx=False)
+			new_ent_preds, pred_entity_idxs = self.data.predict_entity(dataset.eld_items, torch.cat(kb_scores), torch.cat(preds), output_as_idx=False, mark_nil=True)
 		result = []
 		for v, n, p in zip(dataset.eld_items, new_ent_preds, pred_entity_idxs):
 			result.append([v.surface, v.entity, n, p])
-			v.eld_pred_entity = p
+			if no_in_kb_link and not n: v.entity = p
+			v.is_dark_entity = n
 		if type(data[0]) is Corpus:
 			return data[0]
+		elif type(data[0]) is dict:
+			pass
 		return result
 
 	def prepare_input(self, batch):

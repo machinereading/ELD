@@ -5,9 +5,8 @@ import torch
 from . import Relation
 from ..utils.KoreanUtil import decompose_sent
 
-
 class Vocabulary:
-	def __init__(self, surface, parent_sentence, token_ind=0, char_ind=0):
+	def __init__(self, surface, parent_sentence, token_idx=0, char_idx=0):
 		self.surface: str = surface
 		self.surface_idx: int = -1
 		self.is_entity = False
@@ -15,8 +14,8 @@ class Vocabulary:
 		self.entity = None
 		self.entity_idx = -1
 		self.entity_in_kb = False
-		self.char_ind = char_ind
-		self.token_ind = token_ind
+		self.char_idx = char_idx
+		self.token_idx = token_idx
 		self.parent_sentence = parent_sentence
 
 		# reserved for EL
@@ -50,6 +49,7 @@ class Vocabulary:
 		self.jamo_ind = None
 		self.tagged = False
 		self.degree = 0
+
 	def __str__(self):
 		return self.surface
 
@@ -61,18 +61,18 @@ class Vocabulary:
 
 	def __eq__(self, other):
 		if type(other) is not Vocabulary: return False
-		return self.parent_sentence == other.parent_sentence and self.char_ind == other.char_ind
+		return self.parent_sentence == other.parent_sentence and self.char_idx == other.char_idx
 
 	def __hash__(self):
-		return hash((self.parent_sentence, self.char_ind))
+		return hash((self.parent_sentence, self.char_idx))
 
 	@property
 	def lctx(self):
-		return self.parent_sentence.tokens[:self.token_ind]
+		return self.parent_sentence.tokens[:self.token_idx]
 
 	@property
 	def rctx(self):
-		return self.parent_sentence.tokens[self.token_ind + 1:]
+		return self.parent_sentence.tokens[self.token_idx + 1:]
 
 	@property
 	def lctx_ent(self):
@@ -84,15 +84,11 @@ class Vocabulary:
 
 	def to_json(self):
 		return {
-			"surface"        : self.surface,
-			"entity"         : self.entity,
-			"is_entity"      : self.is_entity,
-			"entity_in_kb"   : self.entity_in_kb,
-			"parent_sentence": self.parent_sentence.id,
-			"cluster"        : self.cluster if type(self.cluster) is int else self.cluster.id,
-			"error_type"     : self.error_type,
-			"token_ind"      : self.token_ind,
-			"char_ind"       : self.char_ind
+			"surface"       : self.surface,
+			"entity"        : self.entity,
+			"is_entity"     : self.is_entity,
+			"is_dark_entity": self.is_dark_entity,
+			"char_idx"      : self.char_idx
 		}
 
 	@classmethod
@@ -123,8 +119,8 @@ class Vocabulary:
 		       self.relation_embedding, \
 		       self.type_embedding, \
 		       self.is_new_entity, \
-		       self.entity_label_embedding,\
-			   self.entity_label_idx
+		       self.entity_label_embedding, \
+		       self.entity_label_idx
 
 	@property
 	def jamo(self):

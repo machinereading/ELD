@@ -1,4 +1,3 @@
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -31,7 +30,10 @@ class DataModule:
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		self.modify_entity_embedding = args.modify_entity_embedding
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
+		self.use_cache_kb = args.use_cache_kb
+		self.use_heuristic = args.use_heuristic
 		self.type_predict = args.type_prediction
+
 		# load corpus and se
 		if self.type_predict:
 			self.typegiver = TypeGiver(args)
@@ -83,7 +85,7 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
-			self.corpus = Corpus.load_corpus(args.corpus_dir)  # TODO Limit is here
+			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=0)  # TODO Limit is here
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
@@ -177,7 +179,7 @@ class DataModule:
 			if sum(target) == 0:
 				self.train_oe_embedding[idx] = result
 			else:
-				self.train_oe_embedding[idx] = (result * (0.5 - epoch * 0.001)  + target * (0.5 + epoch * 0.001)).clone().detach() # stabilize
+				self.train_oe_embedding[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
 		for token in self.train_dataset.eld_items:
 			if token.target and token.entity in self.oe2i:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()
@@ -187,7 +189,7 @@ class DataModule:
 		self.new_entity_surface_dict = []
 
 	@TimeUtil.measure_time
-	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, output_as_idx=True, mark_nil=False):
+	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
 		# batchwise prediction, with entity registeration
 
 		def get_pred(tensor, emb):
@@ -197,6 +199,7 @@ class DataModule:
 			sim = torch.max(cos_sim - dist)
 			index = torch.argmax(cos_sim - dist, dim=-1).item()
 			return sim, index
+
 		if new_ent_pred is None:
 			new_ent_pred = torch.zeros(len(target_voca_list), dtype=torch.uint8)
 		if pred_embedding is None:
@@ -216,7 +219,7 @@ class DataModule:
 				# new_ent_flag = v.is_new_entity # oracle test
 				new_ent_flag = i > self.new_ent_threshold
 				if new_ent_flag:  # out-kb
-					if self.new_entity_embedding.size(0) > 0:  # out-kb similarity
+					if self.use_cache_kb and self.new_entity_embedding.size(0) > 0:  # out-kb similarity
 						max_sim, pred_idx = get_pred(e, self.new_entity_embedding)
 					else:  # empty out-kb. register
 						max_sim = 0
@@ -227,7 +230,6 @@ class DataModule:
 					in_kb_voca_queue.append(v)
 					result.append(pred_idx)
 					ent_result.append(self.i2e[pred_idx])
-			# result.append(-2)
 			else:  # in-KB score를 사용하지 않고 direct 비교
 				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
 				new_ent_flag = max_sim < self.register_threshold
@@ -235,29 +237,31 @@ class DataModule:
 			# print(new_ent_flag, max_sim, pred_idx)
 			# out-kb에 대한 registration & result generation
 			if new_ent_flag:  # out-kb
-				if len(v.surface) > 3:  # heuristic
-					out_flag = False
-					for new_ent_idx, ent_dict in enumerate(self.new_entity_surface_dict):
-						if out_flag: break
-						for ent_cand in ent_dict:
-							if v.surface in ent_cand or ent_cand in v.surface:  # 완벽포함관계
-								pred_idx = new_ent_idx
-								max_sim = 1
-								out_flag = True
-								# print(v.surface, F.cosine_similarity(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze() - F.pairwise_distance(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze())
-								break
-					# else: # surface only
-					# 	max_sim = 0
-					# 	pred_idx = -1
+				if self.use_heuristic:  # heuristic
+					if len(v.surface) > 3:
+						out_flag = False
+						for new_ent_idx, ent_dict in enumerate(self.new_entity_surface_dict):
+							if out_flag: break
+							for ent_cand in ent_dict:
+								if v.surface in ent_cand or ent_cand in v.surface:  # 완벽포함관계
+									pred_idx = new_ent_idx
+									max_sim = 1
+									out_flag = True
+									# print(v.surface, F.cosine_similarity(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze() - F.pairwise_distance(e.unsqueeze(0), self.new_entity_embedding[new_ent_idx].unsqueeze(0).to(self.device)).squeeze())
+									break
 
 				if max_sim < self.register_threshold:  # entity registeration
-					# if self.register_policy == "fifo":  # register immediately
-					pred_idx = self.new_entity_embedding.size(0)
-					self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
-					self.new_entity_surface_dict.append({v.surface})
-
-					# print(len(self.new_entity_surface_dict), self.new_entity_embedding.size(0))
-					assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
+					if self.use_cache_kb:
+						pred_idx = self.new_entity_embedding.size(0)
+						self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
+						self.new_entity_surface_dict.append({v.surface})
+						assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
+					else:
+						pred_idx = 0
+						ent = "_"+v.surface
+						self.e2i[ent] = len(self.e2i)
+						self.surface_ent_dict.add_instance(v.surface, ent)
+						self.in_kb_linker.update_entity(v.surface, ent, e)
 				else:
 					assert pred_idx >= 0
 					self.new_entity_surface_dict[pred_idx].add(v.surface)
@@ -265,24 +269,10 @@ class DataModule:
 						self.new_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.new_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
 				result.append(len(self.e2i) + pred_idx)
 				ent_result.append(pred_idx)
-			# elif self.register_policy == "pre_cluster":  # register after clustering batch wise
-			# 	add_idx_queue.append(idx)
-			# 	add_tensor_queue.append(e)
-			# 	result.append(-2)
-			# else:  # out-kb index
-			# 	result.append(len(self.e2i) + pred_idx)  # new entity should have index from existing entities
 			new_ent_flags.append(new_ent_flag)  # new entity flag marker
 
-		# if len(add_tensor_queue) > 0:  # perform preclustering
-		# 	len_before_register = self.new_entity_embedding.size(0)
-		# 	cluster_info, cluster_tensor = hierarchical_clustering(torch.stack(add_tensor_queue))
-		# 	for i, idx in enumerate(add_idx_queue):
-		# 		for x, c in enumerate(cluster_info):
-		# 			if i in c:
-		# 				result[idx] = len_before_register + x + len(self.e2i)
-		# 	self.new_entity_embedding = torch.cat((self.new_entity_embedding, cluster_tensor.cpu()))
 
-		if len(in_kb_idx_queue) > 0:  # in-kb entity linking
+		if not no_in_kb_link and len(in_kb_idx_queue) > 0:  # in-kb entity linking
 			ents = self.in_kb_linker(*in_kb_voca_queue)
 			assert len(ents) == len(in_kb_voca_queue) == len(in_kb_idx_queue)
 			for idx, e, v in zip(in_kb_idx_queue, ents, target_voca_list):
@@ -304,7 +294,8 @@ class DataModule:
 					if v.surface not in surface_count[r]:
 						surface_count[r][v.surface] = 0
 					surface_count[r][v.surface] += 1
-			surface_count = {k: sorted(v.items(), key=lambda x: x[1], reverse=True)[0][1] for k, v in surface_count.items()}
+
+			surface_count = {k: sorted(v.items(), key=lambda x: x[1], reverse=True)[0][0].replace(" ", "_") for k, v in surface_count.items()}
 			for i in range(len(ent_result)):
 				if new_ent_flags[i] and ent_result[i] in surface_count:
 					ent_result[i] = surface_count[ent_result[i]]
@@ -366,9 +357,9 @@ class DataModule:
 		return result
 
 	def prepare(self, mode, *data, namu_only=False) -> ELDDataset:  # for prediction mode
-		if type(data[0]) is str:
+		if type(data[0]) is str: # text에 etri 돌린 다음에 crowdsourcing form으로 만들기
 			func_chain = [text_to_etri, etri_to_ne_dict]
-		elif type(data[0]) is dict:
+		elif type(data[0]) is dict:# crowdsourcing form을 가정함
 			func_chain = []
 		elif type(data[0]) is Corpus and len(data) == 1:
 			if namu_only:
@@ -389,7 +380,7 @@ class DataModule:
 		corpus = Corpus.load_corpus(buf)
 
 		for entity in corpus.entity_iter():
-			entity.target = len(entity.relation) > 0 # 나무위키 전용
+			entity.target = len(entity.relation) > 0  # 나무위키 전용
 		self.initialize_corpus_tensor(corpus, pred=True)
 		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 

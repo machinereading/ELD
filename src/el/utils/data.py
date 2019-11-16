@@ -34,8 +34,8 @@ class DataModule:
 		entities = [x.to_json() for x in sentence.tokens if x.is_entity]
 		for entity in entities:
 			entity["candidates"] = self.surface_ent_dict[entity["surface"]]
-			entity["start"] = entity["char_ind"]
-			entity["end"] = entity["char_ind"] + len(entity["surface"])
+			entity["start"] = entity["char_idx"]
+			entity["end"] = entity["char_idx"] + len(entity["surface"])
 		return {
 			"text"    : sentence.original_sentence,
 			"entities": entities,

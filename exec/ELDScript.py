@@ -19,10 +19,13 @@ parser.add_argument("--use_separate_feature_encoder", action="store_true")
 parser.add_argument("--use_surface_info", action="store_true")
 parser.add_argument("--use_candidate_info", action="store_true")
 parser.add_argument("--use_kb_relation_info", action="store_true")
-
+parser.add_argument("--no_use_cache_kb", action="store_false")
 parser.add_argument("--train_limit", type=int, default=-1)
 parser.add_argument("--dev_limit", type=int, default=-1)
 parser.add_argument("--modify_entity_embedding", action="store_true")
+parser.add_argument("--input_file", type=str)
+parser.add_argument("--output_file", type=str)
+parser.add_argument("--train_iter", type=int, default=1)
 args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
@@ -62,6 +65,16 @@ eld_args.use_separate_feature_encoder = args.use_separate_feature_encoder
 eld_args.use_surface_info = args.use_surface_info
 eld_args.use_candidate_info = args.use_candidate_info
 eld_args.use_kb_relation_info = args.use_kb_relation_info
+eld_args.use_cache_kb = not args.no_use_cache_kb
+if mode == "train" and args.train_iter > 1:
+	for i in range(args.train_iter):
+		if model_name.startswith("bert"):
+			module = BertBasedELD(mode, "%s_%d" % (model_name, i), train_args=eld_args)
+		else:
+			module = VectorBasedELD(mode, "%s_%d" % (model_name, i), train_args=eld_args)
+		module.train()
+	import sys
+	sys.exit(0)
 if model_name.startswith("bert"):
 	module = BertBasedELD(mode, model_name, train_args=eld_args)
 else:
@@ -71,7 +84,14 @@ if mode == "train":
 	module.train()
 	time_analysis()
 if mode == "pred":
-	pass
+	try:
+		import json
+		with open(args.input_file, encoding="UTF8") as rf, open(args.output_file, "w", encoding="UTF8") as wf:
+			items = json.load(rf)
+			json.dump(module(*rf), wf, ensure_ascii=False, indent="\t")
+	except:
+		import traceback
+		traceback.print_exc()
 
 if mode == "demo":
 	pass

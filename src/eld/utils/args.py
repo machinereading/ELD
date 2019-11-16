@@ -24,6 +24,8 @@ class ELDArgs(AbstractArgument):
 		self.use_surface_info = False
 		self.use_candidate_info = False
 		self.use_kb_relation_info = False
+		self.use_cache_kb = True
+		self.use_heuristic = True
 		self.train_embedding = False
 		self.use_character_embedding = True
 		self.use_word_embedding = True

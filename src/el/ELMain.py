@@ -1,15 +1,16 @@
 from .utils.data import DataModule
 from .utils.args import ELArgs
 from .utils.postprocess import *
+from .mulrel_nel.vocabulary import Vocabulary
 from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
 from .. import GlobalValues as gl
 from ..utils import TimeUtil
 from ..utils import *
-from ..ds import Sentence
+from ..ds import Corpus, Sentence
 
 class EL:
-	def __init__(self, mode="test", model_name="no_okt_ent_emb", surface_ent_dict=None):
+	def __init__(self, mode="test", model_name="no_okt_ent_emb", surface_ent_dict=None, entity_voca=None, entity_embedding=None):
 		gl.logger.info("Initializing EL Module")
 		with TimeUtil.TimeChecker("EL_init"):
 			if mode == "train":
@@ -26,6 +27,12 @@ class EL:
 					traceback.print_exc()
 					sys.exit(1)
 			self.data = DataModule(self.args)
+			if surface_ent_dict is not None:
+				self.data.surface_ent_dict = surface_ent_dict
+			if entity_voca is not None and entity_embedding is not None:
+				self.data.entity_voca = Vocabulary.from_json(entity_voca)
+				self.data.entity_embedding = entity_embedding
+
 			self.model_name = model_name
 			self.args.mode = mode
 			self.args.model_name = model_name
@@ -57,7 +64,7 @@ class EL:
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		self.ranker.train(train_data, [("dev", dev_data)],
 		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
-	def predict(self, sentences, delete_candidate=True):
+	def predict(self, sentences, delete_candidate=True, output_type=None):
 		# type_list = [type(x) for x in sentences]
 		# assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
 		# 		[x is Sentence for x in type_list])
@@ -81,13 +88,15 @@ class EL:
 			result += merge_item(j, e, delete_candidate)
 		if type(sentences[0]) is Sentence:
 			result = merge_item_with_corpus(sentences, result)
-		jsondump(jj, "debug/el_prepare.json")
-		jsondump(ee, "debug/el_result_dict.json")
+		if output_type is Corpus:
+			result = Corpus.load_corpus(result)
+		# jsondump(jj, "debug/el_prepare.json")
+		# jsondump(ee, "debug/el_result_dict.json")
 		# print(len(sentences), len(result))
 		return result
 
-	def __call__(self, *sentences):
-		return self.predict(sentences)
+	def __call__(self, *sentences, output_type=None):
+		return self.predict(sentences, output_type=output_type)
 
 	@property
 	def config(self):

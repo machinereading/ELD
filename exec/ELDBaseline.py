@@ -3,13 +3,14 @@ from src.eld.utils import ELDArgs, Evaluator, DataModule
 from src.ds import Corpus
 # a = ELDNoDiscovery("pred", ELDArgs())
 from src.utils import jsondump, writefile
-a = ELDNoDiscovery("pred", ELDArgs())
+# a = ELDNoDiscovery("pred", ELDArgs())
 b = DictBasedELD("pred", ELDArgs())
-c = VectorBasedELD("pred", "noattn_full_fixed")
-d = VectorBasedELD("pred", "full_with_surface")
-e = VectorBasedELD("pred", "full_with_degree")
+# c = VectorBasedELD("pred", "noattn_full_fixed")
+# d = VectorBasedELD("pred", "full_with_surface")
+# e = VectorBasedELD("pred", "full_with_degree")
 data = DataModule("test", ELDArgs())
-for mod in [a,b,c,d,e]:
+# for mod in [a,b,c,d,e]:
+for mod in [b]:
 	mod.data = data
 	mod.evaluator = Evaluator(mod.args, data)
 	print(mod.evaluator is not None)
