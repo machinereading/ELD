@@ -12,10 +12,12 @@ class ELDArgs(AbstractArgument):
 		self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
 		self.eval_per_epoch = 5
-		self.early_stop = 50
+		self.early_stop = 30
 		self.train_corpus_limit = None
 		self.dev_corpus_limit = None
 		self.test_corpus_limit = None
+
+		self.test_mode = False
 
 		# transformer config
 		# self.transformer_mode = "separate"  # one of "joint" or "separate"

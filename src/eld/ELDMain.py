@@ -71,11 +71,9 @@ class ELDSkeleton(ABC):
 		# return sum([F.mse_loss(p, g) for t, p, g in zip(new_entity_flag, pred, label) if torch.sum(g) != 0])
 		return l1 + l2
 
-	def posteval(self, epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
-		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1),
-		                                                                                                                                                                              torch.tensor(pred_entity_idxs),
-		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).cpu(),
-		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).cpu())
+	def posteval(self, epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs):
+		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = \
+			self.evaluator.evaluate(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1), torch.tensor(pred_entity_idxs),torch.cat(new_entity_labels, dim=-1).cpu(), torch.cat(gold_entity_idxs, dim=-1).cpu())
 		print()
 		p, r, f = kb_expectation_score
 		gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % ("KB Expectation", p * 100, r * 100, f * 100))
@@ -93,7 +91,7 @@ class ELDSkeleton(ABC):
 		gl.logger.info("Best epoch %d - Score %.2f" % (max_score_epoch, max_score * 100))
 		if not os.path.isdir("runs/eld/%s" % self.model_name):
 			os.mkdir("runs/eld/%s" % self.model_name)
-		analyze_data = self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		analyze_data = self.data.analyze(dev_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
 		if kb_expectation_score[-1] > 0.8 and not self.stop_train_discovery:
@@ -115,6 +113,9 @@ class ELDSkeleton(ABC):
 	@abstractmethod
 	def predict(self, *data):
 		pass
+
+	@abstractmethod
+	def eval(self, *args, **kwargs): pass
 
 	def __call__(self, *data, no_in_kb_link=False):
 		if self.mode == "demo":
@@ -167,9 +168,10 @@ class ELDSkeleton(ABC):
 			self.load_model()  # load best
 		test_corpus = self.data.test_dataset if test_dataset is None else test_dataset
 		test_batch = DataLoader(dataset=test_corpus, batch_size=batch_size, shuffle=False, num_workers=8)
-		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
+		new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus.eld_items,
 		                                                                                                                                                                              torch.tensor(new_ent_preds).view(-1).to("cpu", dtype=torch.uint8),
+		                                                                                                                                                                              torch.tensor(sims).view(-1),
 		                                                                                                                                                                              torch.tensor(pred_entity_idxs).to("cpu", dtype=torch.int32),
 		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).to("cpu", dtype=torch.uint8),
 		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).to("cpu", dtype=torch.int32))
@@ -183,7 +185,7 @@ class ELDSkeleton(ABC):
 		                                                 ["No surface", no_surface_score]]:
 			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s_test.json" % self.model_name)
 
@@ -284,9 +286,9 @@ class VectorBasedELD(ELDSkeleton):
 			self.data.update_new_entity_embedding(torch.cat(ne), torch.cat(ei), torch.cat(pr), epoch)
 			self.is_best_model = False
 			if epoch % self.eval_per_epoch == 0:
-				new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus, dev_batch)
+				new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus, dev_batch)
 
-				run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus.eld_items, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+				run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus.eld_items, new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 				if not run:
 					jsondump(analysis, "runs/eld/%s/%s_best_eval.json" % (self.model_name, self.model_name))
 					break
@@ -364,17 +366,18 @@ class VectorBasedELD(ELDSkeleton):
 					v = corpus.eld_items[i]
 					assert v.entity_label_idx == l
 				assert v.entity_label_idx == l, "%d/%d/%s" % (l, v.entity_label_idx, v.entity)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.cat(kb_scores), torch.cat(preds))
-		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
+			new_ent_preds, sims, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.cat(kb_scores), torch.cat(preds))
+		return new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 
-	def test(self, batch_size=512):
+	def test(self, test_dataset=None, batch_size=512):
 		if not self.is_best_model:
 			self.load_model()  # load best
 		test_corpus = self.data.test_dataset
 		test_batch = DataLoader(dataset=test_corpus, batch_size=batch_size, shuffle=False, num_workers=8)
-		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
+		new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus.eld_items,
 		                                                                                                                                                                              torch.tensor(new_ent_preds).view(-1),
+		                                                                                                                                                                              torch.tensor(sims).view(-1),
 		                                                                                                                                                                              torch.tensor(pred_entity_idxs),
 		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).cpu(),
 		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).cpu())
@@ -388,7 +391,7 @@ class VectorBasedELD(ELDSkeleton):
 		                                                 ["No surface", no_surface_score]]:
 			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		analyze_data = self.data.analyze(test_corpus.eld_items, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
@@ -414,7 +417,7 @@ class VectorBasedELD(ELDSkeleton):
 				pred = self.vector_transformer(pred)
 				kb_scores.append(kb_score)
 				preds.append(pred)
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(dataset.eld_items, torch.cat(kb_scores), torch.cat(preds), output_as_idx=False, mark_nil=True)
+			new_ent_preds, sims, pred_entity_idxs = self.data.predict_entity(dataset.eld_items, torch.cat(kb_scores), torch.cat(preds), output_as_idx=False, mark_nil=True)
 		result = []
 		for v, n, p in zip(dataset.eld_items, new_ent_preds, pred_entity_idxs):
 			result.append([v.surface, v.entity, n, p])
@@ -546,8 +549,8 @@ class BertBasedELD(ELDSkeleton):
 					# 	pred_entity_idxs += entity_idx
 					# 	new_entity_labels.append(new_entity_label)
 					# 	gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
-					new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus, dev_set)
-					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
+					new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(dev_corpus, dev_set)
+					run, max_score_epoch, max_score, analysis = self.posteval(epoch, max_score_epoch, max_score, dev_corpus, new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs)
 					if not run:
 						jsondump(analysis, "runs/eld/%s/%s_best.json" % (self.model_name, self.model_name))
 						break
@@ -555,8 +558,8 @@ class BertBasedELD(ELDSkeleton):
 		self.load_model()  # load best
 		test_corpus = self.data.test_dataset
 		test_set = self.initialize_dataset(test_corpus)
-		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_set)
-		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus, torch.tensor(new_ent_preds).view(-1),
+		new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_set)
+		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1),
 		                                                                                                                                                                              torch.tensor(pred_entity_idxs),
 		                                                                                                                                                                              torch.cat(new_entity_labels, dim=-1).cpu(),
 		                                                                                                                                                                              torch.cat(gold_entity_idxs, dim=-1).cpu())
@@ -566,11 +569,10 @@ class BertBasedELD(ELDSkeleton):
 		gl.logger.info("%s score: P %.2f, R %.2f, F1 %.2f" % ("KB Expectation", p * 100, r * 100, f * 100))
 		for score_info, ((cp, cr, cf), (up, ur, uf)) in [["Total", total_score],
 		                                                 ["in-KB", in_kb_score],
-		                                                 ["out KB", out_kb_score],
-		                                                 ["No surface", no_surface_score]]:
+		                                                 ["out KB", out_kb_score]]:
 			gl.logger.info("%s score: Clustered - P %.2f, R %.2f, F1 %.2f, Unclustered - P %.2f, R %.2f, F1 %.2f" % (score_info, cp * 100, cr * 100, cf * 100, up * 100, ur * 100, uf * 100))
 		gl.logger.info("Clustering score: %.2f" % (cluster_score * 100))
-		analyze_data = self.data.analyze(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
+		analyze_data = self.data.analyze(test_corpus, torch.tensor(new_ent_preds).view(-1), torch.tensor(sims).view(-1), torch.tensor(pred_entity_idxs), torch.cat(new_entity_labels).cpu(), torch.cat(gold_entity_idxs).cpu(),
 		                                 (kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered))
 		jsondump(analyze_data, "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
@@ -618,8 +620,8 @@ class BertBasedELD(ELDSkeleton):
 
 				new_entity_labels.append(new_entity_label)
 				gold_entity_idxs.append(torch.LongTensor(gold_entity_idx))
-			new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, kb_scores, preds, )
-		return new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs
+			new_ent_preds, sims, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, kb_scores, preds, )
+		return new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs
 
 class ELDNoDiscovery(ELDSkeleton):
 	def __init__(self, mode, args=None):
@@ -642,12 +644,12 @@ class ELDNoDiscovery(ELDSkeleton):
 		gold_entity_idxs = [x.entity_label_idx for x in corpus.eld_items]
 		kb_scores = [0 for _ in corpus.eld_items]
 		preds = [torch.zeros(1, 300).to(self.device, dtype=torch.float) for _ in corpus.eld_items]
-		new_ent_preds, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.tensor(kb_scores), torch.cat(preds))
+		new_ent_preds, _, pred_entity_idxs = self.data.predict_entity(corpus.eld_items, torch.tensor(kb_scores), torch.cat(preds))
 		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
 
 	def predict(self, *data):
 		dataset = self.data.prepare(self.mode, *data, namu_only=True)
-		_, link_result = self.data.predict_entity(dataset.eld_items, output_as_idx=False, mark_nil=True)
+		_, _, link_result = self.data.predict_entity(dataset.eld_items, output_as_idx=False, mark_nil=True)
 		for item, lr in zip(dataset.eld_items, link_result):
 			item.eld_pred_entity = lr
 		return data[0]
@@ -669,12 +671,11 @@ class DictBasedELD(ELDSkeleton):
 	def predict(self, *data):
 		dataset = self.data.prepare(self.mode, *data, namu_only=True )
 		for ent in dataset.eld_items:
-			_, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
+			_, _, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
 			link_result = link_result[0]
 			if link_result == "NOT_IN_CANDIDATE":
 				self.data.surface_ent_dict.add_instance(ent.surface, ent.surface)
 				link_result = ent.surface
-
 			ent.eld_pred_entity = link_result
 		if type(data[0]) is Corpus:
 			return data[0]
@@ -685,17 +686,23 @@ class DictBasedELD(ELDSkeleton):
 		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = [[] for _ in range(4)]
 		mapping = {}
 		for ent in corpus.eld_items:
+			if not ent.entity.startswith("namu_") and ent.entity not in self.data.e2i:
+				ent.target = False
+		_, sims, link_result = self.data.predict_entity(corpus.eld_items, output_as_idx=False, mark_nil=True)
+
+		for ent, lr in zip(corpus.eld_items, link_result):
 			if ent.entity not in mapping:
 				mapping[ent.entity] = len(mapping)
-			new_ent_pred = [0 if ent.surface in self.data.surface_ent_dict else 1]
-			_, link_result = self.data.predict_entity([ent], new_ent_pred=new_ent_pred)
+			# new_ent_pred = [0 if ent.surface in self.data.surface_ent_dict else 1]
+			new_ent_pred = [1 if lr == "NOT_IN_CANDIDATE" else 0]
+			_, _, link_result = self.data.predict_entity([ent], new_ent_pred=new_ent_pred)
 			link_result = link_result[0]
-			new_ent_label = ent.entity in self.data.e2i
-			gold_entity_idxs.append(self.data.e2i[ent.entity] if new_ent_label else mapping[ent.entity] + len(self.data.e2i))
+			new_ent_label = ent.entity.startswith("namu_")
+			gold_entity_idxs.append(self.data.e2i[ent.entity] if not new_ent_label else mapping[ent.entity] + len(self.data.e2i))
 			new_entity_labels.append(new_ent_label)
 			new_ent_preds.append(new_ent_pred)
 			pred_entity_idxs.append(link_result)
-		return new_ent_preds, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
+		return new_ent_preds, sims, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
 
 class ELBasedELD(ELDSkeleton):
 	def save_model(self):
@@ -707,7 +714,7 @@ class ELBasedELD(ELDSkeleton):
 	def predict(self, *data):
 		dataset = self.data.prepare(self.mode, *data, namu_only=True)
 		for ent in dataset.eld_items:
-			_, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
+			_, _, link_result = self.data.predict_entity([ent], output_as_idx=False, mark_nil=True)
 			link_result = link_result[0]
 			if link_result == "NOT_IN_CANDIDATE":
 				self.data.surface_ent_dict.add_instance(ent.surface, ent.surface)
@@ -726,9 +733,9 @@ class ELBasedELD(ELDSkeleton):
 	def eval(self, corpus, dataset):
 		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = [[] for _ in range(4)]
 		mapping = {}
-		_, link_result = self.data.predict_entity(corpus.test_dataset.eld_items, mark_nil=True)
+		_, _, link_result = self.data.predict_entity(corpus.test_dataset.eld_items, mark_nil=True)
 		new_ent_preds = [1 if lr == 0 else 0 for lr in link_result]
-		_, pred_entity_idxs = self.data.predict_entity(corpus.test_dataset.eld_items, new_ent_pred=new_ent_preds, mark_nil=True)
+		_, _, pred_entity_idxs = self.data.predict_entity(corpus.test_dataset.eld_items, new_ent_pred=new_ent_preds, mark_nil=True)
 		for ent, nep in corpus.test_dataset.eld_items:
 			if ent.entity not in mapping:
 				mapping[ent.entity] = len(mapping)

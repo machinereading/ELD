@@ -85,7 +85,7 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
-			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=0)  # TODO Limit is here
+			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=500 if args.test_mode else 0)  # TODO Limit is here
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
@@ -191,8 +191,11 @@ class DataModule:
 	@TimeUtil.measure_time
 	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
 		# batchwise prediction, with entity registeration
+		disable_embedding = pred_embedding is None
 
 		def get_pred(tensor, emb):
+			if disable_embedding:
+				return 0, 0
 			expanded = tensor.expand_as(emb).to(self.device)
 			cos_sim = F.cosine_similarity(expanded, emb.to(self.device))
 			dist = F.pairwise_distance(expanded, emb.to(self.device))
@@ -202,14 +205,15 @@ class DataModule:
 
 		if new_ent_pred is None:
 			new_ent_pred = torch.zeros(len(target_voca_list), dtype=torch.uint8)
+
 		if pred_embedding is None:
 			pred_embedding = torch.zeros(len(target_voca_list), self.ee_dim, dtype=torch.float)
 		result = []
 		ent_result = []
-		new_ent_flags = []
+		new_ent_scores = []
 		in_kb_idx_queue = []
 		in_kb_voca_queue = []
-
+		sims = []
 		for idx, (i, e, v) in enumerate(zip(new_ent_pred, pred_embedding, target_voca_list)):
 			if type(i) is torch.Tensor:
 				i = i.item()
@@ -251,17 +255,17 @@ class DataModule:
 									break
 
 				if max_sim < self.register_threshold:  # entity registeration
-					if self.use_cache_kb:
+					if self.use_cache_kb:  # cache KB에 entity, entity embedding 저장 후 index 반환
 						pred_idx = self.new_entity_embedding.size(0)
 						self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
 						self.new_entity_surface_dict.append({v.surface})
 						assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
-					else:
-						pred_idx = 0
-						ent = "_"+v.surface
-						self.e2i[ent] = len(self.e2i)
-						self.surface_ent_dict.add_instance(v.surface, ent)
-						self.in_kb_linker.update_entity(v.surface, ent, e)
+					else:  # cache KB를 따로 사용하지 않고 바로 KB에 등록
+						pred_idx = 0  # out-kb로 판단한 경우 e2i의 길이만큼 더하는 sequence가 밑에 있으므로 일단 0임
+						ent = "_" + v.surface  # 새로운 개체명: _surface
+						self.e2i[ent] = len(self.e2i)  # e2i에 새로운 개체명 추가
+						self.surface_ent_dict.add_instance(v.surface, ent)  # 개체명 사전에 surface 추가
+						self.in_kb_linker.update_entity(v.surface, ent, e)  # in-kb linker에도 entity랑 surface, 개체 embedding 추가
 				else:
 					assert pred_idx >= 0
 					self.new_entity_surface_dict[pred_idx].add(v.surface)
@@ -269,8 +273,8 @@ class DataModule:
 						self.new_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.new_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
 				result.append(len(self.e2i) + pred_idx)
 				ent_result.append(pred_idx)
-			new_ent_flags.append(new_ent_flag)  # new entity flag marker
-
+			sims.append(max_sim)
+			new_ent_scores.append(i)  # new entity flag marker
 
 		if not no_in_kb_link and len(in_kb_idx_queue) > 0:  # in-kb entity linking
 			ents = self.in_kb_linker(*in_kb_voca_queue)
@@ -283,12 +287,12 @@ class DataModule:
 
 		assert len([x for x in result if x == -2]) == 0
 		assert len(new_ent_pred) == len(result)
-		assert len(new_ent_flags) == len(result)
+		assert len(new_ent_scores) == len(result)
 		# print(self.new_entity_embedding.size(0))
 		if not output_as_idx:
 			surface_count = {}
-			for f, r, v in zip(new_ent_flags, ent_result, target_voca_list):
-				if f:
+			for f, r, v in zip(new_ent_scores, ent_result, target_voca_list):
+				if f > self.new_ent_threshold:
 					if r not in surface_count:
 						surface_count[r] = {}
 					if v.surface not in surface_count[r]:
@@ -297,12 +301,12 @@ class DataModule:
 
 			surface_count = {k: sorted(v.items(), key=lambda x: x[1], reverse=True)[0][0].replace(" ", "_") for k, v in surface_count.items()}
 			for i in range(len(ent_result)):
-				if new_ent_flags[i] and ent_result[i] in surface_count:
+				if new_ent_scores[i] > self.new_ent_threshold and ent_result[i] in surface_count:
 					ent_result[i] = surface_count[ent_result[i]]
-			return new_ent_flags, ent_result
-		return new_ent_flags, result
+			return new_ent_scores, sims, ent_result
+		return new_ent_scores, sims, result
 
-	def analyze(self, corpus, new_ent_pred, idx_pred, new_ent_label, idx_label, evaluation_result):
+	def analyze(self, corpus, new_ent_pred, sims, idx_pred, new_ent_label, idx_label, evaluation_result, pred_ent_emb=None, label_ent_emb=None):
 		result = {
 			"scores": {
 				"KB expectation score": evaluation_result[0],
@@ -320,19 +324,24 @@ class DataModule:
 		# print(mapping_result)
 		# print(len(corpus.eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		has_cluster = {}
-		for e, pn, pi, ln, li in zip(corpus, new_ent_pred, idx_pred, new_ent_label, idx_label):
-			pn, pi, ln, li = [x.item() for x in [pn, pi, ln, li]]
+		if pred_ent_emb is None:
+			pred_ent_emb = torch.zeros_like(new_ent_pred)
+		if label_ent_emb is None:
+			label_ent_emb = torch.zeros_like(new_ent_pred)
+		for e, pn, s, pi, pem, ln, li, lem in zip(corpus, new_ent_pred, sims, idx_pred, pred_ent_emb, new_ent_label, idx_label, label_ent_emb):
+			pn, pi, s, ln, li = [x.item() for x in [pn, pi, s, ln, li]]
 			# print(pn, pi, ln, li)
 			# print(pi in self.i2e, pi in mapping_result, pi - len(self.e2i) in self.i2oe)
 
-			if pn:
+			if pn > self.new_ent_threshold:
 				if mapping_result_clustered[pi] > 0:
 					if mapping_result_clustered[pi] not in has_cluster:
 						has_cluster[mapping_result_clustered[pi]] = []
 					has_cluster[mapping_result_clustered[pi]].append(pi)
 					pred_clustered = self.i2oe[mapping_result_clustered[pi] - len(self.e2i)]
 				else:
-					pred_clustered = ["EXPECTED_IN_KB_AS_OUT_KB", "CLUSTER_PREASSIGNED"][mapping_result_clustered[pi]]
+					c = mapping_result_clustered[pi]
+					pred_clustered = "EXPECTED_IN_KB_AS_OUT_KB" if c == 0 else c
 
 				if mapping_result_unclustered[pi] > 0:
 					if mapping_result_unclustered[pi] not in has_cluster:
@@ -344,6 +353,8 @@ class DataModule:
 
 			else:
 				pred_clustered = pred_unclustered = self.i2e[pi]
+			cossim = F.cosine_similarity(pem, lem)
+			dist = F.pairwise_distance(pem, lem)
 
 			result["result"].append({
 				"Surface"           : e.surface,
@@ -352,14 +363,15 @@ class DataModule:
 				"EntPredUnclustered": pred_unclustered,
 				"Entity"            : e.entity,
 				"NewEntPred"        : pn,
-				"NewEntLabel"       : ln
+				"NewEntLabel"       : ln,
+				"SimWithAnswer"     : [cossim, dist, cossim - dist]
 			})
 		return result
 
 	def prepare(self, mode, *data, namu_only=False) -> ELDDataset:  # for prediction mode
-		if type(data[0]) is str: # text에 etri 돌린 다음에 crowdsourcing form으로 만들기
+		if type(data[0]) is str:  # text에 etri 돌린 다음에 crowdsourcing form으로 만들기
 			func_chain = [text_to_etri, etri_to_ne_dict]
-		elif type(data[0]) is dict:# crowdsourcing form을 가정함
+		elif type(data[0]) is dict:  # crowdsourcing form을 가정함
 			func_chain = []
 		elif type(data[0]) is Corpus and len(data) == 1:
 			if namu_only:
