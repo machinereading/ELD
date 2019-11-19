@@ -258,8 +258,10 @@ class DataModule:
 						assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
 					else:
 						pred_idx = 0
+						l = len(self.e2i)
 						ent = "_"+v.surface
-						self.e2i[ent] = len(self.e2i)
+						self.e2i[ent] = l
+						self.i2e[l]= ent
 						self.surface_ent_dict.add_instance(v.surface, ent)
 						self.in_kb_linker.update_entity(v.surface, ent, e)
 				else:

@@ -13,7 +13,7 @@ names = ["ontology", "inst", "inst-ms"]
 dr = [True, False]
 ne = [True, False]
 hierarchy = [True, False]
-x = [[0], [1], [2], [0, 1], [0, 2]]
+x = [[0], [1], [2]]
 
 labels = TypeGiver(kbt, t, [], []).get_gold(*corpus.eld_items)
 evaluator = TypeEvaluator()
@@ -61,17 +61,17 @@ for use_dr in dr:
 # 		n.append(name)
 # 		print(score)
 
-# for x in zip(corpus.eld_items, labels, *preds):
-# 	try:
-# 		result.append({
-# 			"entity"  : x[0].entity,
-# 			"sentence": x[0].parent_sentence.original_sentence,
-# 			"relation": [[y.relation, y.outgoing, x[0].parent_sentence.entities[x[0].entity_idx + y.relative_index].entity] for y in x[0].relation],
-# 			"answer"  : x[1],
-# 			"ontology": x[2],
-# 			"inst"    : x[3],
-# 			"inst-ms" : x[4]
-# 		})
-# 	except:
-# 		continue
+for x in zip(corpus.eld_items, labels, *preds):
+	try:
+		d = {
+			"entity"  : x[0].entity,
+			"sentence": x[0].parent_sentence.original_sentence,
+			"relation": [[y.relation, y.outgoing, x[0].parent_sentence.entities[x[0].entity_idx + y.relative_index].entity, y.score] for y in x[0].relation],
+			"answer"  : x[1]
+		}
+		for i, nn in enumerate(n):
+			d[nn] = x[2+i]
+		result.append(d)
+	except:
+		continue
 jsondump(result, "type_analysis_with_dr.json")
