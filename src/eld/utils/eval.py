@@ -12,13 +12,14 @@ class Evaluator:
 	def __init__(self, args: ELDArgs, data: DataModule):
 		self.ent_list = data.ent_list
 		self.redirects = pickleload(args.redirects_path)
+		self.new_ent_threshold = args.new_ent_threshold
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects) # need original canddict
 		self.e2i = data.e2i
 		if hasattr(data, "oe2i"):
 			self.oe2i = data.oe2i
 
 	@TimeUtil.measure_time
-	def evaluate(self, eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
+	def evaluate(self, eld_items, new_ent_pred, sims, idx_pred, new_ent_label, idx_label):
 
 		def record(target_dict, p, l):
 			target_dict["Total"] += 1
@@ -31,7 +32,7 @@ class Evaluator:
 					target_dict["TP"] += 1
 
 		assert len(eld_items) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
-		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, new_ent_pred, average="binary")
+		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, [1 if x > self.new_ent_threshold else 0 for x in new_ent_pred], average="binary")
 
 		# give entity uri to each cluster
 		pe_dark_id_to_ge_entity_map = {}  # {pred_idx: {gold_idx: count}}
@@ -40,10 +41,10 @@ class Evaluator:
 		gold_cluster = []
 		total_c, in_kb_c, out_kb_c, no_surface_c = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		total_u, in_kb_u, out_kb_u, no_surface_u = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
-		kb_pred = {"Total": 0, "Correct": 0}
+		# kb_pred = {"Total": 0, "Correct": 0}
 		for e, new_ent, idx in zip(eld_items, new_ent_pred, idx_pred):
 			idx = idx.item()
-			new_ent = new_ent.item()
+			new_ent = new_ent.item() > self.new_ent_threshold
 			if not hasattr(e, "in_surface_dict"):
 				e.in_surface_dict = e.surface in self.surface_ent_dict
 			if new_ent:
@@ -85,7 +86,7 @@ class Evaluator:
 
 		for pred_idx in pe_dark_id_to_ge_entity_map.keys():
 			if pred_idx not in mapping_result_clustered:
-				mapping_result_clustered[pred_idx] = -1
+				mapping_result_clustered[pred_idx] = -pred_idx
 		# print(mapping_result_clustered)
 		mapping_result_unclustered = {}
 		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():  # out-kb pred to label matching
@@ -125,9 +126,9 @@ class Evaluator:
 				record_targets_c.append(no_surface_c)
 				record_targets_u.append(no_surface_u)
 			# kb expectation score
-			kb_pred["Total"] += 1
-			if nep == nel:
-				kb_pred["Correct"] += 1
+			# kb_pred["Total"] += 1
+			# if (nep > self.new_ent_threshold) == (nel == 1):
+			# 	kb_pred["Correct"] += 1
 			# linking score
 			for x in record_targets_c:
 				record(x, ipc, il)

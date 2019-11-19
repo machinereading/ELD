@@ -26,6 +26,7 @@ parser.add_argument("--modify_entity_embedding", action="store_true")
 parser.add_argument("--input_file", type=str)
 parser.add_argument("--output_file", type=str)
 parser.add_argument("--train_iter", type=int, default=1)
+parser.add_argument("--code_test", action="store_true")
 args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
@@ -66,6 +67,7 @@ eld_args.use_surface_info = args.use_surface_info
 eld_args.use_candidate_info = args.use_candidate_info
 eld_args.use_kb_relation_info = args.use_kb_relation_info
 eld_args.use_cache_kb = not args.no_use_cache_kb
+eld_args.test_mode = args.code_test
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
 		if model_name.startswith("bert"):

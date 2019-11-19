@@ -39,4 +39,4 @@ elif args.input_sentence is not None:
 		with open(args.output_file, "w", encoding="UTF8") as f:
 			json.dump(corpus.to_json(), f, ensure_ascii=False, indent="\t")
 	else:
-		print(corpus.to_json())
+		print(corpus)
