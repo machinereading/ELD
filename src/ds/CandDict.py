@@ -7,7 +7,6 @@ class CandDict:
 		self._redirects = redirect_dict
 		self._calc_dict = {}  # lazy property
 		self.generate_calc_dict()
-		self._update_flag = True
 
 	def add_instance(self, surface, entity):
 		if surface not in self._dict:
@@ -15,42 +14,53 @@ class CandDict:
 		if entity not in self._dict[surface]:
 			self._dict[surface][entity] = 0
 		self._dict[surface][entity] += 1
-		self._update_flag = False
+		self.generate_calc_dict(surface)
 
-	def generate_calc_dict(self):
+	def generate_calc_dict(self, update_target=None):
 		self._calc_dict = {}
 		idx = 0
-		for ent in self._kb:
-			try:
-				s = sum(self._dict[ent])
-				if ent in self._dict[ent]:
-					self._calc_dict[ent][ent] += s // 5
-				else:
-					self._calc_dict[ent][ent] = max(s // 5, 1)
-			except:
-				self._dict[ent] = {ent: 2}
-			ent_key = ent.replace(" ", "_").split("_(")[0]
-			try:
-				s = sum(self._dict[ent_key])
-				if ent in self._dict[ent_key]:
-					self._calc_dict[ent_key][ent] += s // 10
-				else:
-					self._calc_dict[ent_key][ent] = max(s // 10, 1)
-			except:
-				self._dict[ent_key] = {ent: 1}
-		for m, e in self._dict.items():
-			# e = {k: v for k, v in e.items() if k in self._kb} # filter only in-kb items
+		if update_target is not None:
+			m = update_target
+			e = self._dict[m]
 			x = list(e.values())
 			values = np.around(x / np.sum(x), 4)
+			if m not in self._calc_dict:
+				self._calc_dict[m] = {}
+			# idxs = [x[1] for x in self._calc_dict[m].values()]
+
 			self._calc_dict[m] = {}
-			for i, (key, value) in enumerate(e.items()):
-				self._calc_dict[m][key] = (values[i], idx)
-				idx += 1
-		self._update_flag = True
+			for i, (k, _) in enumerate(e.items()):
+				self._calc_dict[m][k] = (values[i], 0)
+
+		else:
+			for ent in self._kb:
+				try:
+					s = sum(self._dict[ent])
+					if ent in self._dict[ent]:
+						self._calc_dict[ent][ent] += s // 5
+					else:
+						self._calc_dict[ent][ent] = max(s // 5, 1)
+				except:
+					self._dict[ent] = {ent: 2}
+				ent_key = ent.replace(" ", "_").split("_(")[0]
+				try:
+					s = sum(self._dict[ent_key])
+					if ent in self._dict[ent_key]:
+						self._calc_dict[ent_key][ent] += s // 10
+					else:
+						self._calc_dict[ent_key][ent] = max(s // 10, 1)
+				except:
+					self._dict[ent_key] = {ent: 1}
+			for m, e in self._dict.items():
+				# e = {k: v for k, v in e.items() if k in self._kb} # filter only in-kb items
+				x = list(e.values())
+				values = np.around(x / np.sum(x), 4)
+				self._calc_dict[m] = {}
+				for i, (key, value) in enumerate(e.items()):
+					self._calc_dict[m][key] = (values[i], idx)
+					idx += 1
 
 	def __getitem__(self, surface):
-		if not self._update_flag:
-			self.generate_calc_dict()
 		if type(surface) is tuple:
 			surface, limit = surface
 		else:

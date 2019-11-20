@@ -128,7 +128,7 @@ class ELDDataset(Dataset):
 		is_in_cand_dict = target.in_cand_dict
 		candidate_embeddings = target.candidiate_entity_embedding
 		l = len(target.lctx_ent + target.rctx_ent)
-		avg_degree = sum([x.degree for x in target.lctx_ent + target.rctx_ent]) / l if l > 0 else 0
+		avg_degree = sum([x.degree for x in target.lctx_ent + target.rctx_ent])
 		if self.mode in ["train", "test"]:
 			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_embeddings, avg_degree, new_ent, ee_label, eidx, index
 		else:

@@ -205,14 +205,27 @@ if __name__ == '__main__':
 	if args.mode == "re_input":
 		NAMU_RAW_HOME = "/home/minho/namu/cpages/"
 		target_entities = [x for x in readfile(args.input_file)]
+		d = {}
+		for item in target_entities:
+			x = item.split("\t")
+			if len(x) > 1:
+				d[x[0]] = x[1]
+			else:
+				d[x[0]] = x[0]
+		target_entities = d
 		targets = []
 		print("Filtering target entities")
 		for j in map(jsonload, diriter(NAMU_RAW_HOME)):
 			for part in split_to_sentence(j):
+				target = False
 				for entity in part["entities"]:
 					if entity["entity"] in target_entities:
-						targets.append(part)
-						break
+						entity["entity"] = target_entities[entity["entity"]]
+						target = True
+				if target: targets.append(part)
+
+
+
 		print("Running EL")
 		el = EL()
 		el_result = el(*[x["text"] for x in targets])

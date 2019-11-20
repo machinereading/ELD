@@ -70,6 +70,7 @@ eld_args.use_cache_kb = not args.no_use_cache_kb
 eld_args.test_mode = args.code_test
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
+		eld_args.model_name = "%s_%d" % (model_name, i)
 		if model_name.startswith("bert"):
 			module = BertBasedELD(mode, "%s_%d" % (model_name, i), train_args=eld_args)
 		else:

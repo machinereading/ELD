@@ -85,7 +85,7 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
-			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=500 if args.test_mode else 0)  # TODO Limit is here
+			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=500 if args.test_mode else 0, min_token=10)  # TODO Limit is here
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
@@ -189,7 +189,7 @@ class DataModule:
 		self.new_entity_surface_dict = []
 
 	@TimeUtil.measure_time
-	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
+	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, *, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
 		# batchwise prediction, with entity registeration
 		disable_embedding = pred_embedding is None
 
@@ -266,7 +266,7 @@ class DataModule:
 						ent = "_" + v.surface  # 새로운 개체명: _surface
 						self.e2i[ent] = l  # e2i에 새로운 개체명 추가
 						self.i2e[l]= ent
-						self.surface_ent_dict.add_instance(v.surface, ent)  # 개체명 사전에 surface 추가
+						# self.surface_ent_dict.add_instance(v.surface, ent)  # 개체명 사전에 surface 추가
 						self.in_kb_linker.update_entity(v.surface, ent, e)  # in-kb linker에도 entity랑 surface, 개체 embedding 추가
 				else:
 					assert pred_idx >= 0
@@ -308,7 +308,7 @@ class DataModule:
 			return new_ent_scores, sims, ent_result
 		return new_ent_scores, sims, result
 
-	def analyze(self, corpus, new_ent_pred, sims, idx_pred, new_ent_label, idx_label, evaluation_result, pred_ent_emb=None, label_ent_emb=None):
+	def analyze(self, eld_items, new_ent_pred, sims, idx_pred, new_ent_label, idx_label, evaluation_result):
 		result = {
 			"scores": {
 				"KB expectation score": evaluation_result[0],
@@ -326,11 +326,7 @@ class DataModule:
 		# print(mapping_result)
 		# print(len(corpus.eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		has_cluster = {}
-		if pred_ent_emb is None:
-			pred_ent_emb = torch.zeros_like(new_ent_pred)
-		if label_ent_emb is None:
-			label_ent_emb = torch.zeros_like(new_ent_pred)
-		for e, pn, s, pi, pem, ln, li, lem in zip(corpus, new_ent_pred, sims, idx_pred, pred_ent_emb, new_ent_label, idx_label, label_ent_emb):
+		for e, pn, s, pi, ln, li in zip(eld_items, new_ent_pred, sims, idx_pred,  new_ent_label, idx_label):
 			pn, pi, s, ln, li = [x.item() for x in [pn, pi, s, ln, li]]
 			# print(pn, pi, ln, li)
 			# print(pi in self.i2e, pi in mapping_result, pi - len(self.e2i) in self.i2oe)
@@ -355,8 +351,6 @@ class DataModule:
 
 			else:
 				pred_clustered = pred_unclustered = self.i2e[pi]
-			cossim = F.cosine_similarity(pem, lem)
-			dist = F.pairwise_distance(pem, lem)
 
 			result["result"].append({
 				"Surface"           : e.surface,
@@ -365,8 +359,7 @@ class DataModule:
 				"EntPredUnclustered": pred_unclustered,
 				"Entity"            : e.entity,
 				"NewEntPred"        : pn,
-				"NewEntLabel"       : ln,
-				"SimWithAnswer"     : [cossim, dist, cossim - dist]
+				"NewEntLabel"       : ln
 			})
 		return result
 

@@ -57,7 +57,7 @@ class Corpus:
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path, limit=None):
+	def load_corpus(cls, path, limit=None, min_token=0):
 		# load from crowdsourcing form
 		if type(path) is str:
 			if os.path.isfile(path):
@@ -84,6 +84,7 @@ class Corpus:
 			if len(sentence.entities) == 0:
 				print("No entities", len(item["entities"]))
 				continue
+			if min_token > 0 and len(sentence) < min_token: continue
 			corpus.add_sentence(sentence)
 
 			for nt in sentence.entities:

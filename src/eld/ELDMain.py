@@ -352,7 +352,7 @@ class VectorBasedELD(ELDSkeleton):
 				kb_score, pred = self.transformer(*args, **kwargs)
 				kb_score = torch.sigmoid(kb_score)
 				# print(pred)
-				pred = self.vector_transformer(pred.detach(), eval=False)  # TODO why all same tensor?
+				pred = self.vector_transformer(pred.detach(), eval=False)
 				# print(pred)
 				new_entity_label, _, gold_entity_idx = [x.to(self.device) for x in batch[-4:-1]]
 				dev_idxs.append(batch[-1])
@@ -685,23 +685,30 @@ class DictBasedELD(ELDSkeleton):
 	def eval(self, corpus, dataset):
 		new_ent_preds, pred_entity_idxs, new_entity_labels, gold_entity_idxs = [[] for _ in range(4)]
 		mapping = {}
+		in_kb_linker = self.data.in_kb_linker
 		for ent in corpus.eld_items:
 			if not ent.entity.startswith("namu_") and ent.entity not in self.data.e2i:
 				ent.target = False
-		_, sims, link_result = self.data.predict_entity(corpus.eld_items, output_as_idx=False, mark_nil=True)
+		_, sims, link_result = self.data.predict_entity(corpus.eld_items, output_as_idx=True, mark_nil=True)
 
 		for ent, lr in zip(corpus.eld_items, link_result):
 			if ent.entity not in mapping:
 				mapping[ent.entity] = len(mapping)
 			# new_ent_pred = [0 if ent.surface in self.data.surface_ent_dict else 1]
-			new_ent_pred = [1 if lr == "NOT_IN_CANDIDATE" else 0]
-			_, _, link_result = self.data.predict_entity([ent], new_ent_pred=new_ent_pred)
-			link_result = link_result[0]
+			new_ent_pred = [1 if lr == 0 else 0]
+			if lr == 0:
+				lr = len(self.data.e2i)
+				e = "_" + ent.surface
+				self.data.e2i[e] = lr
+				self.data.i2e[lr] = e
+				in_kb_linker.update_entity(ent.surface, e, None)
+			# _, _, link_result = self.data.predict_entity([ent], new_ent_pred=new_ent_pred)
+			# link_result = link_result[0]
 			new_ent_label = ent.entity.startswith("namu_")
 			gold_entity_idxs.append(self.data.e2i[ent.entity] if not new_ent_label else mapping[ent.entity] + len(self.data.e2i))
 			new_entity_labels.append(new_ent_label)
 			new_ent_preds.append(new_ent_pred)
-			pred_entity_idxs.append(link_result)
+			pred_entity_idxs.append(lr)
 		return new_ent_preds, sims, pred_entity_idxs, [torch.tensor(new_entity_labels)], [torch.tensor(gold_entity_idxs)]
 
 class ELBasedELD(ELDSkeleton):
