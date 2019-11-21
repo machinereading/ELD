@@ -68,7 +68,7 @@ class SeparateEntityEncoder(nn.Module):
 				self.type_encoder = SelfAttentionEncoder(args.t_emb_dim, 6, 5, 1, output_dim=args.t_enc_dim)
 				self.te_dim = args.t_enc_dim
 		self.max_input_dim = max(self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim)
-		self.transformer_input_dim = self.max_input_dim * separate_layers
+		self.transformer_input_dim = sum([self.ce_dim, self.we_dim, self.wce_dim, self.ee_dim, self.re_dim, self.te_dim])
 		if args.use_surface_info:
 			self.transformer_input_dim += 1
 		if args.use_kb_relation_info:
@@ -98,25 +98,32 @@ class SeparateEntityEncoder(nn.Module):
 	            type_batch, type_len,
 	            surface_dict_flag=None, cand_entities=None, avg_degree=None):
 		mid_features = []
+		features_nopad = []
 		if self.ce_flag:
 			ce = self.character_encoder(character_batch) # batch * max_character * embedding_size
 			mid_features.append(F.pad(ce, [0, self.max_input_dim - self.ce_dim]))
+			features_nopad.append(ce)
 		if self.we_flag:
 			we = self.word_encoder(word_batch)
 			mid_features.append(F.pad(we, [0, self.max_input_dim - self.we_dim]))
+			features_nopad.append(we)
 		if self.wce_flag:
 			wce = self.word_context_encoder(left_word_context_batch, left_word_context_len, right_word_context_batch, right_word_context_len)
 			mid_features.append(F.pad(wce, [0, self.max_input_dim - self.wce_dim]))
+			features_nopad.append(wce)
 		if self.ee_flag:
 			ece = self.entity_context_encoder(left_entity_context_batch, left_entity_context_len, right_entity_context_batch, right_entity_context_len)
 			mid_features.append(F.pad(ece, [0, self.max_input_dim - self.ee_dim]))
+			features_nopad.append(ece)
 		if self.re_flag:
 			re = self.relation_encoder(relation_batch)
 			mid_features.append(F.pad(re, [0, self.max_input_dim - self.re_dim]))
+			features_nopad.append(re)
 		if self.te_flag:
 			te = self.type_encoder(type_batch)
 			# print(self.type_encoder.out_size, te.size())
 			mid_features.append(F.pad(te, [0, self.max_input_dim - self.te_dim]))
+			features_nopad.append(te)
 		additional_features = []
 		if surface_dict_flag is not None:
 			additional_features.append(surface_dict_flag.view(-1, 1))
@@ -126,7 +133,7 @@ class SeparateEntityEncoder(nn.Module):
 			# for item in mid_features:
 			# 	print(item.size())
 			# for item in mid_features: print(item.size())
-			ffnn_input = torch.cat(mid_features + additional_features, dim=-1)
+			ffnn_input = torch.cat(features_nopad + additional_features, dim=-1)
 			# ffnn_output = self.transformer(ffnn_input)
 			binary_output = self.binary_encoder(ffnn_input)
 			# print(ffnn_input.size(), binary_output.size())

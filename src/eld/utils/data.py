@@ -53,8 +53,9 @@ class DataModule:
 		self.entity_embedding = torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float()
 		assert len(self.e2i) == self.entity_embedding.size(0)
 		# print(len(self.e2i), len(self.i2e), self.entity_embedding.shape)
-		self.new_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
-		self.new_entity_surface_dict = []
+		if self.use_cache_kb:
+			self.new_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
+			self.new_entity_surface_dict = []
 		self.ee_dim = args.e_emb_dim = ee.shape[-1]
 
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
@@ -85,7 +86,7 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
-			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=500 if args.test_mode else 0, min_token=10)  # TODO Limit is here
+			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=1000 if args.test_mode else 0, min_token=10)
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
@@ -193,15 +194,7 @@ class DataModule:
 		# batchwise prediction, with entity registeration
 		disable_embedding = pred_embedding is None
 
-		def get_pred(tensor, emb):
-			if disable_embedding:
-				return 0, 0
-			expanded = tensor.expand_as(emb).to(self.device)
-			cos_sim = F.cosine_similarity(expanded, emb.to(self.device))
-			dist = F.pairwise_distance(expanded, emb.to(self.device))
-			sim = torch.max(cos_sim - dist)
-			index = torch.argmax(cos_sim - dist, dim=-1).item()
-			return sim, index
+
 
 		if new_ent_pred is None:
 			new_ent_pred = torch.zeros(len(target_voca_list), dtype=torch.uint8)
@@ -224,18 +217,18 @@ class DataModule:
 				new_ent_flag = i > self.new_ent_threshold
 				if new_ent_flag:  # out-kb
 					if self.use_cache_kb and self.new_entity_embedding.size(0) > 0:  # out-kb similarity
-						max_sim, pred_idx = get_pred(e, self.new_entity_embedding)
+						max_sim, pred_idx = self.get_pred(e, self.new_entity_embedding) if not disable_embedding else (0, 0)
 					else:  # empty out-kb. register
 						max_sim = 0
 						pred_idx = -1
 				else:  # in-kb
-					max_sim, pred_idx = get_pred(e, self.entity_embedding)
+					max_sim, pred_idx = self.get_pred(e, self.entity_embedding) if not disable_embedding else (0, 0)
 					in_kb_idx_queue.append(idx)
 					in_kb_voca_queue.append(v)
 					result.append(pred_idx)
 					ent_result.append(self.i2e[pred_idx])
 			else:  # in-KB score를 사용하지 않고 direct 비교
-				max_sim, pred_idx = get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding)))
+				max_sim, pred_idx = self.get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding))) if not disable_embedding else (0, 0)
 				new_ent_flag = max_sim < self.register_threshold
 
 			# print(new_ent_flag, max_sim, pred_idx)
@@ -391,6 +384,22 @@ class DataModule:
 		self.initialize_corpus_tensor(corpus, pred=True)
 		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
+	def predict_entity_with_embedding(self, embedding, in_init_kb_flag=None):
+		if in_init_kb_flag is None:
+			in_init_kb_flag = torch.zeros(embedding.size(0), dtype=torch.uint8)
+		for emb, flag in zip(embedding, in_init_kb_flag):
+			sim, idx = self.get_pred(emb, self.entity_embedding if flag == 0 else self.new_entity_embedding)
+			if sim < self.new_ent_threshold:
+				idx = -1
+
+	def get_pred(self, tensor, emb):
+		if emb.size(0) == 0: return 0, -1
+		expanded = tensor.expand_as(emb).to(self.device)
+		cos_sim = F.cosine_similarity(expanded, emb.to(self.device))
+		dist = F.pairwise_distance(expanded, emb.to(self.device))
+		sim = torch.max(cos_sim - dist)
+		index = torch.argmax(cos_sim - dist, dim=-1).item()
+		return sim, index
 # def hierarchical_clustering(tensors: torch.Tensor):
 # 	iteration = 0
 # 	clustering_result = [[x] for x in range(tensors.size(0))]

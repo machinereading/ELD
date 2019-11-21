@@ -14,17 +14,12 @@ logging.basicConfig(format='%(levelname)s: %(asctime)s %(message)s', datefmt='%I
 logger = logging.getLogger("DefaultLogger")
 logger.setLevel(logging.DEBUG)
 if not os.path.isdir("log"): os.mkdir("log")
-f = logging.FileHandler("log/run_%s.log" % re.sub(r"[ :/]", "_", str(datetime.now())[:-7]))
 # c = logging.StreamHandler()
-
-f.setLevel(logging.DEBUG)
-f.setFormatter(formatter)
 
 # c.setLevel(logging.INFO)
 # c.setFormatter(formatter)
 # c.propagate = False
 # logger.addHandler(c)
-logger.addHandler(f)
 logger.info("[START]")
 
 boolmap = {"True": True, "False": False}

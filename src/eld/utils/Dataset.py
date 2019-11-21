@@ -6,7 +6,8 @@ import torch.nn.functional as F
 from ...ds import Corpus, CandDict, Graph
 from ..utils import ELDArgs
 from ...utils import TimeUtil, readfile
-
+import random
+import math
 class ELDDataset(Dataset):
 	def __init__(self, mode, corpus: Corpus, args: ELDArgs, *, cand_dict: CandDict=None, ent_emb = None, e2i = None, filter_list=None, limit=None, namu_only=False):
 		if filter_list is None:
@@ -94,6 +95,8 @@ class ELDDataset(Dataset):
 			lwe = torch.zeros(1, dtype=torch.float)
 			rwe = torch.zeros(1, dtype=torch.float)
 		if self.ee_flag:
+			lee = [x.entity_embedding for x in target.lctx[-self.window_size:] if x.is_entity]
+			ree = [x.entity_embedding for x in target.lctx[:self.window_size] if x.is_entity]
 			if len(lee) == 0:
 				lee = [torch.zeros(1, self.ee_dim, dtype=torch.float)]
 			if len(ree) == 0:
@@ -138,13 +141,79 @@ class ELDDataset(Dataset):
 		return len(self.eld_items)
 
 
-class TFIDFDataset(Dataset):
-	def __init__(self, mode, corpus: Corpus, args: ELDArgs,):
-		self.corpus = corpus
+class SkipgramDataset(ELDDataset):
+	def __init__(self, mode, corpus: Corpus, args: ELDArgs, *, cand_dict: CandDict = None, ent_emb=None, e2i=None, filter_list=None, limit=None, namu_only=False):
+		super(SkipgramDataset, self).__init__(mode, corpus, args, cand_dict=cand_dict, ent_emb=ent_emb, e2i=e2i, filter_list=filter_list, limit=limit, namu_only=namu_only)
+		self.token_count = {}
+		self.entity_count = {}
+		self.w2i = {w: i for i, w in enumerate(readfile(args.word_file))}
+		self.e2i = {w: i for i, w in enumerate(readfile(args.entity_file))}
+		self.i2w = {v: k for k, v in self.w2i}
+		self.i2e = {v: k for k, v in self.e2i}
+		for token in self.corpus.token_iter():
+			if token.surface in self.w2i:
+				if token.surface not in self.token_count:
+					self.token_count[token.surface] = 0
+				self.token_count[token.surface] += 1
+			if token.entity in self.e2i:
+				if token.is_entity and token.entity not in self.entity_count:
+					self.entity_count[token.entity] = 0
+				self.entity_count[token.entity] += 1
+
+		token_sum = sum(self.token_count.values())
+		self.token_count = {k: v / token_sum for k, v in self.token_count}
+		entity_sum = sum(self.entity_count.values())
+		self.token_subsample_prob = {k: 1 - math.sqrt(1e-5 / v) for k, v in self.token_count}
+		token_neg_sample_denominator = sum(map(lambda x: x ** (3 / 4), self.token_count.values()))
+
+		self.token_neg_sample_prob = {k: v ** (3 / 4) / token_neg_sample_denominator for k, v in self.token_count if v > 0}
+		self.token_neg_sample_prob_values = list(self.token_neg_sample_prob.values())
+
+		self.entity_count = {k: v / entity_sum for k, v in self.entity_count}
+		self.entity_subsample_prob = {k: 1 - math.sqrt(1e-5 / v) for k, v in self.entity_count}
+		ent_neg_sample_denominator = sum(map(lambda x: x ** (3 / 4), self.entity_count.values()))
+		self.entity_neg_sample_prob = {k: v ** (3 / 4) / ent_neg_sample_denominator for k, v in self.entity_count if v > 0}
+		self.entity_neg_sample_prob_values = list(self.entity_neg_sample_prob.values())
+
+	def __getitem__(self, index):
+		args = list(super().__getitem__(index))
+		target = self.eld_items[index]
+		token_samples = []
+		token_negative_samples = []
+		entity_samples = []
+		entity_negative_samples = []
+		for item in target.lctx[-self.window_size:] + target.rctx[:self.window_size]:
+			surface = item.surface
+			if surface in self.token_subsample_prob:
+				rand = random.random()
+				if rand > self.token_subsample_prob[surface]:
+					token_samples.append(self.w2i[surface])
+			if item.is_entity:
+				entity = item.entity
+				if entity in self.entity_subsample_prob:
+					rand = random.random()
+					if rand > self.token_subsample_prob[surface]:
+						entity_samples.append(self.w2i[surface])
+		random.shuffle(token_samples)
+		token_samples = token_samples[:5]
+		token_samples += [-1] * (5 - len(token_samples))
+		random.shuffle(entity_samples)
+		entity_samples = entity_samples[:5]
+		entity_samples += [-1] * (5 - len(entity_samples))
+		while len(token_negative_samples) < 25:
+			randn = random.randint(0, len(self.token_neg_sample_prob_values))
+
+			randval = random.random()
+			if randval < self.token_neg_sample_prob_values[randn]:
+				token_negative_samples.append(randn)
+
+		while len(entity_negative_samples) < 25:
+			randn = random.randint(0, len(self.entity_neg_sample_prob_values))
+
+			randval = random.random()
+			if randval < self.entity_neg_sample_prob_values[randn]:
+				entity_negative_samples.append(randn)
 
 
-	def __getitem__(self, item):
-		pass
-
-	def __len__(self):
-		pass
+		args += [token_samples, token_negative_samples, entity_samples, entity_negative_samples]
+		return tuple(args)

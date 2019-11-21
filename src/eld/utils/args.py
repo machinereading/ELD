@@ -35,7 +35,7 @@ class ELDArgs(AbstractArgument):
 		self.use_entity_context_embedding = True
 		self.use_relation_embedding = True
 		self.use_type_embedding = True
-		self.context_window_size = 5
+		self.context_window_size = 15
 
 		self.character_encoder = "cnn"
 		self.word_encoder = "cnn"
@@ -43,8 +43,9 @@ class ELDArgs(AbstractArgument):
 		self.entity_context_encoder = "bilstm"
 		self.relation_encoder = "cnn"
 		self.type_encoder = "ffnn"
-
 		self.vector_transformer = "cnn"
+
+		self.pred_train_mode = "mse"
 
 		# data path config
 		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"
