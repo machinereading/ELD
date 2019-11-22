@@ -40,7 +40,7 @@ class DiscoveryModel:
 		gl.logger.info("Training discovery model")
 		optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4, weight_decay=1e-4)
 		tqdmloop = tqdm(range(1, self.args.epochs + 1))
-		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=512, shuffle=True, num_workers=4)
+		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=256, shuffle=True, num_workers=4)
 		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=512, shuffle=False, num_workers=4)
 		test_batch = DataLoader(dataset=self.data.test_dataset, batch_size=512, shuffle=False, num_workers=4)
 		max_score = (0, 0, 0)
@@ -54,7 +54,7 @@ class DiscoveryModel:
 				args, kwargs = self.prepare_input(batch)
 				label = batch[-4]
 				pred, _ = self.model(*args, **kwargs)
-				loss = F.binary_cross_entropy_with_logits(pred.view(-1), label.to(dtype=torch.float, device=self.device))
+				loss = F.binary_cross_entropy_with_logits(pred.view(-1), label.to(dtype=torch.float, device=self.device), pos_weight=torch.tensor([3]).to(dtype=torch.float, device=self.device))
 				loss.backward()
 				optimizer.step()
 				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, float(loss)))
@@ -78,6 +78,7 @@ class DiscoveryModel:
 	def load_model(self):
 		self.model: nn.Module = SeparateEntityEncoder(self.args)
 		self.model.load_state_dict(torch.load(self.args.model_path))
+		self.model.to(self.device)
 
 	def save_model(self):
 		torch.save(self.model.state_dict(), self.args.model_path)
@@ -106,8 +107,10 @@ class DiscoveryModel:
 			preds.append(pred.view(-1))
 			labels.append(label)
 			# print(pred.size())
-		preds = torch.softmax(torch.cat(preds, dim=-1), dim=-1)
+		preds = torch.sigmoid(torch.cat(preds, dim=-1))
 		labels = torch.cat(labels, dim=-1)
+		# for p, l in zip(preds, labels):
+		# 	print(p.item(), l.item())
 		print()
 		ms = (0, 0, 0)
 
