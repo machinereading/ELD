@@ -1,6 +1,6 @@
 import argparse
 
-from src.eld.PredOnly import PredModel
+from src.eld.PredOnly import SkipGramEntEmbedding
 from src.eld.utils import ELDArgs, DataModule
 from src.utils.TimeUtil import time_analysis
 
@@ -74,11 +74,11 @@ if mode in ["train", "test"]:
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
 		eld_args.model_name = "%s_%d" % (model_name, i)
-		module = PredModel(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
+		module = SkipGramEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
 		module.train()
 	import sys
 	sys.exit(0)
-module = PredModel(mode, model_name, args=eld_args)
+module = SkipGramEntEmbedding(mode, model_name, args=eld_args)
 
 if mode == "train":
 	module.train()

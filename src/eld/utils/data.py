@@ -27,6 +27,7 @@ class DataModule:
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+		self.cache_surface_ent_dict = CandDict([], {}, {})
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		self.modify_entity_embedding = args.modify_entity_embedding
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
@@ -165,24 +166,29 @@ class DataModule:
 		"""
 		assert self.mode == "train"
 		emb_map = {}
+		l = len(self.e2i)
 		for flag, i, e in zip(new_entity_flag, gold_idx, pred_emb):
 			i = i.item()
-			if flag.item():
-				if i not in emb_map:
-					emb_map[i] = []
-				emb_map[i].append(e)
+			if i not in emb_map:
+				emb_map[i] = []
+			emb_map[i].append(e)
 		for k, v in emb_map.items():
-			idx = k - len(self.e2i)
+			if k > l:
+				idx = k - len(self.e2i)
+				update_target = self.train_oe_embedding
+			else:
+				idx = k
+				update_target = self.entity_embedding
 			result = (sum(v) / len(v)).to(self.device)
 			# print("UPDATED", k - len(self.e2i), self.i2oe[k - len(self.e2i)], result)
-			target = self.train_oe_embedding[idx].to(self.device)
+			target = update_target[idx].to(self.device)
 			# self.train_oe_embedding[idx] = result
 			if sum(target) == 0:
-				self.train_oe_embedding[idx] = result
+				update_target[idx] = result
 			else:
-				self.train_oe_embedding[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
+				update_target[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
 		for token in self.train_dataset.eld_items:
-			if token.target and token.entity in self.oe2i:
+			if token.target:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()
 
 	def reset_new_entity(self):

@@ -79,3 +79,7 @@ class CandDict:
 
 	def __contains__(self, surface):
 		return len(self[surface]) == 0
+
+	# def __iadd__(self, other):
+	# 	assert type(other) is CandDict
+	# 	self._kb +=
