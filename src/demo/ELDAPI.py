@@ -6,7 +6,7 @@ from src.eld import VectorBasedELD
 jpype.startJVM(jpype.getDefaultJVMPath())
 app = Flask(__name__)
 
-module = VectorBasedELD(mode="demo")
+module = VectorBasedELD(model_name="norel_degree_0", mode="demo")
 
 @app.route("/eld/", methods=["POST"])
 def eld():
@@ -15,6 +15,5 @@ def eld():
 	return run(text)
 
 def run(text):
-	result = {}
 	run_result = module(text)
 	return json.dumps(run_result, ensure_ascii=False)

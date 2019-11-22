@@ -36,19 +36,17 @@ class CandDict:
 			for ent in self._kb:
 				try:
 					s = sum(self._dict[ent])
-					if ent in self._dict[ent]:
-						self._calc_dict[ent][ent] += s // 5
+					if ent in self._dict[ent]: pass
 					else:
-						self._calc_dict[ent][ent] = max(s // 5, 1)
+						self._calc_dict[ent][ent] = 1
 				except:
-					self._dict[ent] = {ent: 2}
+					self._dict[ent] = {ent: 1}
 				ent_key = ent.replace(" ", "_").split("_(")[0]
 				try:
 					s = sum(self._dict[ent_key])
-					if ent in self._dict[ent_key]:
-						self._calc_dict[ent_key][ent] += s // 10
+					if ent in self._dict[ent_key]: pass
 					else:
-						self._calc_dict[ent_key][ent] = max(s // 10, 1)
+						self._calc_dict[ent_key][ent] = 1
 				except:
 					self._dict[ent_key] = {ent: 1}
 			for m, e in self._dict.items():

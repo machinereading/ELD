@@ -22,6 +22,7 @@ class DiscoveryModel:
 
 		if self.mode == "train":
 			self.model: nn.Module = SeparateEntityEncoder(self.args)
+			self.save_model()
 		if self.mode == "pred":
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
