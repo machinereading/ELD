@@ -5,7 +5,7 @@ from src.eld.utils import ELDArgs, DataModule
 from src.utils.TimeUtil import time_analysis
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--mode", type=str, choices=["train", "pred", "typeeval", "demo", "test"], required=True)
+parser.add_argument("--mode", type=str, choices=["train", "pred", "test"], required=True)
 parser.add_argument("--model_name", type=str, required=True)
 parser.add_argument("--char_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
 parser.add_argument("--word_encoder", type=str, default="cnn", choices=["none", "cnn", "selfattn"])
@@ -93,11 +93,6 @@ if mode == "pred":
 		import traceback
 		traceback.print_exc()
 
-if mode == "demo":
-	pass
-
-if mode == "typeeval":
-	module.evaluate_type()
 
 if mode == "test":
 	module.test()

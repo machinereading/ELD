@@ -51,6 +51,7 @@ class ELDDataset(Dataset):
 				self.eld_items = self.corpus.eld_items
 		else:
 			self.eld_items = [x for x in self.corpus.entity_iter()]
+		self.new_ent_ratio = len([x for x in self.eld_items if x.is_new_entity])
 
 	@TimeUtil.measure_time
 	def __getitem__(self, index):
