@@ -135,8 +135,8 @@ class Sentence:
 				else:
 					new_ent.ne_type = entity["ne_type"]
 			except Exception as e:
-				import traceback
-				traceback.print_exc()
+				# import traceback
+				# traceback.print_exc()
 				error_count += 1
 		# if error_count > 0:
 		# print(error_count, len(entities))

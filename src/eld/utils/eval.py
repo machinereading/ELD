@@ -1,5 +1,6 @@
 from typing import List
 
+import torch
 from sklearn.metrics import precision_recall_fscore_support, adjusted_rand_score
 
 from src.ds import Vocabulary
@@ -20,7 +21,6 @@ class Evaluator:
 
 	@TimeUtil.measure_time
 	def evaluate(self, eld_items, new_ent_pred, sims, idx_pred, new_ent_label, idx_label):
-
 		def record(target_dict, p, l):
 			target_dict["Total"] += 1
 			target_dict["R"] += 1
@@ -43,8 +43,11 @@ class Evaluator:
 		total_u, in_kb_u, out_kb_u, no_surface_u = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		# kb_pred = {"Total": 0, "Correct": 0}
 		for e, new_ent, idx in zip(eld_items, new_ent_pred, idx_pred):
-			idx = idx.item()
-			new_ent = new_ent.item() > self.new_ent_threshold
+			if type(idx) is torch.Tensor:
+				idx = idx.item()
+			if type(new_ent) is torch.Tensor:
+				new_ent = new_ent.item()
+			new_ent = new_ent > self.new_ent_threshold
 			if not hasattr(e, "in_surface_dict"):
 				e.in_surface_dict = e.surface in self.surface_ent_dict
 			if new_ent:
@@ -99,15 +102,15 @@ class Evaluator:
 			else:  # out-kb 매핑 불가 - 틀림
 				mapping_idx = 0  # not in candidate(wrong)
 			mapping_result_unclustered[pred_idx] = mapping_idx
-		idx_pred_unclustered = idx_pred.clone()
+		idx_pred_unclustered = idx_pred[:]
 		for pred_idx, mapping_idx in mapping_result_unclustered.items():
-			for i in range(idx_pred_unclustered.size(0)):
-				if idx_pred_unclustered[i].item() == pred_idx:
+			for i in range(len(idx_pred_unclustered)):
+				if idx_pred_unclustered[i] == pred_idx:
 					idx_pred_unclustered[i] = mapping_idx
-		idx_pred_clustered = idx_pred.clone()
+		idx_pred_clustered = idx_pred[:]
 		for pred_idx, mapping_idx in mapping_result_clustered.items():
-			for i in range(idx_pred_clustered.size(0)):
-				if idx_pred_clustered[i].item() == pred_idx:
+			for i in range(len(idx_pred_clustered)):
+				if idx_pred_clustered[i] == pred_idx:
 					idx_pred_clustered[i] = mapping_idx
 
 		in_surface_dict_flags = [x.in_surface_dict for x in eld_items]

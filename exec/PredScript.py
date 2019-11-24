@@ -1,9 +1,9 @@
 import argparse
 
-from src.eld.PredOnly import SkipGramEntEmbedding
+from src.eld.PredOnly import SkipGramEntEmbedding, MSEEntEmbedding
 from src.eld.utils import ELDArgs, DataModule
 from src.utils.TimeUtil import time_analysis
-
+from src.ds import Corpus
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", type=str, choices=["train", "pred", "test"], required=True)
 parser.add_argument("--model_name", type=str, required=True)
@@ -31,6 +31,7 @@ args = parser.parse_args()
 mode = args.mode
 model_name = args.model_name
 eld_args = ELDArgs(model_name)
+
 if mode == "typeeval":
 	eld_args.type_prediction = True
 if args.char_encoder == "none":
@@ -71,17 +72,22 @@ eld_args.test_mode = args.code_test
 
 if mode in ["train", "test"]:
 	data = DataModule(mode, eld_args)
+	train_data = Corpus.load_corpus("corpus/namu_eld_handtag_train2/", limit=500)
+	# dev_data = Corpus.load_corpus("corpus/ambiguous_input.json", limit=500)
+	dev_data = Corpus.load_corpus("corpus/namu_eld_handtag_dev2/", limit=500)
+	test_data = Corpus.load_corpus("corpus/namu_eld_handtag_test2/", limit=500)
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
 		eld_args.model_name = "%s_%d" % (model_name, i)
-		module = SkipGramEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
-		module.train()
+		module = MSEEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
+		module.train(train_data=train_data, dev_data=dev_data, test_data=test_data)
 	import sys
 	sys.exit(0)
-module = SkipGramEntEmbedding(mode, model_name, args=eld_args)
+module = MSEEntEmbedding(mode, model_name, args=eld_args, data=data)
 
 if mode == "train":
-	module.train()
+	# module.train(train_data=Corpus.load_corpus("/home/minho/wiki/1911_full/", limit=500), dev_data=Corpus.load_corpus("corpus/namu_eld_handtag_only_dev2/", limit=500))
+	module.train(train_data=train_data, dev_data=dev_data, test_data=test_data)
 	time_analysis()
 if mode == "pred":
 	try:

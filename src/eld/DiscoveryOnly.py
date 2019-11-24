@@ -7,6 +7,8 @@ from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from src.ds import Corpus
+from src.eld.utils.Dataset import ELDDataset
 from ..utils import jsondump
 from .modules import SeparateEntityEncoder
 from .utils import ELDArgs, DataModule
@@ -36,13 +38,18 @@ class DiscoveryModel:
 			self.data = data
 		gl.logger.info("Finished discovery model initialization")
 
-	def train(self):
+	def train(self, train_data, dev_data, test_data=None):
 		gl.logger.info("Training discovery model")
 		optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4, weight_decay=1e-4)
 		tqdmloop = tqdm(range(1, self.args.epochs + 1))
-		train_batch = DataLoader(dataset=self.data.train_dataset, batch_size=256, shuffle=True, num_workers=4)
-		dev_batch = DataLoader(dataset=self.data.dev_dataset, batch_size=512, shuffle=False, num_workers=4)
-		test_batch = DataLoader(dataset=self.data.test_dataset, batch_size=512, shuffle=False, num_workers=4)
+		self.data.initialize_corpus_tensor(train_data)
+		train_dataset = ELDDataset(self.mode, train_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+		train_batch = DataLoader(dataset=train_dataset, batch_size=256, shuffle=True, num_workers=4)
+
+		self.data.initialize_corpus_tensor(dev_data)
+		dev_dataset = ELDDataset(self.mode, dev_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+		dev_batch = DataLoader(dataset=dev_dataset, batch_size=512, shuffle=False, num_workers=4)
+
 		max_score = (0, 0, 0)
 		max_score_epoch = 0
 		max_score_threshold = 0
@@ -59,7 +66,7 @@ class DiscoveryModel:
 				optimizer.step()
 				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, float(loss)))
 			if epoch % self.args.eval_per_epoch == 0:
-				(p, r, f), mi = self.pred(dev_batch, eld_items=self.data.dev_dataset.eld_items, dump_name=str(epoch))
+				(p, r, f), mi = self.pred(dev_batch, eld_items=dev_dataset.eld_items, dump_name=str(epoch))
 				gl.logger.info("Epoch %d max score @ threshold %.2f: P %.2f R %.2f F %.2f" % (epoch, mi, p * 100, r * 100, f * 100))
 				if f > max_score[-1]:
 					max_score = (p, r, f)
@@ -71,10 +78,17 @@ class DiscoveryModel:
 					os.mkdir("runs/eld/%s" % self.model_name)
 				if self.args.early_stop <= epoch - max_score_epoch:
 					break
-		self.load_model()
-		test_score, test_threshold = self.pred(test_batch, eld_items=self.data.test_dataset.eld_items, dump_name="test")
-		p, r, f = test_score
-		gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
+		if test_data is not None:
+			self.load_model()
+			self.data.initialize_corpus_tensor(test_data)
+			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+			test_score, test_threshold = self.pred(test_batch, eld_items=test_dataset.eld_items, dump_name="test")
+			p, r, f = test_score
+			gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
+			self.args.new_ent_threshold = test_threshold
+			jsondump(self.args, self.args.model_path + "_args.json")
+
 	def load_model(self):
 		self.model: nn.Module = SeparateEntityEncoder(self.args)
 		self.model.load_state_dict(torch.load(self.args.model_path))
@@ -96,7 +110,7 @@ class DiscoveryModel:
 			kwargs["avg_degree"] = avg_degree
 		return args, kwargs
 
-	def pred(self, batch, *, eld_items=None, dump_name=""):
+	def pred(self, batch, *, pred_mode=False, eld_items=None, dump_name=""):
 		self.model.eval()
 		preds = []
 		labels = []
@@ -111,6 +125,7 @@ class DiscoveryModel:
 		labels = torch.cat(labels, dim=-1)
 		# for p, l in zip(preds, labels):
 		# 	print(p.item(), l.item())
+		if pred_mode: return preds
 		print()
 		ms = (0, 0, 0)
 
@@ -129,6 +144,18 @@ class DiscoveryModel:
 			jsondump(generate_result_dict(eld_items, ms, preds, labels), "runs/eld/%s/%s_%s.json" % (self.model_name, self.model_name, dump_name))
 
 		return ms, mi
+
+	def __call__(self, data: Corpus, batch_size=512):
+		dataset = self.data.prepare("pred", [data])
+		dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
+		kb_scores = []
+
+		with torch.no_grad():
+			for batch in dataloader:
+				kb_scores.append(self.pred(batch, pred_mode=True))
+		for item, kb_score in zip(data.eld_items, kb_scores):
+			item.is_dark_entity = kb_score > self.args.new_ent_threshold
+		return data
 
 def generate_result_dict(corpus, score, preds, labels):
 	result = {

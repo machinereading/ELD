@@ -6,10 +6,10 @@ class ELDArgs(AbstractArgument):
 		self.device = "cuda"
 
 		# training config
-		self.corpus_dir = "corpus/namu_eld_inputs_handtag_only/"
-		self.train_filter = "corpus/namu_handtag_only_train"
-		self.dev_filter = "corpus/namu_handtag_only_dev"
-		self.test_filter = "corpus/namu_handtag_only_test"
+		# self.corpus_dir = "corpus/namu_eld_inputs_handtag_only/"
+		# self.train_filter = "corpus/namu_handtag_only_train"
+		# self.dev_filter = "corpus/namu_handtag_only_dev"
+		# self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
 		self.eval_per_epoch = 5
 		self.early_stop = 30

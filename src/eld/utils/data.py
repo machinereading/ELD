@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from .Dataset import ELDDataset
 from .args import ELDArgs
-from .datafunc import text_to_etri, etri_to_ne_dict
+from src.utils.datafunc import text_to_etri, etri_to_ne_dict
 from ..modules.InKBLinker import MulRel, PEM, Dist, InKBLinker
 from ..modules.TypePred import TypeGiver
 from ... import GlobalValues as gl
@@ -16,6 +16,7 @@ class DataModule:
 	def __init__(self, mode: str, args: ELDArgs):
 		# index 0: not in dictionary
 		# initialize embedding
+		gl.logger.info("Initializing ELD data module")
 		self.mode = mode
 		self.args = args
 		self.device = args.device
@@ -27,7 +28,7 @@ class DataModule:
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
-		self.cache_surface_ent_dict = CandDict([], {}, {})
+
 		self.use_explicit_kb_classifier = args.use_explicit_kb_classifier
 		self.modify_entity_embedding = args.modify_entity_embedding
 		self.modify_entity_embedding_weight = args.modify_entity_embedding_weight
@@ -52,11 +53,17 @@ class DataModule:
 		self.i2e = {v: k for k, v in self.e2i.items()}
 		ee = np.load(args.entity_embedding_file)
 		self.entity_embedding = torch.tensor(np.stack([np.zeros(ee.shape[-1]), *ee])).float()
+
+
 		assert len(self.e2i) == self.entity_embedding.size(0)
 		# print(len(self.e2i), len(self.i2e), self.entity_embedding.shape)
 		if self.use_cache_kb:
-			self.new_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
-			self.new_entity_surface_dict = []
+			self.cache_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
+			self.cache_entity_surface_dict = []
+
+		self.original_entity_embedding = self.entity_embedding.clone()
+		self.original_surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+		self.original_e2i = {k: v for k, v in self.e2i.items()}
 		self.ee_dim = args.e_emb_dim = ee.shape[-1]
 
 		self.ce_dim = self.we_dim = self.re_dim = self.te_dim = 1
@@ -87,21 +94,21 @@ class DataModule:
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
 		if mode in ["train", "test"]:
-			self.corpus = Corpus.load_corpus(args.corpus_dir, limit=1000 if args.test_mode else 0, min_token=10)
+			# self.corpus = Corpus.load_corpus(args.corpus_dir, limit=1000 if args.test_mode else 0, min_token=10)
 			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
 			self.oe2i["NOT_IN_CANDIDATE"] = 0
 			self.i2oe = {v: k for k, v in self.oe2i.items()}
 			self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 			self.err_entity = set([])
-			self.initialize_corpus_tensor(self.corpus)
-			gl.logger.info("Corpus initialized")
-			self.train_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.train_filter)], limit=args.train_corpus_limit)
-			gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
-			self.dev_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.dev_filter)], limit=args.dev_corpus_limit)
-			gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
-			self.test_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.test_filter)], limit=args.test_corpus_limit)
-			args.jamo_limit = self.train_dataset.max_jamo_len_in_word
-			args.word_limit = self.train_dataset.max_word_len_in_entity
+			# self.initialize_corpus_tensor(self.corpus)
+			# gl.logger.info("Corpus initialized")
+			# self.train_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.train_filter)], limit=args.train_corpus_limit)
+			# gl.logger.debug("Train corpus size: %d" % len(self.train_dataset))
+			# self.dev_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.dev_filter)], limit=args.dev_corpus_limit)
+			# gl.logger.debug("Dev corpus size: %d" % len(self.dev_dataset))
+			# self.test_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.test_filter)], limit=args.test_corpus_limit)
+			# args.jamo_limit = self.train_dataset.max_jamo_len_in_word
+			# args.word_limit = self.train_dataset.max_word_len_in_entity
 
 		# self.corpus = Corpus.load_corpus(args.corpus_dir)
 		# self.initialize_vocabulary_tensor(self.corpus)
@@ -111,11 +118,12 @@ class DataModule:
 		self.register_threshold = args.new_ent_threshold
 
 	@TimeUtil.measure_time
-	def initialize_corpus_tensor(self, corpus: Corpus, pred=False):
-		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
-			self.initialize_token_tensor(token, pred)
+	def initialize_corpus_tensor(self, corpus: Corpus, pred=False, train=True):
 
-	def initialize_token_tensor(self, token: Vocabulary, pred=False):
+		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
+			self.initialize_token_tensor(token, pred, train)
+
+	def initialize_token_tensor(self, token: Vocabulary, pred=False, train=True):
 		if token.is_entity:
 			token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
 			if self.use_kb_relation_info:
@@ -157,10 +165,11 @@ class DataModule:
 					self.err_entity.add(token.entity)
 				token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 				token.entity_label_idx = -1
-				token.target = False
+				if train:
+					token.target = False
 		return token
 
-	def update_new_entity_embedding(self, new_entity_flag, gold_idx, pred_emb, epoch):
+	def update_new_entity_embedding(self, dataset, new_entity_flag, gold_idx, pred_emb, epoch):
 		"""
 		Train 과정에서 label별로 entity embedding을 업데이트 하는 함수, prediction에서는 안쓰임
 		"""
@@ -187,13 +196,18 @@ class DataModule:
 				update_target[idx] = result
 			else:
 				update_target[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
-		for token in self.train_dataset.eld_items:
-			if token.target:
+		for token in dataset.eld_items:
+			if token.target and token.is_new_entity:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()
 
 	def reset_new_entity(self):
-		self.new_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
-		self.new_entity_surface_dict = []
+		if self.use_cache_kb:
+			self.cache_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
+			self.cache_entity_surface_dict = []
+		else:
+			self.entity_embedding = self.original_entity_embedding
+			self.surface_ent_dict = self.original_surface_ent_dict
+			self.e2i = self.original_e2i
 
 	@TimeUtil.measure_time
 	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, *, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
@@ -222,8 +236,8 @@ class DataModule:
 				# new_ent_flag = v.is_new_entity # oracle test
 				new_ent_flag = i > self.new_ent_threshold
 				if new_ent_flag:  # out-kb
-					if self.use_cache_kb and self.new_entity_embedding.size(0) > 0:  # out-kb similarity
-						max_sim, pred_idx = self.get_pred(e, self.new_entity_embedding) if not disable_embedding else (0, 0)
+					if self.use_cache_kb and self.cache_entity_embedding.size(0) > 0:  # out-kb similarity
+						max_sim, pred_idx = self.get_pred(e, self.cache_entity_embedding) if not disable_embedding else (0, 0)
 					else:  # empty out-kb. register
 						max_sim = 0
 						pred_idx = -1
@@ -234,7 +248,7 @@ class DataModule:
 					result.append(pred_idx)
 					ent_result.append(self.i2e[pred_idx])
 			else:  # in-KB score를 사용하지 않고 direct 비교
-				max_sim, pred_idx = self.get_pred(e, torch.cat((self.entity_embedding, self.new_entity_embedding))) if not disable_embedding else (0, 0)
+				max_sim, pred_idx = self.get_pred(e, torch.cat((self.entity_embedding, self.cache_entity_embedding))) if not disable_embedding else (0, 0)
 				new_ent_flag = max_sim < self.register_threshold
 
 			# print(new_ent_flag, max_sim, pred_idx)
@@ -243,7 +257,7 @@ class DataModule:
 				if self.use_heuristic:  # heuristic
 					if len(v.surface) > 3:
 						out_flag = False
-						for new_ent_idx, ent_dict in enumerate(self.new_entity_surface_dict):
+						for new_ent_idx, ent_dict in enumerate(self.cache_entity_surface_dict):
 							if out_flag: break
 							for ent_cand in ent_dict:
 								if v.surface in ent_cand or ent_cand in v.surface:  # 완벽포함관계
@@ -255,10 +269,10 @@ class DataModule:
 
 				if max_sim < self.register_threshold:  # entity registeration
 					if self.use_cache_kb:  # cache KB에 entity, entity embedding 저장 후 index 반환
-						pred_idx = self.new_entity_embedding.size(0)
-						self.new_entity_embedding = torch.cat((self.new_entity_embedding, e.unsqueeze(0).cpu()))
-						self.new_entity_surface_dict.append({v.surface})
-						assert len(self.new_entity_surface_dict) == self.new_entity_embedding.size(0)
+						pred_idx = self.cache_entity_embedding.size(0)
+						self.cache_entity_embedding = torch.cat((self.cache_entity_embedding, e.unsqueeze(0).cpu()))
+						self.cache_entity_surface_dict.append({v.surface})
+						assert len(self.cache_entity_surface_dict) == self.cache_entity_embedding.size(0)
 					else:  # cache KB를 따로 사용하지 않고 바로 KB에 등록
 						pred_idx = 0  # out-kb로 판단한 경우 e2i의 길이만큼 더하는 sequence가 밑에 있으므로 일단 0임
 						l = len(self.e2i)
@@ -269,9 +283,9 @@ class DataModule:
 						self.in_kb_linker.update_entity(v.surface, ent, e)  # in-kb linker에도 entity랑 surface, 개체 embedding 추가
 				else:
 					assert pred_idx >= 0
-					self.new_entity_surface_dict[pred_idx].add(v.surface)
+					self.cache_entity_surface_dict[pred_idx].add(v.surface)
 					if self.modify_entity_embedding:
-						self.new_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.new_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
+						self.cache_entity_embedding[pred_idx] = e * self.modify_entity_embedding_weight + self.cache_entity_embedding[pred_idx] * (1 - self.modify_entity_embedding_weight)
 				result.append(len(self.e2i) + pred_idx)
 				ent_result.append(pred_idx)
 			sims.append(max_sim)
@@ -390,21 +404,70 @@ class DataModule:
 		self.initialize_corpus_tensor(corpus, pred=True)
 		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
-	def predict_entity_with_embedding(self, embedding, in_init_kb_flag=None):
-		if in_init_kb_flag is None:
-			in_init_kb_flag = torch.zeros(embedding.size(0), dtype=torch.uint8)
-		for emb, flag in zip(embedding, in_init_kb_flag):
-			sim, idx = self.get_pred(emb, self.entity_embedding if flag == 0 else self.new_entity_embedding)
-			if sim < self.new_ent_threshold:
-				idx = -1
+	def predict_entity_with_embedding(self, eld_items, embedding, out_kb_flag=None):
+		# TODO Candidate 뽑고 그 중 similarity 가장 높은거로 연결하게 바꾸기
+		result = []
+		if self.use_cache_kb:
+			if out_kb_flag is None:
+				out_kb_flag = torch.zeros(embedding.size(0), dtype=torch.uint8)
+			for ent, emb, flag in zip(eld_items, embedding, out_kb_flag):
+				candidates = []
+				empty_candidate = False
+				if not flag:
+					candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
+					if len(candidates) == 0:
+						empty_candidate = True
+						target_emb = torch.zeros(0)
+					else:
+						target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
+				else:
+					target_emb = []
+					for i, s in enumerate(self.cache_entity_surface_dict):
+						if ent.surface in s:
+							candidates.append(i + len(self.e2i))
+							target_emb.append(self.cache_entity_embedding[i])
+					if len(candidates) == 0:
+						target_emb = torch.zeros(0)
+						empty_candidate = True
+					else: target_emb = torch.cat(target_emb)
+				if not empty_candidate:
+					sim, idx = self.get_pred(emb, target_emb)
+				else:
+					sim, idx = 0, 0
+				idx = candidates[idx] if not empty_candidate else 0
+				if flag and sim < self.new_ent_threshold: # register
+					idx = len(self.e2i) + self.cache_entity_embedding.size(0)
+					self.cache_entity_embedding = torch.cat([self.cache_entity_embedding, emb.cpu().clone().detach().unsqueeze(0)])
+					self.cache_entity_surface_dict.append({ent.surface})
+				elif self.modify_entity_embedding:
+					target_emb[idx] *= 1 - self.modify_entity_embedding_weight
+					target_emb[idx] += emb * self.modify_entity_embedding_weight
+				result.append([idx, sim])
+		else:
+			for ent, emb in zip(eld_items, embedding):
+				candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
+				target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
+				sim, idx = self.get_pred(emb, target_emb)
+				if sim < self.new_ent_threshold: # register
+					idx = self.entity_embedding.size(0)
+					self.entity_embedding = torch.cat([self.entity_embedding, emb.cpu().clone().detach().unsqueeze(0)])
+					self.surface_ent_dict.add_instance(ent.surface, "_"+str(idx)) # temporary id
+					self.e2i["_"+str(idx)] = idx
+				elif self.modify_entity_embedding:
+					self.entity_embedding[idx] *= 1 - self.modify_entity_embedding_weight
+					self.entity_embedding[idx] += emb * self.modify_entity_embedding_weight
+				result.append([idx, sim])
+		return result
 
 	def get_pred(self, tensor, emb):
-		if emb.size(0) == 0: return 0, -1
-		expanded = tensor.expand_as(emb).to(self.device)
-		cos_sim = F.cosine_similarity(expanded, emb.to(self.device))
-		dist = F.pairwise_distance(expanded, emb.to(self.device))
+		if emb.size(0) == 0 or len(emb.size()) == 1: return 0, -1
+		emb = emb.to(self.device)
+		expanded = tensor.expand_as(emb)
+		cos_sim = F.cosine_similarity(expanded, emb)
+		dist = F.pairwise_distance(expanded, emb)
 		sim = torch.max(cos_sim - dist)
 		index = torch.argmax(cos_sim - dist, dim=-1).item()
+		del expanded, cos_sim, dist
 		return sim, index
 # def hierarchical_clustering(tensors: torch.Tensor):
 # 	iteration = 0

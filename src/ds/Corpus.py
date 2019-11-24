@@ -79,10 +79,10 @@ class Corpus:
 		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
 			if sentence is None:
-				print("Sentence is None")
+				# print("Sentence is None")
 				continue
 			if len(sentence.entities) == 0:
-				print("No entities", len(item["entities"]))
+				# print("No entities")
 				continue
 			if min_token > 0 and len(sentence) < min_token: continue
 			corpus.add_sentence(sentence)
@@ -189,4 +189,9 @@ class Corpus:
 	@property
 	def eld_items(self) -> List[Vocabulary]:
 		return [x for x in self.entity_iter() if x.target]
+
+	@classmethod
+	def from_string(cls, *corpus):
+		from ..utils.datafunc import text_to_etri, etri_to_ne_dict
+		return cls.load_corpus(map(etri_to_ne_dict, map(text_to_etri, corpus)))
 
