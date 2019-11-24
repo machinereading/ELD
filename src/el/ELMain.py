@@ -100,7 +100,27 @@ class EL:
 		return self.predict(sentences, output_type=output_type)
 
 	def pred_corpus(self, data:Corpus):
-		return self.predict([x for x in data.sentences])
+		sentences = data.sentences
+		batches = split_to_batch(sentences, 200)
+		result = []
+		jj = []
+		ee = {}
+		for batch in batches:
+			if len(batch) == 0: continue
+			j, conll_str, tsv_str = self.data.prepare(*batch)
+			jj += j
+			# print(len(batch), len(j))
+			dataset = D.generate_dataset_from_str(conll_str, tsv_str)
+			data_items = self.ranker.get_data_items(dataset, predict=True)
+			# print(len(data_items))
+			self.ranker.model._coh_ctx_vecs = []
+			predictions = self.ranker.predict(data_items)
+			e = D.make_result_dict(dataset, predictions)
+			for k, v in ee.items():
+				ee[k] = v
+			result += merge_item(j, e, delete_candidate=True)
+		data.sentences = merge_item_with_corpus(sentences, result)
+		return data
 
 	@property
 	def config(self):
