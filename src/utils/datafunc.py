@@ -1,5 +1,5 @@
-from ...utils import getETRI
-from ... import GlobalValues as gl
+from ..utils import getETRI
+from .. import GlobalValues as gl
 from functools import reduce
 import random
 def find_ne_pos(j):
