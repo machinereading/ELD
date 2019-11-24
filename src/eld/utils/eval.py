@@ -20,7 +20,7 @@ class Evaluator:
 			self.oe2i = data.oe2i
 
 	@TimeUtil.measure_time
-	def evaluate(self, eld_items, new_ent_pred, sims, idx_pred, new_ent_label, idx_label):
+	def evaluate(self, eld_items, new_ent_pred, idx_pred, new_ent_label, idx_label):
 		def record(target_dict, p, l):
 			target_dict["Total"] += 1
 			target_dict["R"] += 1
@@ -64,13 +64,12 @@ class Evaluator:
 		mapping_result_clustered = {}
 		mapped_entity_clustered = {}  # 한번 assign된 entity의 re-assign 방지
 		# {gold_idx: {pred_idx:count}}
+
 		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():
 			for gold_idx, gold_count in mapping.items():
 				if gold_idx not in mapped_entity_clustered:
 					mapped_entity_clustered[gold_idx] = {}
-				if pred_idx not in mapped_entity_clustered[gold_idx]:
-					mapped_entity_clustered[gold_idx][pred_idx] = 0
-				mapped_entity_clustered[gold_idx][pred_idx] += gold_count
+				mapped_entity_clustered[gold_idx][pred_idx] = gold_count
 
 		for k, v in mapped_entity_clustered.items():
 			mapped_entity_clustered[k] = list(sorted([[k, v] for k, v in v.items()], key=lambda x: x[1], reverse=True))
@@ -78,19 +77,24 @@ class Evaluator:
 		# 최대 cluster부터 linking 시작
 		while len(mapped_entity_clustered) > 0:
 			mapped_entity_clustered = list(sorted([[k, v] for k, v in mapped_entity_clustered], key=lambda x: max([y[1] for y in x[1]]), reverse=True))
-			gold_idx, sorted_pred_index = mapped_entity_clustered[0]
+			gold_idx, sorted_pred_index = mapped_entity_clustered.pop(0)
 			pred_idx, _ = sorted_pred_index[0]
 			# print(gold_idx, sorted_pred_index, pred_idx)
 			mapping_result_clustered[pred_idx] = gold_idx if gold_idx >= len(self.e2i) else 0
-			del mapped_entity_clustered[0]
 			for item in mapped_entity_clustered:
 				item[1] = list(filter(lambda x: x[0] != pred_idx, item[1]))
 			mapped_entity_clustered = [x for x in mapped_entity_clustered if len(x[1]) > 0]
 
-		for pred_idx in pe_dark_id_to_ge_entity_map.keys():
+		for pred_idx, gc in pe_dark_id_to_ge_entity_map.items():
 			if pred_idx not in mapping_result_clustered:
-				mapping_result_clustered[pred_idx] = -pred_idx
+				mapping_result_clustered[pred_idx] = -list(sorted([[k, v] for k, v in gc.items()], key=lambda x: x[1], reverse=True))[0][0]
 		# print(mapping_result_clustered)
+		idx_pred_clustered = idx_pred[:]
+		for pred_idx, mapping_idx in mapping_result_clustered.items():
+			for i in range(len(idx_pred_clustered)):
+				if idx_pred_clustered[i] == pred_idx:
+					idx_pred_clustered[i] = mapping_idx
+		# unclustered mapping
 		mapping_result_unclustered = {}
 		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():  # out-kb pred to label matching
 			# 등록 순서에 따라 index를 받기 때문에 index 변환 과정이 필요함
@@ -103,15 +107,13 @@ class Evaluator:
 				mapping_idx = 0  # not in candidate(wrong)
 			mapping_result_unclustered[pred_idx] = mapping_idx
 		idx_pred_unclustered = idx_pred[:]
+
 		for pred_idx, mapping_idx in mapping_result_unclustered.items():
 			for i in range(len(idx_pred_unclustered)):
 				if idx_pred_unclustered[i] == pred_idx:
 					idx_pred_unclustered[i] = mapping_idx
-		idx_pred_clustered = idx_pred[:]
-		for pred_idx, mapping_idx in mapping_result_clustered.items():
-			for i in range(len(idx_pred_clustered)):
-				if idx_pred_clustered[i] == pred_idx:
-					idx_pred_clustered[i] = mapping_idx
+
+
 
 		in_surface_dict_flags = [x.in_surface_dict for x in eld_items]
 		new_ent_flags = [x.is_new_entity for x in eld_items]

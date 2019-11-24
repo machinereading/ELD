@@ -101,6 +101,8 @@ def getETRI(text):
 	except KeyboardInterrupt:
 		return None
 	except Exception:
+		import traceback
+		traceback.print_exc()
 		gl.logger.critical("ETRI connection lost")
 		gl.logger.debug(text[:30])
 		return None

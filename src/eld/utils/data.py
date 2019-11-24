@@ -58,9 +58,11 @@ class DataModule:
 		assert len(self.e2i) == self.entity_embedding.size(0)
 		# print(len(self.e2i), len(self.i2e), self.entity_embedding.shape)
 		if self.use_cache_kb:
-			self.cache_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
-			self.cache_entity_surface_dict = []
-
+			self.cache_entity_embedding = {i: torch.zeros([0, ee.shape[-1]], dtype=torch.float) for i in range(1, 10)}
+			self.cache_entity_surface_dict = {i: [] for i in range(1, 10)}
+			self.pred_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
+			self.pred_entity_surface_dict = []
+			self.pred_i2e = {}
 		self.original_entity_embedding = self.entity_embedding.clone()
 		self.original_surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 		self.original_e2i = {k: v for k, v in self.e2i.items()}
@@ -202,9 +204,9 @@ class DataModule:
 
 	def reset_new_entity(self):
 		if self.use_cache_kb:
-			self.cache_entity_embedding = torch.zeros([0, self.ee_dim], dtype=torch.float)
-			self.cache_entity_surface_dict = []
-		else:
+			self.cache_entity_embedding = {i: torch.zeros([0, self.ee_dim], dtype=torch.float) for i in range(1, 10)}
+			self.cache_entity_surface_dict = {i: [] for i in range(1, 10)}
+		else: # TODO Threshold별로 저장할 수 있게
 			self.entity_embedding = self.original_entity_embedding
 			self.surface_ent_dict = self.original_surface_ent_dict
 			self.e2i = self.original_e2i
@@ -213,8 +215,6 @@ class DataModule:
 	def predict_entity(self, target_voca_list, new_ent_pred=None, pred_embedding=None, *, output_as_idx=True, mark_nil=False, no_in_kb_link=False):
 		# batchwise prediction, with entity registeration
 		disable_embedding = pred_embedding is None
-
-
 
 		if new_ent_pred is None:
 			new_ent_pred = torch.zeros(len(target_voca_list), dtype=torch.uint8)
@@ -376,45 +376,111 @@ class DataModule:
 			})
 		return result
 
-	def prepare(self, mode, *data, namu_only=False) -> ELDDataset:  # for prediction mode
-		if type(data[0]) is str:  # text에 etri 돌린 다음에 crowdsourcing form으로 만들기
-			func_chain = [text_to_etri, etri_to_ne_dict]
-		elif type(data[0]) is dict:  # crowdsourcing form을 가정함
-			func_chain = []
-		elif type(data[0]) is Corpus and len(data) == 1:
-			if namu_only:
-				for entity in data[0].entity_iter():
-					entity.target = len(entity.relation) > 0  # 나무위키 전용
-			else:
-				for entity in data[0].entity_iter(): entity.target = True
-			self.initialize_corpus_tensor(data[0], pred=True)
-			return ELDDataset(mode, data[0], self.args, cand_dict=self.surface_ent_dict, namu_only=namu_only)
-		else:
-			func_chain = []
+	def prepare(self, mode, data:Corpus, namu_only=False) -> ELDDataset:  # for prediction mode
 
-		buf = []
-		for item in data:
-			for func in func_chain:
-				item = func(item)
-			buf.append(item)
-		corpus = Corpus.load_corpus(buf)
+		for entity in data.entities: entity.target = True
+		self.initialize_corpus_tensor(data, pred=True)
+		return ELDDataset(mode, data, self.args, cand_dict=self.surface_ent_dict, namu_only=namu_only)
+		# else:
+		# 	func_chain = []
+		#
+		# buf = []
+		# for item in data:
+		# 	for func in func_chain:
+		# 		item = func(item)
+		# 	buf.append(item)
+		# corpus = Corpus.load_corpus(buf)
+		#
+		# for entity in corpus._entity_iter():
+		# 	entity.target = len(entity.relation) > 0  # 나무위키 전용
+		# self.initialize_corpus_tensor(corpus, pred=True)
+		# return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
-		for entity in corpus.entity_iter():
-			entity.target = len(entity.relation) > 0  # 나무위키 전용
-		self.initialize_corpus_tensor(corpus, pred=True)
-		return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
+	def predict_entity_with_embedding(self, eld_items, embedding, out_kb_flags=None):
+		idx_result = {i: [] for i in range(1, 10)}
+		sim_result = {i: [] for i in range(1, 10)}
+		for idx in range(1, 10):
+			threshold = idx * 0.1
+			if self.use_cache_kb:
+				if out_kb_flags is None:
+					out_kb_flags = torch.zeros(embedding.size(0), dtype=torch.uint8)
+				for ent, emb, out_kb_flag in zip(eld_items, embedding, out_kb_flags):
+					candidates = []
+					if not out_kb_flag:
+						candidates = [self.e2i[x[0]] for x in self.surface_ent_dict[ent.surface] if x[0] in self.e2i]
+						if len(candidates) == 0:
+							target_emb = torch.zeros(0)
+						else:
+							target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
+					else:
+						target_emb = []
+						for i, s in enumerate(self.cache_entity_surface_dict[idx]):
+							if ent.surface in s:
+								candidates.append(i)
+								target_emb.append(self.cache_entity_embedding[idx][i])
+							elif len(ent.surface) > 3:
+								for stored_surface in s:
+									if ent.surface in stored_surface or stored_surface in ent.surface:
+										candidates.append(i)
+										target_emb.append(self.cache_entity_embedding[idx][i])
+										break
+						if len(candidates) == 0:
+							target_emb = self.cache_entity_embedding[idx]
+							candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+						else:
+							target_emb = torch.cat(target_emb)
+					if len(candidates) > 0:
+						if target_emb.dim() == 1:
+							target_emb = target_emb.view(-1, self.ee_dim)
+						assert len(candidates) == target_emb.size(0)
+						sim, pred_idx = self.get_pred(emb, target_emb)
+						pred_idx = candidates[pred_idx] if len(candidates) > 0 else 0
+					else:
+						sim, pred_idx = 0, 0
+					if out_kb_flag:
+						if sim < threshold: # register
+							pred_idx = len(self.e2i) + self.cache_entity_embedding[idx].size(0)
+							self.cache_entity_embedding[idx] = torch.cat([self.cache_entity_embedding[idx], emb.cpu().clone().detach().unsqueeze(0)]).view(-1, self.ee_dim)
+							self.cache_entity_surface_dict[idx].append({ent.surface})
+							assert self.cache_entity_embedding[idx].size(0) == len(self.cache_entity_surface_dict[idx])
+						else: # link cache kb
+							self.cache_entity_surface_dict[idx][pred_idx].add(ent.surface)
+							if self.modify_entity_embedding:
+								self.cache_entity_embedding[idx][pred_idx] *= 1 - self.modify_entity_embedding_weight
+								self.cache_entity_embedding[idx][pred_idx] += emb * self.modify_entity_embedding_weight
+							pred_idx += len(self.e2i)
+					idx_result[idx].append(pred_idx)
+					sim_result[idx].append(sim)
+			else: # TODO
+				for ent, emb in zip(eld_items, embedding):
+					candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
+					target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
+					sim, idx = self.get_pred(emb, target_emb)
+					if sim < self.new_ent_threshold: # register
+						idx = self.entity_embedding.size(0)
+						self.entity_embedding = torch.cat([self.entity_embedding, emb.cpu().clone().detach().unsqueeze(0)])
+						self.surface_ent_dict.add_instance(ent.surface, "_"+str(idx)) # temporary id
+						self.e2i["_"+str(idx)] = idx
+					elif self.modify_entity_embedding:
+						self.entity_embedding[idx] *= 1 - self.modify_entity_embedding_weight
+						self.entity_embedding[idx] += emb * self.modify_entity_embedding_weight
+					idx_result.append(idx)
+					sim_result.append(sim)
+		return idx_result, sim_result
 
-	def predict_entity_with_embedding(self, eld_items, embedding, out_kb_flag=None):
-		# TODO Candidate 뽑고 그 중 similarity 가장 높은거로 연결하게 바꾸기
+	def predict_entity_with_embedding_immediate(self, eld_items, embedding, out_kb_flags=None, threshold=None): # for pred
+		if threshold is None:
+			threshold = self.register_threshold
 		result = []
+		sim_result = []
 		if self.use_cache_kb:
-			if out_kb_flag is None:
-				out_kb_flag = torch.zeros(embedding.size(0), dtype=torch.uint8)
-			for ent, emb, flag in zip(eld_items, embedding, out_kb_flag):
+			if out_kb_flags is None:
+				out_kb_flags = torch.zeros(embedding.size(0), dtype=torch.uint8)
+			for ent, emb, out_kb_flag in zip(eld_items, embedding, out_kb_flags):
 				candidates = []
 				empty_candidate = False
-				if not flag:
-					candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
+				if not out_kb_flag:
+					candidates = [self.e2i[x[0]] for x in self.surface_ent_dict[ent.surface] if x[0] in self.e2i]
 					if len(candidates) == 0:
 						empty_candidate = True
 						target_emb = torch.zeros(0)
@@ -422,28 +488,47 @@ class DataModule:
 						target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
 				else:
 					target_emb = []
-					for i, s in enumerate(self.cache_entity_surface_dict):
+					for i, s in enumerate(self.pred_entity_surface_dict):
 						if ent.surface in s:
-							candidates.append(i + len(self.e2i))
-							target_emb.append(self.cache_entity_embedding[i])
+							candidates.append(i)
+							target_emb.append(self.pred_entity_embedding[i])
+						elif len(ent.surface) > 3:
+							for stored_surface in s:
+								if ent.surface in stored_surface or stored_surface in ent.surface:
+									candidates.append(i)
+									target_emb.append(self.pred_entity_embedding[i])
+									break
 					if len(candidates) == 0:
-						target_emb = torch.zeros(0)
-						empty_candidate = True
-					else: target_emb = torch.cat(target_emb)
-				if not empty_candidate:
-					sim, idx = self.get_pred(emb, target_emb)
+						target_emb = self.pred_entity_embedding
+						candidates = [x for x in range(len(self.pred_entity_surface_dict))]
+					else:
+						target_emb = torch.cat(target_emb)
+				if len(candidates) > 0:
+					if target_emb.dim() == 1:
+						target_emb = target_emb.unsqueeze(0)
+					sim, pred_idx = self.get_pred(emb, target_emb)
+					pred_idx = candidates[pred_idx] if not empty_candidate else 0
 				else:
-					sim, idx = 0, 0
-				idx = candidates[idx] if not empty_candidate else 0
-				if flag and sim < self.new_ent_threshold: # register
-					idx = len(self.e2i) + self.cache_entity_embedding.size(0)
-					self.cache_entity_embedding = torch.cat([self.cache_entity_embedding, emb.cpu().clone().detach().unsqueeze(0)])
-					self.cache_entity_surface_dict.append({ent.surface})
-				elif self.modify_entity_embedding:
-					target_emb[idx] *= 1 - self.modify_entity_embedding_weight
-					target_emb[idx] += emb * self.modify_entity_embedding_weight
-				result.append([idx, sim])
-		else:
+					sim, pred_idx = 0, 0
+				if out_kb_flag:
+					if sim < threshold: # register
+						self.pred_entity_embedding = torch.cat([self.pred_entity_embedding, emb.cpu().clone().detach().unsqueeze(0)]).view(-1, self.ee_dim)
+						self.pred_entity_surface_dict.append({ent.surface})
+						ent_name = "_"+ent.surface.replace(" ", "_")
+						self.pred_i2e[len(self.pred_i2e)] = ent_name
+						result.append(ent_name)
+						assert self.pred_entity_embedding.size(0) == len(self.cache_entity_surface_dict)
+
+					else: # link cache kb
+						self.pred_entity_surface_dict[pred_idx].add(ent.surface)
+						if self.modify_entity_embedding:
+							self.pred_entity_embedding[pred_idx] *= 1 - self.modify_entity_embedding_weight
+							self.pred_entity_embedding[pred_idx] += emb * self.modify_entity_embedding_weight
+						result.append(self.pred_i2e[pred_idx])
+				else:
+					result.append(self.i2e[pred_idx])
+				sim_result.append(sim)
+		else: # TODO
 			for ent, emb in zip(eld_items, embedding):
 				candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
 				target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
@@ -456,17 +541,20 @@ class DataModule:
 				elif self.modify_entity_embedding:
 					self.entity_embedding[idx] *= 1 - self.modify_entity_embedding_weight
 					self.entity_embedding[idx] += emb * self.modify_entity_embedding_weight
-				result.append([idx, sim])
-		return result
+				result.append(idx)
+				sim_result.append(sim)
+		return result, sim_result
 
 	def get_pred(self, tensor, emb):
-		if emb.size(0) == 0 or len(emb.size()) == 1: return 0, -1
+		assert emb.dim() == 2
+		if emb.size(0) == 0: return 0, 0
 		emb = emb.to(self.device)
 		expanded = tensor.expand_as(emb)
 		cos_sim = F.cosine_similarity(expanded, emb)
 		dist = F.pairwise_distance(expanded, emb)
-		sim = torch.max(cos_sim - dist)
-		index = torch.argmax(cos_sim - dist, dim=-1).item()
+		dist += 1 # prevent zero division
+		sim = torch.max(torch.sigmoid(cos_sim / dist))
+		index = torch.argmax(cos_sim / dist, dim=-1).item()
 		del expanded, cos_sim, dist
 		return sim, index
 # def hierarchical_clustering(tensors: torch.Tensor):

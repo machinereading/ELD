@@ -76,7 +76,7 @@ class CandDict:
 		return cand_list
 
 	def __contains__(self, surface):
-		return len(self[surface]) == 0
+		return surface not in self._calc_dict
 
 	# def __iadd__(self, other):
 	# 	assert type(other) is CandDict

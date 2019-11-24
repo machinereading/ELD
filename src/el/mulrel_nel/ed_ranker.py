@@ -46,6 +46,7 @@ class EDRanker:
         # print('prerank model')
         self.prerank_model = ntee.NTEE(config)
         self.args = config['args']
+        self.device = config["device"]
 
         # print('main model')
         if self.args.mode in ['eval', 'test']:
@@ -64,8 +65,8 @@ class EDRanker:
             config['oracle'] = False
             self.model = ModelClass(config)
 
-        self.prerank_model.cuda()
-        self.model.cuda()
+        self.prerank_model.to(self.device)
+        self.model.to(self.device)
 
     def prerank(self, dataset, predict=False):
         new_dataset = []

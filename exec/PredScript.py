@@ -1,9 +1,10 @@
 import argparse
 
-from src.eld.PredOnly import SkipGramEntEmbedding, MSEEntEmbedding
+from src.ds import Corpus
+from src.eld.PredOnly import MSEEntEmbedding
 from src.eld.utils import ELDArgs, DataModule
 from src.utils.TimeUtil import time_analysis
-from src.ds import Corpus
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--mode", type=str, choices=["train", "pred", "test"], required=True)
 parser.add_argument("--model_name", type=str, required=True)
@@ -72,16 +73,17 @@ eld_args.test_mode = args.code_test
 
 if mode in ["train", "test"]:
 	data = DataModule(mode, eld_args)
-	train_data = Corpus.load_corpus("corpus/namu_eld_handtag_train2/", limit=500)
+	train_data = Corpus.load_corpus("corpus/namu_eld_handtag_train2/", limit=1500 if args.code_test else 0)
 	# dev_data = Corpus.load_corpus("corpus/ambiguous_input.json", limit=500)
-	dev_data = Corpus.load_corpus("corpus/namu_eld_handtag_dev2/", limit=500)
-	test_data = Corpus.load_corpus("corpus/namu_eld_handtag_test2/", limit=500)
+	dev_data = Corpus.load_corpus("corpus/namu_eld_handtag_dev2/", limit=1500 if args.code_test else 0)
+	test_data = Corpus.load_corpus("corpus/namu_eld_handtag_test2/", limit=1500 if args.code_test else 0)
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
 		eld_args.model_name = "%s_%d" % (model_name, i)
 		module = MSEEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
 		module.train(train_data=train_data, dev_data=dev_data, test_data=test_data)
 	import sys
+
 	sys.exit(0)
 module = MSEEntEmbedding(mode, model_name, args=eld_args, data=data)
 
@@ -92,13 +94,14 @@ if mode == "train":
 if mode == "pred":
 	try:
 		import json
+
 		with open(args.input_file, encoding="UTF8") as rf, open(args.output_file, "w", encoding="UTF8") as wf:
 			items = json.load(rf)
 			json.dump(module(*rf), wf, ensure_ascii=False, indent="\t")
 	except:
 		import traceback
-		traceback.print_exc()
 
+		traceback.print_exc()
 
 if mode == "test":
 	module.test()

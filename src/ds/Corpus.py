@@ -169,7 +169,7 @@ class Corpus:
 			for token in sent:
 				yield token
 
-	def entity_iter(self):
+	def _entity_iter(self):
 		for sent in self:
 			for ent in sent.entities:
 				yield ent
@@ -188,10 +188,14 @@ class Corpus:
 
 	@property
 	def eld_items(self) -> List[Vocabulary]:
-		return [x for x in self.entity_iter() if x.target]
+		return [x for x in self._entity_iter() if x.target]
+
+	@property
+	def entities(self):
+		return [x for x in self._entity_iter()]
 
 	@classmethod
 	def from_string(cls, *corpus):
 		from ..utils.datafunc import text_to_etri, etri_to_ne_dict
-		return cls.load_corpus(map(etri_to_ne_dict, map(text_to_etri, corpus)))
+		return cls.load_corpus(list(map(etri_to_ne_dict, map(text_to_etri, corpus))))
 

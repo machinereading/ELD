@@ -40,6 +40,8 @@ class Vocabulary:
 		self.candidiate_entity_index = torch.zeros(1, dtype=torch.float)
 		self.is_dark_entity = False
 		self.confidence_score = 0
+		self.type_pred = []
+		self.uri = ""
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None

@@ -42,4 +42,5 @@ def postprocess(entity: Vocabulary):
 	# print(entity.type)
 	entity.en_entity = uris[entity.entity] if entity.entity in uris else ""
 	entity.entity = entity.entity.replace(" ", "_")
+	entity.uri = "http://kbox.kaist.ac.kr/resource/%s" % entity.entity
 	return entity

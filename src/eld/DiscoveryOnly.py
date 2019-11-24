@@ -15,25 +15,24 @@ from .utils import ELDArgs, DataModule
 from .. import GlobalValues as gl
 
 class DiscoveryModel:
-	def __init__(self, mode: str, model_name: str, args: ELDArgs, data: DataModule = None):
+	def __init__(self, mode: str, model_name: str, args: ELDArgs=None, data: DataModule = None):
 		gl.logger.info("Initializing discovery model")
 		self.mode = mode
 		self.model_name = model_name
 		self.args = args
-		self.device = "cuda"
+		self.device = "cuda" if self.mode != "demo" else "cpu"
 
 		if self.mode == "train":
 			self.model: nn.Module = SeparateEntityEncoder(self.args)
 			self.save_model()
-		if self.mode == "pred":
+			self.model.to(self.device)
+			jsondump(self.args.to_json(), "models/eld/%s_args.json" % model_name)
+		else:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
-		if self.mode == "demo":
-			self.device = "cpu"
-		self.model.to(self.device)
 		self.args.device = self.device
 		if data is None:
-			self.data = DataModule(mode, args)
+			self.data = DataModule(mode, self.args)
 		else:
 			self.data = data
 		gl.logger.info("Finished discovery model initialization")
@@ -86,15 +85,19 @@ class DiscoveryModel:
 			test_score, test_threshold = self.pred(test_batch, eld_items=test_dataset.eld_items, dump_name="test")
 			p, r, f = test_score
 			gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
-			self.args.new_ent_threshold = test_threshold
-			jsondump(self.args, self.args.model_path + "_args.json")
+			self.args.out_kb_threshold = test_threshold
+			jsondump(self.args.to_json(), self.args.arg_path)
 
 	def load_model(self):
 		self.model: nn.Module = SeparateEntityEncoder(self.args)
-		self.model.load_state_dict(torch.load(self.args.model_path))
+		if self.mode != "demo":
+			self.model.load_state_dict(torch.load(self.args.model_path))
+		else:
+			self.model.load_state_dict(torch.load(self.args.model_path, map_location=lambda storage, location: storage))
 		self.model.to(self.device)
 
 	def save_model(self):
+		jsondump(self.args.to_json(), )
 		torch.save(self.model.state_dict(), self.args.model_path)
 
 	def prepare_input(self, batch):
@@ -126,7 +129,6 @@ class DiscoveryModel:
 		# for p, l in zip(preds, labels):
 		# 	print(p.item(), l.item())
 		if pred_mode: return preds
-		print()
 		ms = (0, 0, 0)
 
 		mi = 0
@@ -146,13 +148,12 @@ class DiscoveryModel:
 		return ms, mi
 
 	def __call__(self, data: Corpus, batch_size=512):
-		dataset = self.data.prepare("pred", [data])
+		dataset = self.data.prepare("pred", data)
 		dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 		kb_scores = []
 
 		with torch.no_grad():
-			for batch in dataloader:
-				kb_scores.append(self.pred(batch, pred_mode=True))
+			kb_scores.append(self.pred(dataloader, pred_mode=True))
 		for item, kb_score in zip(data.eld_items, kb_scores):
 			item.is_dark_entity = kb_score > self.args.new_ent_threshold
 		return data

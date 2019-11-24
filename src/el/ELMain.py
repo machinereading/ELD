@@ -12,6 +12,7 @@ from ..ds import Corpus, Sentence
 class EL:
 	def __init__(self, mode="test", model_name="no_okt_ent_emb", surface_ent_dict=None, entity_voca=None, entity_embedding=None):
 		gl.logger.info("Initializing EL Module")
+		self.device = "cuda" if mode != "demo" else "cpu"
 		with TimeUtil.TimeChecker("EL_init"):
 			if mode == "train":
 				self.args = ELArgs()
@@ -98,6 +99,9 @@ class EL:
 	def __call__(self, *sentences, output_type=None):
 		return self.predict(sentences, output_type=output_type)
 
+	def pred_corpus(self, data:Corpus):
+		return self.predict([x for x in data.sentences])
+
 	@property
 	def config(self):
 		return {
@@ -117,7 +121,8 @@ class EL:
 			'n_loops'            : self.args.n_loops,
 			'n_rels'             : self.args.n_rels,
 			'mulrel_type'        : self.args.mulrel_type,
-			'args'               : self.args
+			'args'               : self.args,
+			"device": self.device
 		}
 
 	def reload_ranker(self):

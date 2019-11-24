@@ -25,7 +25,7 @@ if args.input_file is not None:
 
 	corpus = Corpus.load_corpus(args.input_file)
 	el(*corpus)
-	for token in corpus.entity_iter():
+	for token in corpus._entity_iter():
 		token.entity = token.el_pred_entity
 	eld(corpus, no_in_kb_link=True)
 	if args.output_file is not None:

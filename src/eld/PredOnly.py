@@ -215,12 +215,12 @@ class SkipGramEntEmbedding:
 		return ms, mi
 
 class MSEEntEmbedding:
-	def __init__(self, mode: str, model_name: str, args: ELDArgs, data: DataModule = None):
+	def __init__(self, mode: str, model_name: str, args: ELDArgs=None, data: DataModule = None):
 		gl.logger.info("Initializing prediction model")
 		self.mode = mode
 		self.model_name = model_name
 		self.args = args
-		self.device = "cuda"
+		self.device = "cuda" if self.mode != "demo" else "cpu"
 		if data is None:
 			self.data = DataModule(mode, args)
 		else:
@@ -229,16 +229,13 @@ class MSEEntEmbedding:
 			self.encoder: nn.Module = SeparateEntityEncoder(self.args)
 			self.transformer: nn.Module = CNNVectorTransformer(self.encoder.max_input_dim, args.e_emb_dim, args.flags)
 			jsondump(args.to_json(), "models/eld/%s_args.json" % model_name)
-		if self.mode == "pred":
+		else:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
-		if self.mode == "demo":
-			self.device = "cpu"
 		self.encoder.to(self.device)
 		self.transformer.to(self.device)
 		self.args.device = self.device
 
-		self.train_method = args.pred_train_mode
 		gl.logger.info("Finished prediction model initialization")
 
 	def train(self, train_data: Corpus, dev_data: Corpus = None, test_data: Corpus = None):
@@ -260,7 +257,7 @@ class MSEEntEmbedding:
 
 		max_score = (0, 0, 0)
 		max_score_epoch = 0
-
+		max_threshold = 0
 		for epoch in tqdmloop:
 			self.encoder.train()
 			self.transformer.train()
@@ -270,6 +267,7 @@ class MSEEntEmbedding:
 			newent_flags = []
 			entity_idxs = []
 			preds = []
+			losssum = 0
 			for batch in train_batch:
 				optimizer.zero_grad()
 				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, _, _, _ = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
@@ -286,7 +284,8 @@ class MSEEntEmbedding:
 
 				loss.backward()
 				optimizer.step()
-				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, float(loss)))
+				losssum += float(loss)
+				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, losssum))
 			self.data.update_new_entity_embedding(train_dataset, torch.cat(newent_flags), torch.cat(entity_idxs), torch.cat(preds), epoch)
 			if dev_data is not None and epoch % self.args.eval_per_epoch == 0:
 				with torch.no_grad():
@@ -303,52 +302,74 @@ class MSEEntEmbedding:
 						transformed = self.transformer(encoded_mention)
 						preds.append(transformed)
 						labels.append(label)
-					preds = torch.cat(preds, dim=-1)
-					pred_idx_gold_discovery = self.data.predict_entity_with_embedding(dev_data.eld_items, preds, out_kb_flags)
+					preds = torch.cat(preds)
+					idx, sims = self.data.predict_entity_with_embedding(dev_data.eld_items, preds, out_kb_flags)
 
-					idx = [x[0] for x in pred_idx_gold_discovery]
-					sims = [x[1] for x in pred_idx_gold_discovery]
-					labels = torch.cat(labels, dim=-1)
-					_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, sims, idx, out_kb_flags, labels)
+					labels = torch.cat(labels)
+					evals = {}
+					for threshold_idx in range(1, 10):
+						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+						evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
+					p, r, f = 0, 0, 0
+					mt = 0
+					for k, v in evals.items():
+						kp, kr, kf = v[0]
+						if kf > f:
+							p, r, f = kp, kr, kf
+							mt = k * 0.1
 
-					p, r, f = total_score[0]
-					gl.logger.info("Epoch %d eval score: P %.2f R %.2f F %.2f" % (epoch, p * 100, r * 100, f * 100))
+					gl.logger.info("Epoch %d eval score: P %.2f R %.2f F %.2f @ threshold %.1f" % (epoch, p * 100, r * 100, f * 100, mt))
 					if f > max_score[-1]:
 						max_score = (p, r, f)
 						max_score_epoch = epoch
+						max_threshold = mt
+						self.args.new_ent_threshold = max_threshold
 						self.save_model()
 					p, r, f = max_score
-					gl.logger.info("Max eval score @ epoch %d: P %.2f R %.2f F %.2f" % (max_score_epoch, p * 100, r * 100, f * 100))
+					gl.logger.info("Max eval score @ epoch %d: P %.2f R %.2f F %.2f @ threshold %.1f" % (max_score_epoch, p * 100, r * 100, f * 100, max_threshold))
 					if not os.path.isdir("runs/eld/%s" % self.model_name):
 						os.mkdir("runs/eld/%s" % self.model_name)
-					jsondump(self.generate_result_dict(dev_data.eld_items, idx, (total_score, in_kb_score, out_kb_score), mapping_result), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
+					jsondump(self.generate_result_dict(dev_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
 
 		if test_data is not None:
 			self.load_model()
-			self.data.reset_new_entity()
-			self.data.initialize_corpus_tensor(test_data)
-			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
-			preds = []
-			labels = []
-			out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
-			for batch in test_batch:
-				args, kwargs = self.prepare_input(batch)
-				label = batch[-2]
-				_, encoded_mention = self.encoder(*args, **kwargs)
-				transformed = self.transformer(encoded_mention)
-				preds.append(transformed)
-				labels.append(label)
-			preds = torch.cat(preds, dim=-1)
-			pred_idx_gold_discovery = self.data.predict_entity_with_embedding(test_data.eld_items, preds, out_kb_flags)
+			with torch.no_grad():
+				self.encoder.eval()
+				self.transformer.eval()
+				self.data.reset_new_entity()
 
-			labels = torch.cat(labels, dim=-1)
-			idx = [x[0] for x in pred_idx_gold_discovery]
-			sims = [x[1] for x in pred_idx_gold_discovery]
-			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, sims, idx, out_kb_flags, labels)
-			p, r, f = total_score
-			gl.logger.info("Test score: P %.2f R %.2f F %.2f" % (p * 100, r * 100, f * 100))
-			jsondump(self.generate_result_dict(test_data.eld_items, idx, (total_score, in_kb_score, out_kb_score), mapping_result), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
+				self.data.initialize_corpus_tensor(test_data)
+				test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+				test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+				preds = []
+				labels = []
+				out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
+				for batch in test_batch:
+					args, kwargs = self.prepare_input(batch)
+					label = batch[-2]
+					_, encoded_mention = self.encoder(*args, **kwargs)
+					transformed = self.transformer(encoded_mention)
+					preds.append(transformed)
+					labels.append(label)
+				preds = torch.cat(preds)
+
+				idx, sims = self.data.predict_entity_with_embedding(test_data.eld_items, preds, out_kb_flags)
+
+				labels = torch.cat(labels)
+				evals = {}
+				for threshold_idx in range(1, 10):
+					_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+					evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
+				p, r, f = 0, 0, 0
+				mt = 0
+				for k, v in evals.items():
+					kp, kr, kf = v[0]
+					if kf > f:
+						p, r, f = kp, kr, kf
+						mt = k * 0.1
+				gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.1f" % (p * 100, r * 100, f * 100, mt))
+				jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
+				jsondump(self.args.to_json(), self.args.arg_path)
 
 	def prepare_input(self, batch):
 		if self.mode in ["train", "test"]:
@@ -366,10 +387,16 @@ class MSEEntEmbedding:
 	def load_model(self):
 		self.encoder: nn.Module = SeparateEntityEncoder(self.args)
 		self.transformer: nn.Module = CNNVectorTransformer(self.encoder.max_input_dim, self.args.e_emb_dim, self.args.flags)
-
-		load_dict = torch.load(self.args.model_path)
+		if self.mode == "demo":
+			load_dict = torch.load(self.args.model_path, map_location=lambda storage, location: storage)
+		else:
+			load_dict = torch.load(self.args.model_path)
 		self.encoder.load_state_dict(load_dict["encoder"])
 		self.transformer.load_state_dict(load_dict["transformer"])
+
+		self.encoder.to(self.device)
+		self.transformer.to(self.device)
+
 
 	def save_model(self):
 		save_dict = {
@@ -377,29 +404,65 @@ class MSEEntEmbedding:
 			"transformer": self.transformer.state_dict()
 		}
 		torch.save(save_dict, self.args.model_path)
+		jsondump(self.args.to_json(), self.args.arg_path)
 
-	def generate_result_dict(self, eld_items, preds, score, mapping_result):
+	def predict(self, data: Corpus): # For API
+		self.data.initialize_corpus_tensor(data, pred=True)
+		dataset = ELDDataset(self.mode, data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+		batchs = DataLoader(dataset=dataset, batch_size=512, shuffle=False, num_workers=4)
+		preds = []
+		labels = []
+		out_kb_flags = [x.is_dark_entity for x in data.entities]
+		for batch in batchs:
+			args, kwargs = self.prepare_input(batch)
+			label = batch[-2]
+			_, encoded_mention = self.encoder(*args, **kwargs)
+			transformed = self.transformer(encoded_mention)
+			preds.append(transformed)
+			labels.append(label)
+		preds = torch.cat(preds)
+
+		result, sims = self.data.predict_entity_with_embedding_immediate(data.entities, preds, out_kb_flags)
+		for e, r, s in zip(data.entities, result, sims):
+			e.entity = r
+			e.confidence_score = s
+		return data
+
+	def __call__(self, data: Corpus): return self.predict(data)
+	def generate_result_dict(self, eld_items, preds, sims, eval_result):
+
 		result = {
-			"total" : list(score[0]),
-			"in-kb" : list(score[1]),
-			"out_kb": list(score[2]),
-			"data"  : []
+			"score": {},
+			"data" : []
 		}
-		has_cluster = {}
+		for k in eval_result.keys():
+			v = eval_result[k]
+			pred = preds[k]
+			sim = sims[k]
+			result["score"][k] = {
+				"Total" : list(v[0]),
+				"In-KB" : list(v[1]),
+				"Out-KB": list(v[2]),
+				"ARI"   : v[3]
+			}
+			mapping_result = v[4]
+			for i, (e, p, s) in enumerate(zip(eld_items, pred, sim)):
+				if p >= self.data.original_entity_embedding.size(0):
+					preassigned = mapping_result[p] < 0
+					mapping = mapping_result[p] if not preassigned else mapping_result[p] * -1
 
-		for e, p in zip(eld_items, preds): # TODO
-			if p >= self.data.original_entity_embedding.size(0):
-				# assert mapping_result[p] > 0
-				if mapping_result[p] not in has_cluster:
-					has_cluster[mapping_result[p]] = []
-				has_cluster[mapping_result[p]].append(p)
-				p = self.data.i2oe[mapping_result[p] - len(self.data.e2i)]
-			else:
-				p = self.data.i2e[p]
-			result["data"].append({
-				"Surface": e.surface,
-				"Context": " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
-				"EntPred": p,
-				"Entity" : e.entity
-			})
+					p = self.data.i2oe[mapping - len(self.data.e2i)]
+					if preassigned:
+						p += "_preassigned"
+				else:
+					p = self.data.i2e[p]
+				if len(result["data"]) <= i:
+					result["data"].append({
+						"Surface": e.surface,
+						"Context": " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
+						"EntPred": {k: "%s:%.2f" % (p, s)},
+						"Entity" : e.entity
+					})
+				else:
+					result["data"][i]["EntPred"][k] = "%s:%.2f" % (p, s)
 		return result

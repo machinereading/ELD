@@ -105,5 +105,9 @@ class ELDArgs(AbstractArgument):
 		return "models/eld/" + self.model_name
 
 	@property
+	def arg_path(self):
+		return self.model_path + "_args.json"
+
+	@property
 	def flags(self):
 		return len([x for x in [self.use_character_embedding, self.use_word_embedding, self.use_word_context_embedding, self.use_entity_context_embedding, self.use_relation_embedding, self.use_type_embedding] if x])
