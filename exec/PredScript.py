@@ -27,6 +27,7 @@ parser.add_argument("--modify_entity_embedding", action="store_true")
 parser.add_argument("--input_file", type=str)
 parser.add_argument("--output_file", type=str)
 parser.add_argument("--train_iter", type=int, default=1)
+parser.add_argument("--cand_only", action="store_true")
 parser.add_argument("--code_test", action="store_true")
 args = parser.parse_args()
 mode = args.mode
@@ -70,6 +71,7 @@ eld_args.use_candidate_info = False
 eld_args.use_kb_relation_info = False
 eld_args.use_cache_kb = not args.no_use_cache_kb
 eld_args.test_mode = args.code_test
+eld_args.cand_only = args.cand_only
 
 if mode in ["train", "test"]:
 	data = DataModule(mode, eld_args)

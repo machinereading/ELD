@@ -154,8 +154,10 @@ class DiscoveryModel:
 
 		with torch.no_grad():
 			kb_scores.append(self.pred(dataloader, pred_mode=True))
+		kb_scores = torch.cat(kb_scores).view(-1)
 		for item, kb_score in zip(data.eld_items, kb_scores):
-			item.is_dark_entity = kb_score > self.args.new_ent_threshold
+			item.kb_score = kb_score.item()
+			item.is_dark_entity = kb_score.item() > self.args.new_ent_threshold
 		return data
 
 def generate_result_dict(corpus, score, preds, labels):

@@ -1,13 +1,13 @@
-from .utils.data import DataModule
-from .utils.args import ELArgs
-from .utils.postprocess import *
-from .mulrel_nel.vocabulary import Vocabulary
-from .mulrel_nel.ed_ranker import EDRanker
 from .mulrel_nel import dataset as D
+from .mulrel_nel.ed_ranker import EDRanker
+from .mulrel_nel.vocabulary import Vocabulary
+from .utils.args import ELArgs
+from .utils.data import DataModule
+from .utils.postprocess import *
 from .. import GlobalValues as gl
-from ..utils import TimeUtil
-from ..utils import *
 from ..ds import Corpus, Sentence
+from ..utils import *
+from ..utils import TimeUtil
 
 class EL:
 	def __init__(self, mode="test", model_name="no_okt_ent_emb", surface_ent_dict=None, entity_voca=None, entity_embedding=None):
@@ -60,11 +60,13 @@ class EL:
 		gl.logger.info("Start training")
 		self.ranker.train(train_data, [("dev", dev_data)],
 		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
+
 	def train_with_conll(self, tc, tt, dc, dt):
 		train_data = D.generate_dataset_from_str(tc, tt)
 		dev_data = D.generate_dataset_from_str(dc, dt)
 		self.ranker.train(train_data, [("dev", dev_data)],
 		                  config={'lr': self.args.learning_rate, 'n_epochs': self.args.n_epochs})
+
 	def predict(self, sentences, delete_candidate=True, output_type=None):
 		# type_list = [type(x) for x in sentences]
 		# assert all([x is str for x in type_list]) or all([x is dict for x in type_list]) or all(
@@ -99,7 +101,7 @@ class EL:
 	def __call__(self, *sentences, output_type=None):
 		return self.predict(sentences, output_type=output_type)
 
-	def pred_corpus(self, data:Corpus):
+	def pred_corpus(self, data: Corpus):
 		sentences = data.sentences
 		batches = split_to_batch(sentences, 200)
 		result = []
@@ -142,7 +144,7 @@ class EL:
 			'n_rels'             : self.args.n_rels,
 			'mulrel_type'        : self.args.mulrel_type,
 			'args'               : self.args,
-			"device": self.device
+			"device"             : self.device
 		}
 
 	def reload_ranker(self):

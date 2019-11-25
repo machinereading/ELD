@@ -24,7 +24,7 @@ def load(path, model_class, suffix=''):
 
     model = model_class(config)
     # model.load_state_dict(torch.load(path + '.state_dict' + suffix, map_location={'cuda:0':'cuda:1'}))
-    model.load_state_dict(torch.load(path + '.state_dict' + suffix))
+    model.load_state_dict(torch.load(path + '.state_dict' + suffix, map_location=lambda storage, loc: storage))
     return model
 
 

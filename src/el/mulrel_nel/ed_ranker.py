@@ -46,7 +46,8 @@ class EDRanker:
         # print('prerank model')
         self.prerank_model = ntee.NTEE(config)
         self.args = config['args']
-        self.device = config["device"]
+        self.device = "cpu"
+
 
         # print('main model')
         if self.args.mode in ['eval', 'test']:
@@ -87,14 +88,14 @@ class EDRanker:
                              for l, m, r in zip(lctx_ids, ment_ids, rctx_ids)]
 
                 entity_ids = [m['cands'] for m in content]
-                entity_ids = Variable(torch.LongTensor(entity_ids).cuda())
+                entity_ids = Variable(torch.LongTensor(entity_ids).to(self.device))
 
                 entity_mask = [m['mask'] for m in content]
-                entity_mask = Variable(torch.FloatTensor(entity_mask).cuda())
+                entity_mask = Variable(torch.FloatTensor(entity_mask).to(self.device))
 
                 token_ids, token_offsets = utils.flatten_list_of_lists(token_ids)
-                token_offsets = Variable(torch.LongTensor(token_offsets).cuda())
-                token_ids = Variable(torch.LongTensor(token_ids).cuda())
+                token_offsets = Variable(torch.LongTensor(token_offsets).to(self.device))
+                token_ids = Variable(torch.LongTensor(token_ids).to(self.device))
 
                 log_probs = self.prerank_model.forward(token_ids, token_offsets, entity_ids, use_sum=True)
                 log_probs = (log_probs * entity_mask).add_((entity_mask - 1).mul_(1e10))
@@ -317,10 +318,10 @@ class EDRanker:
                     s_rtoken_ids = [m['snd_ctx'][1] for m in batch]
                     s_mtoken_ids = [m['snd_ment'] for m in batch]
 
-                    entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).cuda())
-                    true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).cuda())
-                    p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).cuda())
-                    entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).cuda())
+                    entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).to(self.device))
+                    true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).to(self.device))
+                    p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).to(self.device))
+                    entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).to(self.device))
 
                     token_ids, token_mask = utils.make_equal_len(token_ids, self.model.word_voca.unk_id)
                     s_ltoken_ids, s_ltoken_mask = utils.make_equal_len(s_ltoken_ids, self.model.snd_word_voca.unk_id,
@@ -330,15 +331,15 @@ class EDRanker:
                     s_rtoken_mask = [l[::-1] for l in s_rtoken_mask]
                     s_mtoken_ids, s_mtoken_mask = utils.make_equal_len(s_mtoken_ids, self.model.snd_word_voca.unk_id)
 
-                    token_ids = Variable(torch.LongTensor(token_ids).cuda())
-                    token_mask = Variable(torch.FloatTensor(token_mask).cuda())
+                    token_ids = Variable(torch.LongTensor(token_ids).to(self.device))
+                    token_mask = Variable(torch.FloatTensor(token_mask).to(self.device))
                     # too ugly but too lazy to fix it
-                    self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).cuda())
-                    self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).cuda())
-                    self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).cuda())
-                    self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).cuda())
-                    self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).cuda())
-                    self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).cuda())
+                    self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).to(self.device))
+                    self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).to(self.device))
+                    self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).to(self.device))
+                    self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).to(self.device))
+                    self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).to(self.device))
+                    self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).to(self.device))
 
                     scores = self.model.forward(token_ids, token_mask, entity_ids, entity_mask, p_e_m,
                                                 gold=true_pos.view(-1, 1))
@@ -417,10 +418,10 @@ class EDRanker:
             rctx_ids = s_rtoken_ids
             m_ids = s_mtoken_ids
 
-            entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).cuda())
-            p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).cuda())
-            entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).cuda())
-            true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).cuda())
+            entity_ids = Variable(torch.LongTensor([m['selected_cands']['cands'] for m in batch]).to(self.device))
+            p_e_m = Variable(torch.FloatTensor([m['selected_cands']['p_e_m'] for m in batch]).to(self.device))
+            entity_mask = Variable(torch.FloatTensor([m['selected_cands']['mask'] for m in batch]).to(self.device))
+            true_pos = Variable(torch.LongTensor([m['selected_cands']['true_pos'] for m in batch]).to(self.device))
 
             token_ids, token_mask = utils.make_equal_len(token_ids, self.model.word_voca.unk_id)
             s_ltoken_ids, s_ltoken_mask = utils.make_equal_len(s_ltoken_ids, self.model.snd_word_voca.unk_id,
@@ -430,15 +431,15 @@ class EDRanker:
             s_rtoken_mask = [l[::-1] for l in s_rtoken_mask]
             s_mtoken_ids, s_mtoken_mask = utils.make_equal_len(s_mtoken_ids, self.model.snd_word_voca.unk_id)
 
-            token_ids = Variable(torch.LongTensor(token_ids).cuda())
-            token_mask = Variable(torch.FloatTensor(token_mask).cuda())
+            token_ids = Variable(torch.LongTensor(token_ids).to(self.device))
+            token_mask = Variable(torch.FloatTensor(token_mask).to(self.device))
             # too ugly, but too lazy to fix it
-            self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).cuda())
-            self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).cuda())
-            self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).cuda())
-            self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).cuda())
-            self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).cuda())
-            self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).cuda())
+            self.model.s_ltoken_ids = Variable(torch.LongTensor(s_ltoken_ids).to(self.device))
+            self.model.s_ltoken_mask = Variable(torch.FloatTensor(s_ltoken_mask).to(self.device))
+            self.model.s_rtoken_ids = Variable(torch.LongTensor(s_rtoken_ids).to(self.device))
+            self.model.s_rtoken_mask = Variable(torch.FloatTensor(s_rtoken_mask).to(self.device))
+            self.model.s_mtoken_ids = Variable(torch.LongTensor(s_mtoken_ids).to(self.device))
+            self.model.s_mtoken_mask = Variable(torch.FloatTensor(s_mtoken_mask).to(self.device))
 
             scores = self.model.forward(token_ids, token_mask, entity_ids, entity_mask, p_e_m,
                                         gold=true_pos.view(-1, 1))

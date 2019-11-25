@@ -330,6 +330,8 @@ class MSEEntEmbedding:
 					if not os.path.isdir("runs/eld/%s" % self.model_name):
 						os.mkdir("runs/eld/%s" % self.model_name)
 					jsondump(self.generate_result_dict(dev_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_%d.json" % (self.model_name, self.model_name, epoch))
+					if self.args.early_stop <= epoch - max_score_epoch:
+						break
 
 		if test_data is not None:
 			self.load_model()
@@ -424,7 +426,8 @@ class MSEEntEmbedding:
 
 		result, sims = self.data.predict_entity_with_embedding_immediate(data.entities, preds, out_kb_flags)
 		for e, r, s in zip(data.entities, result, sims):
-			e.entity = r
+			if e.entity == "NOT_IN_CANDIDATE":
+				e.entity = r
 			e.confidence_score = s
 		return data
 

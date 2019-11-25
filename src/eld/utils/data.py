@@ -35,6 +35,7 @@ class DataModule:
 		self.use_cache_kb = args.use_cache_kb
 		self.use_heuristic = args.use_heuristic
 		self.type_predict = args.type_prediction
+		self.cand_only = args.cand_only
 
 		# load corpus and se
 		if self.type_predict:
@@ -400,7 +401,7 @@ class DataModule:
 		idx_result = {i: [] for i in range(1, 10)}
 		sim_result = {i: [] for i in range(1, 10)}
 		for idx in range(1, 10):
-			threshold = idx * 0.1
+			threshold = 0.5 + idx * 0.02
 			if self.use_cache_kb:
 				if out_kb_flags is None:
 					out_kb_flags = torch.zeros(embedding.size(0), dtype=torch.uint8)
@@ -498,14 +499,13 @@ class DataModule:
 									candidates.append(i)
 									target_emb.append(self.pred_entity_embedding[i])
 									break
-					if len(candidates) == 0:
+					if not self.cand_only and len(candidates) == 0:
 						target_emb = self.pred_entity_embedding
 						candidates = [x for x in range(len(self.pred_entity_surface_dict))]
 					else:
 						target_emb = torch.cat(target_emb)
 				if len(candidates) > 0:
-					if target_emb.dim() == 1:
-						target_emb = target_emb.unsqueeze(0)
+					target_emb = target_emb.view(-1, self.ee_dim)
 					sim, pred_idx = self.get_pred(emb, target_emb)
 					pred_idx = candidates[pred_idx] if not empty_candidate else 0
 				else:
@@ -517,7 +517,7 @@ class DataModule:
 						ent_name = "_"+ent.surface.replace(" ", "_")
 						self.pred_i2e[len(self.pred_i2e)] = ent_name
 						result.append(ent_name)
-						assert self.pred_entity_embedding.size(0) == len(self.cache_entity_surface_dict)
+						assert self.pred_entity_embedding.size(0) == len(self.pred_entity_surface_dict)
 
 					else: # link cache kb
 						self.pred_entity_surface_dict[pred_idx].add(ent.surface)
@@ -540,7 +540,7 @@ class DataModule:
 					self.e2i["_"+str(idx)] = idx
 				elif self.modify_entity_embedding:
 					self.entity_embedding[idx] *= 1 - self.modify_entity_embedding_weight
-					self.entity_embedding[idx] += emb * self.modify_entity_embedding_weight
+					self.entity_embedding[idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
 				result.append(idx)
 				sim_result.append(sim)
 		return result, sim_result
@@ -551,11 +551,11 @@ class DataModule:
 		emb = emb.to(self.device)
 		expanded = tensor.expand_as(emb)
 		cos_sim = F.cosine_similarity(expanded, emb)
-		dist = F.pairwise_distance(expanded, emb)
-		dist += 1 # prevent zero division
-		sim = torch.max(torch.sigmoid(cos_sim / dist))
-		index = torch.argmax(cos_sim / dist, dim=-1).item()
-		del expanded, cos_sim, dist
+		# dist = F.pairwise_distance(expanded, emb)
+		# dist += 1 # prevent zero division
+		sim = torch.max(torch.sigmoid(cos_sim))
+		index = torch.argmax(cos_sim, dim=-1).item()
+		del expanded, cos_sim
 		return sim, index
 # def hierarchical_clustering(tensors: torch.Tensor):
 # 	iteration = 0

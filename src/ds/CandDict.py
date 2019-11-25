@@ -41,14 +41,14 @@ class CandDict:
 						self._calc_dict[ent][ent] = 1
 				except:
 					self._dict[ent] = {ent: 1}
-				ent_key = ent.replace(" ", "_").split("_(")[0]
-				try:
-					s = sum(self._dict[ent_key])
-					if ent in self._dict[ent_key]: pass
-					else:
-						self._calc_dict[ent_key][ent] = 1
-				except:
-					self._dict[ent_key] = {ent: 1}
+				# ent_key = ent.replace(" ", "_").split("_(")[0]
+				# try:
+				# 	s = sum(self._dict[ent_key])
+				# 	if ent in self._dict[ent_key]: pass
+				# 	else:
+				# 		self._calc_dict[ent_key][ent] = 1
+				# except:
+				# 	self._dict[ent_key] = {ent: 1}
 			for m, e in self._dict.items():
 				# e = {k: v for k, v in e.items() if k in self._kb} # filter only in-kb items
 				x = list(e.values())

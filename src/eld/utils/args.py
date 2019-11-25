@@ -46,6 +46,7 @@ class ELDArgs(AbstractArgument):
 		self.vector_transformer = "cnn"
 
 		self.pred_train_mode = "mse"
+		self.cand_only = False
 
 		# data path config
 		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"

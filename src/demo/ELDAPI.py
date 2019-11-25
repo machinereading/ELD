@@ -2,6 +2,7 @@ import json
 from flask import Flask, request
 import jpype
 
+from src.demo import postprocess
 from src.el import EL
 from src.eld.DiscoveryOnly import DiscoveryModel
 from src.eld.PredOnly import MSEEntEmbedding
@@ -11,19 +12,30 @@ from src.eld.utils import DataModule, ELDArgs
 
 jpype.startJVM(jpype.getDefaultJVMPath())
 app = Flask(__name__)
+# args = ELDArgs()
+# args.device = "cpu"
+# datamodule = DataModule("demo", args)
+# datamodule.register_threshold = 0.5
+# discovery = DiscoveryModel("demo", "discovery_degree_surface_4", data=datamodule)
+# discovery.args.new_ent_threshold = 0.485 # 일단 하드코딩
+# el = EL(mode="demo")
+# pred = MSEEntEmbedding("demo", "predtest", data=datamodule)
+# typepred = TypeGiver(kbt = "data/eld/typerefer/entity_types.json", t = "data/eld/typerefer/dbpedia_types", use_dr=False, use_ne=True, use_hierarchy=True)
 args = ELDArgs()
 args.device = "cpu"
 datamodule = DataModule("demo", args)
+datamodule.register_threshold = 0.5
 discovery = DiscoveryModel("demo", "discovery_degree_surface_4", data=datamodule)
+discovery.args.new_ent_threshold = 0.485 # 일단 하드코딩
 el = EL(mode="demo")
-ent_emb = MSEEntEmbedding("demo", "predtest", data=datamodule)
+pred = MSEEntEmbedding("demo", "predtest", data=datamodule)
 typepred = TypeGiver(kbt = "data/eld/typerefer/entity_types.json", t = "data/eld/typerefer/dbpedia_types", use_dr=False, use_ne=True, use_hierarchy=True)
 print("Module loaded")
 @app.route("/eld/", methods=["POST"])
 def eld():
 	jpype.attachThreadToJVM()
 	text = request.json
-	return run(text)
+	return run(text["content"])
 
 def generate_output(c: Corpus):
 	sentence = c.sentences[0]
@@ -39,12 +51,14 @@ def generate_output(c: Corpus):
 			"start_offset": entity.char_idx,
 			"end_offset": entity.char_idx + len(entity.surface),
 			"ne_type": entity.ne_type,
-			"type": entity.type_pred,
-			"score": 0,
-			"confidence": entity.confidence_score,
-			"uri": entity.uri
+			"type": list(entity.type_pred),
+			"score": entity.kb_score,
+			"confidence": float(entity.confidence_score),
+			"uri": entity.uri,
+			"en_entity": entity.en_entity
 		}
-		if entity.is_dark_entity:
+		if entity.entity == "NOT_IN_CANDIDATE": continue
+		if not entity.is_dark_entity:
 			result["entities"].append(ent)
 		else:
 			result["dark_entity"].append(ent)
@@ -52,8 +66,12 @@ def generate_output(c: Corpus):
 
 def run(text):
 	corpus = Corpus.from_string(text)
-	discovery_result = discovery(corpus)
-
+	corpus = el.pred_corpus(corpus)
+	corpus = discovery(corpus)
+	corpus = pred(corpus)
+	corpus = typepred.pred(corpus)
+	for item in corpus.entities:
+		postprocess.postprocess(item)
 	return json.dumps(generate_output(corpus), ensure_ascii=False)
 
 if __name__ == '__main__':

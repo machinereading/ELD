@@ -104,7 +104,6 @@ def getETRI(text):
 		import traceback
 		traceback.print_exc()
 		gl.logger.critical("ETRI connection lost")
-		gl.logger.debug(text[:30])
 		return None
 	finally:
 		clientSocket.close()

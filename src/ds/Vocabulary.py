@@ -39,9 +39,11 @@ class Vocabulary:
 		self.eld_pred_entity = None
 		self.candidiate_entity_index = torch.zeros(1, dtype=torch.float)
 		self.is_dark_entity = False
+		self.kb_score = 0
 		self.confidence_score = 0
 		self.type_pred = []
 		self.uri = ""
+		self.en_entity = None
 
 		# some properties that will be initialized later
 		self.lctxw_ind = None

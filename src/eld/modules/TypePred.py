@@ -1,3 +1,4 @@
+from src.ds import Corpus
 from ...ds import Vocabulary
 from ...utils import readfile, jsonload
 
@@ -116,3 +117,21 @@ class TypeGiver:
 	def get_gold(self, *tokens: Vocabulary):
 		return [self.kb_types[token.entity] if token.entity in self.kb_types else [] for token in tokens]
 
+	def pred(self, data: Corpus):
+		for token in data.entities:
+			types = set([])
+			if self.use_ne:
+				if token.ne_type in self.ne_tag_mapping:
+					types |= set(map(lambda x: "http://dbpedia.org/ontology/" + x, self.ne_tag_mapping[token.ne_type]["mapped_dbo"]))
+					types.add("http://dbpedia.org/ontology/" + self.ne_tag_mapping[token.ne_type]["type"])
+			if self.use_hierarchy:
+				add_items = set([])
+				for t in types:
+					if t.startswith(self.relation_prefix):
+						t = t[len(self.relation_prefix):]
+						if t in self.hierarchical_types:
+							for l in self.hierarchical_types[t]["full_label"].split("."):
+								add_items.add(self.relation_prefix + l)
+				types |= add_items
+			token.type_pred = list(types)
+		return data

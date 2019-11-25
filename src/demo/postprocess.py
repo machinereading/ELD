@@ -38,9 +38,9 @@ print(len(types), len(uris))
 
 def postprocess(entity: Vocabulary):
 	# print(entity.entity, entity.entity in types)
-	entity.type = types[entity.entity] if entity.entity in types else []
+	entity.type_pred = list(types[entity.entity]) if entity.entity in types else entity.type_pred
 	# print(entity.type)
-	entity.en_entity = uris[entity.entity] if entity.entity in uris else ""
+	entity.en_entity = uris[entity.entity] if entity.entity in uris else None
 	entity.entity = entity.entity.replace(" ", "_")
 	entity.uri = "http://kbox.kaist.ac.kr/resource/%s" % entity.entity
 	return entity
