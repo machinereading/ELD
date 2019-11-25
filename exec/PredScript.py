@@ -73,21 +73,23 @@ eld_args.use_cache_kb = not args.no_use_cache_kb
 eld_args.test_mode = args.code_test
 eld_args.cand_only = args.cand_only
 
-if mode in ["train", "test"]:
-	data = DataModule(mode, eld_args)
+if mode == "train":
+
 	train_data = Corpus.load_corpus("corpus/namu_eld_handtag_train2/", limit=1500 if args.code_test else 0)
 	# dev_data = Corpus.load_corpus("corpus/ambiguous_input.json", limit=500)
 	dev_data = Corpus.load_corpus("corpus/namu_eld_handtag_dev2/", limit=1500 if args.code_test else 0)
-	test_data = Corpus.load_corpus("corpus/namu_eld_handtag_test2/", limit=1500 if args.code_test else 0)
+	test_data = Corpus.load_corpus("corpus/nokim.json", limit=1500 if args.code_test else 0)
+elif mode == "test":
+	test_data = Corpus.load_corpus("corpus/nokim.json", limit=1500 if args.code_test else 0)
 if mode == "train" and args.train_iter > 1:
 	for i in range(args.train_iter):
 		eld_args.model_name = "%s_%d" % (model_name, i)
-		module = MSEEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args, data=data)
+		module = MSEEntEmbedding(mode, "%s_%d" % (model_name, i), args=eld_args)
 		module.train(train_data=train_data, dev_data=dev_data, test_data=test_data)
 	import sys
 
 	sys.exit(0)
-module = MSEEntEmbedding(mode, model_name, args=eld_args, data=data)
+module = MSEEntEmbedding(mode, model_name, args=eld_args)
 
 if mode == "train":
 	# module.train(train_data=Corpus.load_corpus("/home/minho/wiki/1911_full/", limit=500), dev_data=Corpus.load_corpus("corpus/namu_eld_handtag_only_dev2/", limit=500))
@@ -106,4 +108,4 @@ if mode == "pred":
 		traceback.print_exc()
 
 if mode == "test":
-	module.test()
+	module.test(test_data)

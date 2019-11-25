@@ -8,7 +8,7 @@ from sklearn.metrics import precision_recall_fscore_support
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.ds import Corpus
+from src.ds import Corpus, CandDict
 from .modules import CNNVectorTransformer, SeparateEntityEncoder
 from .utils import ELDArgs, DataModule, Evaluator
 from .utils.Dataset import ELDDataset, SkipgramDataset
@@ -106,7 +106,7 @@ class SkipGramEntEmbedding:
 					preds.append(transformed)
 					labels.append(label)
 				preds = torch.cat(preds, dim=-1)
-				pred_idx_gold_discovery = self.data.predict_entity_with_embedding(dev_data.eld_items, preds, out_kb_flags)
+				pred_idx_gold_discovery = self.data.predict_entity_with_embedding_train(dev_data.eld_items, preds, out_kb_flags)
 
 				labels = torch.cat(labels, dim=-1)
 				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, None, pred_idx_gold_discovery, out_kb_flags, labels)
@@ -221,10 +221,7 @@ class MSEEntEmbedding:
 		self.model_name = model_name
 		self.args = args
 		self.device = "cuda" if self.mode != "demo" else "cpu"
-		if data is None:
-			self.data = DataModule(mode, args)
-		else:
-			self.data = data
+
 		if self.mode == "train":
 			self.encoder: nn.Module = SeparateEntityEncoder(self.args)
 			self.transformer: nn.Module = CNNVectorTransformer(self.encoder.max_input_dim, args.e_emb_dim, args.flags)
@@ -232,15 +229,20 @@ class MSEEntEmbedding:
 		else:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
+		if data is None:
+			self.data = DataModule(mode, self.args)
+		else:
+			self.data = data
 		self.encoder.to(self.device)
 		self.transformer.to(self.device)
 		self.args.device = self.device
+		self.evaluator = Evaluator(self.args, self.data)
 
 		gl.logger.info("Finished prediction model initialization")
 
 	def train(self, train_data: Corpus, dev_data: Corpus = None, test_data: Corpus = None):
 		gl.logger.info("Training prediction model")
-		evaluator = Evaluator(self.args, self.data)
+
 		batch_size = 512
 		optimizer = torch.optim.Adam(list(self.encoder.parameters()) + list(self.transformer.parameters()), lr=1e-4, weight_decay=1e-4)
 		tqdmloop = tqdm(range(1, self.args.epochs + 1))
@@ -303,12 +305,12 @@ class MSEEntEmbedding:
 						preds.append(transformed)
 						labels.append(label)
 					preds = torch.cat(preds)
-					idx, sims = self.data.predict_entity_with_embedding(dev_data.eld_items, preds, out_kb_flags)
+					idx, sims = self.data.predict_entity_with_embedding_train(dev_data.eld_items, preds, out_kb_flags)
 
 					labels = torch.cat(labels)
 					evals = {}
 					for threshold_idx in range(1, 10):
-						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
 						evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 					p, r, f = 0, 0, 0
 					mt = 0
@@ -316,7 +318,7 @@ class MSEEntEmbedding:
 						kp, kr, kf = v[0]
 						if kf > f:
 							p, r, f = kp, kr, kf
-							mt = k * 0.1
+							mt = 0.5 + k * 0.02
 
 					gl.logger.info("Epoch %d eval score: P %.2f R %.2f F %.2f @ threshold %.1f" % (epoch, p * 100, r * 100, f * 100, mt))
 					if f > max_score[-1]:
@@ -334,44 +336,48 @@ class MSEEntEmbedding:
 						break
 
 		if test_data is not None:
-			self.load_model()
-			with torch.no_grad():
-				self.encoder.eval()
-				self.transformer.eval()
-				self.data.reset_new_entity()
+			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-				self.data.initialize_corpus_tensor(test_data)
-				test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-				test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
-				preds = []
-				labels = []
-				out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
-				for batch in test_batch:
-					args, kwargs = self.prepare_input(batch)
-					label = batch[-2]
-					_, encoded_mention = self.encoder(*args, **kwargs)
-					transformed = self.transformer(encoded_mention)
-					preds.append(transformed)
-					labels.append(label)
-				preds = torch.cat(preds)
+	def test(self, test_data: Corpus):
+		self.load_model()
+		with torch.no_grad():
+			self.encoder.eval()
+			self.transformer.eval()
+			self.data.reset_new_entity()
 
-				idx, sims = self.data.predict_entity_with_embedding(test_data.eld_items, preds, out_kb_flags)
+			self.data.initialize_corpus_tensor(test_data)
+			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+			preds = []
+			labels = []
+			out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
+			for batch in test_batch:
+				args, kwargs = self.prepare_input(batch)
+				label = batch[-2]
+				_, encoded_mention = self.encoder(*args, **kwargs)
+				transformed = self.transformer(encoded_mention)
+				preds.append(transformed)
+				labels.append(label)
+			preds = torch.cat(preds)
 
-				labels = torch.cat(labels)
-				evals = {}
-				for threshold_idx in range(1, 10):
-					_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
-					evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
-				p, r, f = 0, 0, 0
-				mt = 0
-				for k, v in evals.items():
-					kp, kr, kf = v[0]
-					if kf > f:
-						p, r, f = kp, kr, kf
-						mt = k * 0.1
-				gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.1f" % (p * 100, r * 100, f * 100, mt))
-				jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
-				jsondump(self.args.to_json(), self.args.arg_path)
+			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_flags)
+
+			labels = torch.cat(labels)
+			evals = {}
+			for threshold_idx in range(1, 10):
+				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+				evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
+			p, r, f = 0, 0, 0
+			mt = 0
+			for k, v in evals.items():
+				kp, kr, kf = v[0]
+				if kf > f:
+					p, r, f = kp, kr, kf
+					mt = 0.5 + k * 0.02
+			gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (p * 100, r * 100, f * 100, mt))
+			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
+			return self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name)
+			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def prepare_input(self, batch):
 		if self.mode in ["train", "test"]:
@@ -431,9 +437,10 @@ class MSEEntEmbedding:
 			e.confidence_score = s
 		return data
 
-	def __call__(self, data: Corpus): return self.predict(data)
-	def generate_result_dict(self, eld_items, preds, sims, eval_result):
+	def __call__(self, data: Corpus):
+		return self.predict(data)
 
+	def generate_result_dict(self, eld_items, preds, sims, eval_result):
 		result = {
 			"score": {},
 			"data" : []
@@ -469,3 +476,36 @@ class MSEEntEmbedding:
 				else:
 					result["data"][i]["EntPred"][k] = "%s:%.2f" % (p, s)
 		return result
+
+class DictBasedPred:
+	"""
+	개체 연결 -> 실패 -> 등록 -> 재연결 시도
+	"""
+
+	def __init__(self, data: DataModule):
+		self.data = data
+		self.evaluator = Evaluator(ELDArgs(), data)
+		self.canddict = data.surface_ent_dict
+		self.model_name = "dictbased"
+
+	def test(self, data: Corpus):
+		self.data.initialize_corpus_tensor(data, pred=True)
+		dataset = ELDDataset("test", data, ELDArgs(), cand_dict=self.data.surface_ent_dict)
+		batchs = DataLoader(dataset=dataset, batch_size=512, shuffle=False, num_workers=4)
+		preds = []
+		labels = []
+		newents = []
+		out_kb_flags = [x.is_new_entity for x in data.eld_items]
+		for entity in data.eld_items:
+			cands = self.canddict[entity.surface]
+			if len(cands) == 0:
+				ent = len(self.data.e2i) + len(newents)
+				newents.append(entity.entity)
+				preds.append(ent)
+				self.canddict.add_instance(entity.surface, ent)
+			else:
+				preds.append(self.data.e2i[cands[0][0]] if cands[0][0] in self.data.e2i else 0)
+			labels.append(entity.entity_label_idx)
+
+		_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(data.eld_items, out_kb_flags, preds, out_kb_flags, labels)
+		print(total_score)

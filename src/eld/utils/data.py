@@ -96,13 +96,14 @@ class DataModule:
 		in_kb_linker_dict = {"mulrel": MulRel, "pem": PEM, "dist": Dist}
 		self.in_kb_linker: InKBLinker = in_kb_linker_dict[args.in_kb_linker](args, self.surface_ent_dict)
 
-		if mode in ["train", "test"]:
+
+		self.oe2i = {}
+		self.oe2i["NOT_IN_CANDIDATE"] = 0
+		self.i2oe = {v: k for k, v in self.oe2i.items()}
+		self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
+		self.err_entity = set([])
 			# self.corpus = Corpus.load_corpus(args.corpus_dir, limit=1000 if args.test_mode else 0, min_token=10)
-			self.oe2i = {w: i + 1 for i, w in enumerate(readfile(args.out_kb_entity_file))}
-			self.oe2i["NOT_IN_CANDIDATE"] = 0
-			self.i2oe = {v: k for k, v in self.oe2i.items()}
-			self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
-			self.err_entity = set([])
+
 			# self.initialize_corpus_tensor(self.corpus)
 			# gl.logger.info("Corpus initialized")
 			# self.train_dataset = ELDDataset(mode, self.corpus, args, cand_dict=self.surface_ent_dict, filter_list=[x for x in readfile(args.train_filter)], limit=args.train_corpus_limit)
@@ -124,7 +125,11 @@ class DataModule:
 	def initialize_corpus_tensor(self, corpus: Corpus, pred=False, train=True):
 
 		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
+			if token.is_entity and token.entity.startswith("namu_") and token.entity not in self.oe2i:
+				self.oe2i[token.entity] = len(self.oe2i)
 			self.initialize_token_tensor(token, pred, train)
+		self.i2oe = {v: k for k, v in self.oe2i.items()}
+		self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
 
 	def initialize_token_tensor(self, token: Vocabulary, pred=False, train=True):
 		if token.is_entity:
@@ -397,7 +402,7 @@ class DataModule:
 		# self.initialize_corpus_tensor(corpus, pred=True)
 		# return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
-	def predict_entity_with_embedding(self, eld_items, embedding, out_kb_flags=None):
+	def predict_entity_with_embedding_train(self, eld_items, embedding, out_kb_flags=None):
 		idx_result = {i: [] for i in range(1, 10)}
 		sim_result = {i: [] for i in range(1, 10)}
 		for idx in range(1, 10):
@@ -448,25 +453,26 @@ class DataModule:
 							self.cache_entity_surface_dict[idx][pred_idx].add(ent.surface)
 							if self.modify_entity_embedding:
 								self.cache_entity_embedding[idx][pred_idx] *= 1 - self.modify_entity_embedding_weight
-								self.cache_entity_embedding[idx][pred_idx] += emb * self.modify_entity_embedding_weight
+								self.cache_entity_embedding[idx][pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
 							pred_idx += len(self.e2i)
 					idx_result[idx].append(pred_idx)
 					sim_result[idx].append(sim)
 			else: # TODO
+				self.reset_new_entity()
 				for ent, emb in zip(eld_items, embedding):
 					candidates = [self.e2i[x] if x in self.e2i else 0 for x in self.surface_ent_dict[ent.surface]]
 					target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
-					sim, idx = self.get_pred(emb, target_emb)
-					if sim < self.new_ent_threshold: # register
-						idx = self.entity_embedding.size(0)
+					sim, pred_idx = self.get_pred(emb, target_emb)
+					if sim < threshold: # register
+						pred_idx = self.entity_embedding.size(0)
 						self.entity_embedding = torch.cat([self.entity_embedding, emb.cpu().clone().detach().unsqueeze(0)])
-						self.surface_ent_dict.add_instance(ent.surface, "_"+str(idx)) # temporary id
-						self.e2i["_"+str(idx)] = idx
+						self.surface_ent_dict.add_instance(ent.surface, "_"+str(pred_idx)) # temporary id
+						self.e2i["_"+str(pred_idx)] = pred_idx
 					elif self.modify_entity_embedding:
-						self.entity_embedding[idx] *= 1 - self.modify_entity_embedding_weight
-						self.entity_embedding[idx] += emb * self.modify_entity_embedding_weight
-					idx_result.append(idx)
-					sim_result.append(sim)
+						self.entity_embedding[pred_idx] *= 1 - self.modify_entity_embedding_weight
+						self.entity_embedding[pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
+					idx_result[idx].append(pred_idx)
+					sim_result[idx].append(sim)
 		return idx_result, sim_result
 
 	def predict_entity_with_embedding_immediate(self, eld_items, embedding, out_kb_flags=None, threshold=None): # for pred
@@ -523,7 +529,7 @@ class DataModule:
 						self.pred_entity_surface_dict[pred_idx].add(ent.surface)
 						if self.modify_entity_embedding:
 							self.pred_entity_embedding[pred_idx] *= 1 - self.modify_entity_embedding_weight
-							self.pred_entity_embedding[pred_idx] += emb * self.modify_entity_embedding_weight
+							self.pred_entity_embedding[pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
 						result.append(self.pred_i2e[pred_idx])
 				else:
 					result.append(self.i2e[pred_idx])
