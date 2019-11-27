@@ -37,6 +37,8 @@ class DataModule:
 		self.type_predict = args.type_prediction
 		self.cand_only = args.cand_only
 
+		self.calc_threshold = lambda x: 0.5 + x * 0.025
+
 		# load corpus and se
 		if self.type_predict:
 			self.typegiver = TypeGiver(args)
@@ -407,7 +409,7 @@ class DataModule:
 		idx_result = {i: [] for i in range(1, 10)}
 		sim_result = {i: [] for i in range(1, 10)}
 		for idx in range(1, 10):
-			threshold = 0.5 + idx * 0.02
+			threshold = self.calc_threshold(idx)
 			if self.use_cache_kb:
 				if out_kb_flags is None:
 					out_kb_flags = torch.zeros(embedding.size(0), dtype=torch.uint8)
@@ -432,8 +434,11 @@ class DataModule:
 										target_emb.append(self.cache_entity_embedding[idx][i])
 										break
 						if len(candidates) == 0:
-							target_emb = self.cache_entity_embedding[idx]
-							candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+							if not self.cand_only:
+								target_emb = self.cache_entity_embedding[idx]
+								candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+							else:
+								target_emb = []
 						else:
 							target_emb = torch.cat(target_emb)
 					if len(candidates) > 0:

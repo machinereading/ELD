@@ -3,7 +3,7 @@ from src.eld.utils import ELDArgs, Evaluator, DataModule
 from src.ds import Corpus
 # a = ELDNoDiscovery("pred", ELDArgs())
 from src.utils import jsondump, writefile
-# a = ELDNoDiscovery("pred", ELDArgs())
+a = ELDNoDiscovery("pred", ELDArgs())
 dictargs = ELDArgs()
 dictargs.in_kb_linker = "pem"
 dictargs.use_cache_kb = False
@@ -13,12 +13,13 @@ b = DictBasedELD("pred", dictargs)
 # d = VectorBasedELD("pred", "full_with_surface")
 # e = VectorBasedELD("pred", "full_with_degree")
 data = DataModule("test", dictargs)
+test_data = Corpus.load_corpus("corpus/namu_eld_handtag_test2/")
 # for mod in [a,b,c,d,e]:
-for mod in [b]:
+for mod in [a, b]:
 	mod.data = data
 	mod.evaluator = Evaluator(mod.args, data)
 	print(mod.evaluator is not None)
-	mod.test()
+	mod.test(test_data)
 # corpus = Corpus.load_corpus("result_mapping.json")
 # for i, mod in enumerate([a, b, c, d, e]):
 # 	run_result = mod(corpus)

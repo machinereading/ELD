@@ -10,6 +10,7 @@ from tqdm import tqdm
 from transformers import BertTokenizer, BertModel
 
 from src.ds import Corpus
+from src.eld.utils.Dataset import ELDDataset
 from .modules import SeparateEntityEncoder, FFNNEncoder, FFNNVectorTransformer, SelfAttnVectorTransformer, CNNVectorTransformer
 from .utils import ELDArgs, DataModule, Evaluator, TypeEvaluator
 from .. import GlobalValues as gl
@@ -163,10 +164,11 @@ class ELDSkeleton(ABC):
 			result.append(buf)
 		return result
 
-	def test(self, test_dataset=None, batch_size=512):
+	def test(self, test_dataset, batch_size=512):
 		if not self.is_best_model:
 			self.load_model()  # load best
-		test_corpus = self.data.test_dataset if test_dataset is None else test_dataset
+		test_corpus =  ELDDataset(self.mode, test_dataset, self.args, cand_dict=self.data.surface_ent_dict)
+
 		test_batch = DataLoader(dataset=test_corpus, batch_size=batch_size, shuffle=False, num_workers=8)
 		new_ent_preds, sims, pred_entity_idxs, new_entity_labels, gold_entity_idxs = self.eval(test_corpus, test_batch)
 		kb_expectation_score, total_score, in_kb_score, out_kb_score, no_surface_score, cluster_score, mapping_result_clustered, mapping_result_unclustered = self.evaluator.evaluate(test_corpus.eld_items,

@@ -338,7 +338,7 @@ class MSEEntEmbedding:
 		if test_data is not None:
 			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-	def test(self, test_data: Corpus):
+	def test(self, test_data: Corpus, out_kb_flags=None):
 		self.load_model()
 		with torch.no_grad():
 			self.encoder.eval()
@@ -351,7 +351,8 @@ class MSEEntEmbedding:
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
 			preds = []
 			labels = []
-			out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
+			if out_kb_flags is None:
+				out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
 			for batch in test_batch:
 				args, kwargs = self.prepare_input(batch)
 				label = batch[-2]
@@ -374,7 +375,7 @@ class MSEEntEmbedding:
 				kp, kr, kf = v[0]
 				if kf > f:
 					p, r, f = kp, kr, kf
-					mt = 0.5 + k * 0.02
+					mt = self.data.calc_threshold(k)
 			gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (p * 100, r * 100, f * 100, mt))
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
 			return self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name)
@@ -494,15 +495,14 @@ class DictBasedPred:
 		evaluator = Evaluator(ELDArgs(), self.data)
 		preds = []
 		labels = []
-		newents = []
 		out_kb_flags = [x.is_new_entity for x in data.eld_items]
 		out_kb_preds = []
 		for entity in data.eld_items:
 			cands = self.canddict[entity.surface]
 			if len(cands) == 0:
-				ent = len(self.data.e2i) + len(newents)
-				newents.append(entity.entity)
+				ent = len(self.data.e2i)
 				self.canddict.add_instance(entity.surface, ent)
+				self.data.e2i[len(self.data.e2i)] = ent
 			else:
 				ent = self.data.e2i[cands[0][0]] if cands[0][0] in self.data.e2i else 0
 			preds.append(ent)
@@ -534,7 +534,8 @@ class DictBasedPred:
 				if mapping == 0:
 					p = "NOT_IN_CANDIDATE"
 				else:
-					p = self.data.i2oe[mapping - len(self.data.original_e2i)]
+					if mapping < len(self.data.original_e2i): p = "NOT_IN_CANDIDATE"
+					else: p = self.data.i2oe[mapping - len(self.data.original_e2i)]
 				if preassigned:
 					p += "_preassigned"
 			else:
@@ -579,7 +580,7 @@ class NoRegister(MSEEntEmbedding):
 			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_preds)
 
 			labels = torch.cat(labels)
-			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_preds, idx, out_kb_labels, labels)
+			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_preds, idx[1], out_kb_labels, labels)
 			evals = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = total_score[0]
 			gl.logger.info("Test score: P %.2f R %.2f F %.2f" % (p * 100, r * 100, f * 100))
