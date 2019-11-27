@@ -236,7 +236,6 @@ class MSEEntEmbedding:
 		self.encoder.to(self.device)
 		self.transformer.to(self.device)
 		self.args.device = self.device
-		self.evaluator = Evaluator(self.args, self.data)
 
 		gl.logger.info("Finished prediction model initialization")
 
@@ -257,6 +256,7 @@ class MSEEntEmbedding:
 			dev_dataset = ELDDataset(self.mode, dev_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 			dev_batch = DataLoader(dataset=dev_dataset, batch_size=512, shuffle=False, num_workers=4)
 
+		evaluator = Evaluator(ELDArgs(), self.data)
 		max_score = (0, 0, 0)
 		max_score_epoch = 0
 		max_threshold = 0
@@ -310,7 +310,7 @@ class MSEEntEmbedding:
 					labels = torch.cat(labels)
 					evals = {}
 					for threshold_idx in range(1, 10):
-						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
 						evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 					p, r, f = 0, 0, 0
 					mt = 0
@@ -346,6 +346,7 @@ class MSEEntEmbedding:
 			self.data.reset_new_entity()
 
 			self.data.initialize_corpus_tensor(test_data)
+			evaluator = Evaluator(ELDArgs(), self.data)
 			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
 			preds = []
@@ -365,7 +366,7 @@ class MSEEntEmbedding:
 			labels = torch.cat(labels)
 			evals = {}
 			for threshold_idx in range(1, 10):
-				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
 				evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = 0, 0, 0
 			mt = 0
@@ -484,28 +485,135 @@ class DictBasedPred:
 
 	def __init__(self, data: DataModule):
 		self.data = data
-		self.evaluator = Evaluator(ELDArgs(), data)
+
 		self.canddict = data.surface_ent_dict
 		self.model_name = "dictbased"
 
 	def test(self, data: Corpus):
 		self.data.initialize_corpus_tensor(data, pred=True)
-		dataset = ELDDataset("test", data, ELDArgs(), cand_dict=self.data.surface_ent_dict)
-		batchs = DataLoader(dataset=dataset, batch_size=512, shuffle=False, num_workers=4)
+		evaluator = Evaluator(ELDArgs(), self.data)
 		preds = []
 		labels = []
 		newents = []
 		out_kb_flags = [x.is_new_entity for x in data.eld_items]
+		out_kb_preds = []
 		for entity in data.eld_items:
 			cands = self.canddict[entity.surface]
 			if len(cands) == 0:
 				ent = len(self.data.e2i) + len(newents)
 				newents.append(entity.entity)
-				preds.append(ent)
 				self.canddict.add_instance(entity.surface, ent)
 			else:
-				preds.append(self.data.e2i[cands[0][0]] if cands[0][0] in self.data.e2i else 0)
-			labels.append(entity.entity_label_idx)
+				ent = self.data.e2i[cands[0][0]] if cands[0][0] in self.data.e2i else 0
+			preds.append(ent)
+			out_kb_preds.append(ent >= len(self.data.original_e2i))
+			labels.append(self.data.e2i[entity.entity] if entity.entity in self.data.e2i else 0)
 
-		_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = self.evaluator.evaluate(data.eld_items, out_kb_flags, preds, out_kb_flags, labels)
-		print(total_score)
+		_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(data.eld_items, out_kb_preds, preds, out_kb_flags, labels)
+		print(total_score[0])
+		return self.generate_result_dict(data.eld_items, preds, (total_score, in_kb_score, out_kb_score, ari, mapping_result))
+
+	def generate_result_dict(self, eld_items, preds, eval_result):
+		result = {
+			"score": {},
+			"data" : []
+		}
+		v = eval_result
+		pred = preds
+		result["score"] = {
+			"Total" : list(v[0]),
+			"In-KB" : list(v[1]),
+			"Out-KB": list(v[2]),
+			"ARI"   : v[3]
+		}
+		mapping_result = v[4]
+		for i, (e, p) in enumerate(zip(eld_items, pred)):
+			if p >= self.data.original_entity_embedding.size(0):
+				preassigned = mapping_result[p] < 0
+				mapping = mapping_result[p] if not preassigned else mapping_result[p] * -1
+				if mapping == 0:
+					p = "NOT_IN_CANDIDATE"
+				else:
+					p = self.data.i2oe[mapping - len(self.data.original_e2i)]
+				if preassigned:
+					p += "_preassigned"
+			else:
+				p = self.data.i2e[p]
+			result["data"].append({
+				"Surface": e.surface,
+				"Context": " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
+				"EntPred": p,
+				"Entity" : e.entity
+			})
+		return result
+
+class NoRegister(MSEEntEmbedding):
+	def __init__(self, mode: str, model_name: str, args: ELDArgs=None, data: DataModule = None):
+		super(NoRegister, self).__init__(mode, model_name, args, data)
+		self.model_name = "noreg"
+
+	def test(self, test_data: Corpus):
+		self.load_model()
+		with torch.no_grad():
+			self.encoder.eval()
+			self.transformer.eval()
+			self.data.reset_new_entity()
+
+			self.data.initialize_corpus_tensor(test_data)
+			evaluator = Evaluator(ELDArgs(), self.data)
+			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+			preds = []
+			labels = []
+			out_kb_labels = [x.is_new_entity for x in test_data.eld_items]
+			out_kb_preds = [0 for _ in test_data.eld_items]
+			for batch in test_batch:
+				args, kwargs = self.prepare_input(batch)
+				label = batch[-2]
+				_, encoded_mention = self.encoder(*args, **kwargs)
+				transformed = self.transformer(encoded_mention)
+				preds.append(transformed)
+				labels.append(label)
+			preds = torch.cat(preds)
+
+			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_preds)
+
+			labels = torch.cat(labels)
+			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_preds, idx, out_kb_labels, labels)
+			evals = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
+			p, r, f = total_score[0]
+			gl.logger.info("Test score: P %.2f R %.2f F %.2f" % (p * 100, r * 100, f * 100))
+			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
+			return self.generate_result_dict(test_data.eld_items, idx, evals)
+
+	def generate_result_dict(self, eld_items, preds, eval_result):
+		result = {
+			"score": {},
+			"data" : []
+		}
+		v = eval_result
+		pred = preds
+		result["score"] = {
+			"Total" : list(v[0]),
+			"In-KB" : list(v[1]),
+			"Out-KB": list(v[2]),
+			"ARI"   : v[3]
+		}
+		mapping_result = v[4]
+		for i, (e, p) in enumerate(zip(eld_items, pred)):
+			if p >= self.data.original_entity_embedding.size(0):
+				preassigned = mapping_result[p] < 0
+				mapping = mapping_result[p] if not preassigned else mapping_result[p] * -1
+
+				p = self.data.i2oe[mapping - len(self.data.e2i)]
+				if preassigned:
+					p += "_preassigned"
+			else:
+				p = self.data.i2e[p]
+			result["data"].append({
+				"Surface": e.surface,
+				"Context": " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
+				"EntPred": p,
+				"Entity" : e.entity
+			})
+		return result

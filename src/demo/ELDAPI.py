@@ -24,7 +24,8 @@ app = Flask(__name__)
 args = ELDArgs()
 args.device = "cpu"
 datamodule = DataModule("demo", args)
-datamodule.register_threshold = 0.5
+datamodule.register_threshold = 0.59
+datamodule.cand_only = True
 discovery = DiscoveryModel("demo", "discovery_degree_surface_4", data=datamodule)
 discovery.args.new_ent_threshold = 0.485 # 일단 하드코딩
 el = EL(mode="demo")
@@ -57,7 +58,7 @@ def generate_output(c: Corpus):
 			"uri": entity.uri,
 			"en_entity": entity.en_entity
 		}
-		if entity.entity == "NOT_IN_CANDIDATE": continue
+		# if entity.entity == "NOT_IN_CANDIDATE": continue
 		if not entity.is_dark_entity:
 			result["entities"].append(ent)
 		else:

@@ -16,6 +16,7 @@ class Evaluator:
 		self.new_ent_threshold = args.new_ent_threshold
 		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects) # need original canddict
 		self.e2i = data.e2i
+		self.original_e2i = data.original_e2i
 		if hasattr(data, "oe2i"):
 			self.oe2i = data.oe2i
 
@@ -80,7 +81,7 @@ class Evaluator:
 			gold_idx, sorted_pred_index = mapped_entity_clustered.pop(0)
 			pred_idx, _ = sorted_pred_index[0]
 			# print(gold_idx, sorted_pred_index, pred_idx)
-			mapping_result_clustered[pred_idx] = gold_idx if gold_idx >= len(self.e2i) else 0
+			mapping_result_clustered[pred_idx] = gold_idx if gold_idx >= len(self.original_e2i) else 0
 			for item in mapped_entity_clustered:
 				item[1] = list(filter(lambda x: x[0] != pred_idx, item[1]))
 			mapped_entity_clustered = [x for x in mapped_entity_clustered if len(x[1]) > 0]

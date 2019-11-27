@@ -123,10 +123,11 @@ class DataModule:
 
 	@TimeUtil.measure_time
 	def initialize_corpus_tensor(self, corpus: Corpus, pred=False, train=True):
-
 		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
 			if token.is_entity and token.entity.startswith("namu_") and token.entity not in self.oe2i:
 				self.oe2i[token.entity] = len(self.oe2i)
+			if token.is_entity and not token.entity.startswith("namu_") and token.entity not in self.e2i:
+				token.target = False
 			self.initialize_token_tensor(token, pred, train)
 		self.i2oe = {v: k for k, v in self.oe2i.items()}
 		self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
@@ -505,9 +506,10 @@ class DataModule:
 									candidates.append(i)
 									target_emb.append(self.pred_entity_embedding[i])
 									break
-					if not self.cand_only and len(candidates) == 0:
-						target_emb = self.pred_entity_embedding
-						candidates = [x for x in range(len(self.pred_entity_surface_dict))]
+					if len(candidates) == 0:
+						if not self.cand_only :
+							target_emb = self.pred_entity_embedding
+							candidates = [x for x in range(len(self.pred_entity_surface_dict))]
 					else:
 						target_emb = torch.cat(target_emb)
 				if len(candidates) > 0:
