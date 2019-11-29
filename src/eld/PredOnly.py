@@ -351,8 +351,9 @@ class MSEEntEmbedding:
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
 			preds = []
 			labels = []
+			out_kb_labels = [x.is_new_entity for x in test_data.eld_items]
 			if out_kb_flags is None:
-				out_kb_flags = [x.is_new_entity for x in test_data.eld_items]
+				out_kb_flags = out_kb_labels
 			for batch in test_batch:
 				args, kwargs = self.prepare_input(batch)
 				label = batch[-2]
@@ -363,11 +364,11 @@ class MSEEntEmbedding:
 			preds = torch.cat(preds)
 
 			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_flags)
-
+			print(max(*idx) - len(self.data.original_e2i))
 			labels = torch.cat(labels)
 			evals = {}
 			for threshold_idx in range(1, 10):
-				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
+				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_labels, labels)
 				evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = 0, 0, 0
 			mt = 0

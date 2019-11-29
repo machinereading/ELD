@@ -148,6 +148,7 @@ class DiscoveryModel:
 		return ms, mi
 
 	def __call__(self, data: Corpus, batch_size=512):
+		self.data.initialize_corpus_tensor(data)
 		dataset = self.data.prepare("pred", data)
 		dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, num_workers=8)
 		kb_scores = []
