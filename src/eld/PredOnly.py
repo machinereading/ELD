@@ -221,7 +221,10 @@ class MSEEntEmbedding:
 		self.model_name = model_name
 		self.args = args
 		self.device = "cuda" if self.mode != "demo" else "cpu"
-
+		if data is None:
+			self.data = DataModule(mode, self.args)
+		else:
+			self.data = data
 		if self.mode == "train":
 			self.encoder: nn.Module = SeparateEntityEncoder(self.args)
 			self.transformer: nn.Module = CNNVectorTransformer(self.encoder.max_input_dim, args.e_emb_dim, args.flags)
@@ -229,10 +232,7 @@ class MSEEntEmbedding:
 		else:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
-		if data is None:
-			self.data = DataModule(mode, self.args)
-		else:
-			self.data = data
+
 		self.encoder.to(self.device)
 		self.transformer.to(self.device)
 		self.args.device = self.device
@@ -282,9 +282,9 @@ class MSEEntEmbedding:
 				ee_label = batch[-3].to(self.device)
 				entity_idxs.append(batch[-2])
 
-				loss = sum([F.mse_loss(p, g) if torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for p, g in zip(transformed, ee_label)]) / ee_label.size(0)
-
-				loss.backward()
+				# loss = sum([F.mse_loss(p, g) if torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for p, g in zip(transformed, ee_label)]) / ee_label.size(0) #
+				loss = self.loss(transformed, batch[-4], batch[-2], ee_label).to(self.device)
+				loss.backward() # update new entity embedding에서 grad function이 있는 상태로 저장되는듯?
 				optimizer.step()
 				losssum += float(loss)
 				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, losssum))
@@ -338,6 +338,40 @@ class MSEEntEmbedding:
 		if test_data is not None:
 			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
+	def loss(self, pred_emb, new_ent_label, idx_label, emb_label):
+		assert pred_emb.size(0) == new_ent_label.size(0) == idx_label.size(0) == emb_label.size(0)
+		def get_pred(tensor, emb):
+			assert emb.dim() == 2
+			if emb.size(0) == 0: return 0, 0
+			emb = emb.to(self.device)
+			expanded = tensor.expand_as(emb)
+			cos_sim = F.cosine_similarity(expanded, emb)
+			# dist = F.pairwise_distance(expanded, emb)
+			# dist += 1 # prevent zero division
+			return cos_sim
+		loss = torch.zeros(1, dtype=torch.float).to(self.device)
+		oe_len = len(self.data.oe2i)
+		idx_label = idx_label.clone() - len(self.data.original_e2i)
+		neg_sample_size = 10
+		for pe, nl, idx, le in zip(pred_emb, new_ent_label, idx_label, emb_label):
+			if not nl:
+				loss += F.mse_loss(pe, le).to(self.device)
+			else:
+				# neg sampling
+				if torch.sum(le) == 0:
+					continue
+
+				loss += F.mse_loss(pe, le).to(self.device)
+				samples = list(range(oe_len))
+				samples.remove(idx.item())
+				nsamples = np.random.choice(samples, neg_sample_size)
+
+				similarity_targets = torch.cat([self.data.train_oe_embedding[x] for x in nsamples]).view(-1, self.data.ee_dim).clone().detach()
+
+				loss += sum(get_pred(pe, similarity_targets).to(self.device)) / neg_sample_size
+		return loss
+
+
 	def test(self, test_data: Corpus, out_kb_flags=None):
 		self.load_model()
 		with torch.no_grad():
@@ -364,7 +398,8 @@ class MSEEntEmbedding:
 			preds = torch.cat(preds)
 
 			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_flags)
-			print(max(*idx) - len(self.data.original_e2i))
+			for item in idx.values():
+				print(max(item) - len(self.data.original_e2i))
 			labels = torch.cat(labels)
 			evals = {}
 			for threshold_idx in range(1, 10):
