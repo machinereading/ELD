@@ -215,7 +215,7 @@ class DataModule:
 		if self.use_cache_kb:
 			self.cache_entity_embedding = {i: torch.zeros([0, self.ee_dim], dtype=torch.float) for i in range(1, 10)}
 			self.cache_entity_surface_dict = {i: [] for i in range(1, 10)}
-		else: # TODO Threshold별로 저장할 수 있게
+		else: # Threshold별로 저장하는 대신 매번 predict할때마다 reset하게 바꿈.
 			self.entity_embedding = self.original_entity_embedding
 			self.surface_ent_dict = self.original_surface_ent_dict
 			self.e2i = self.original_e2i
