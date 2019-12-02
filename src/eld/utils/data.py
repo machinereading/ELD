@@ -37,7 +37,7 @@ class DataModule:
 		self.type_predict = args.type_prediction
 		self.cand_only = args.cand_only
 
-		self.calc_threshold = lambda x: 0.5 + x * 0.025
+		self.calc_threshold = lambda x: x * 0.05
 
 		# load corpus and se
 		if self.type_predict:
@@ -566,7 +566,7 @@ class DataModule:
 		cos_sim = F.cosine_similarity(expanded, emb)
 		# dist = F.pairwise_distance(expanded, emb)
 		# dist += 1 # prevent zero division
-		sim = torch.max(torch.sigmoid(cos_sim))
+		sim = (torch.max(cos_sim) + 1) / 2
 		index = torch.argmax(cos_sim, dim=-1).item()
 		del expanded, cos_sim
 		return sim, index
