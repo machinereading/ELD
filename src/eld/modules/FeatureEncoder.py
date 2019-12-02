@@ -41,8 +41,11 @@ class BiContextEncoder(nn.Module):
 		return context, soft_attn_weights
 
 class CNNEncoder(nn.Module):
-	def __init__(self, in_dim, in_channel, out_channel, kernel_size):
+	def __init__(self, in_dim, in_channel, out_channel, kernel_size, embed_first=False):
 		super(CNNEncoder, self).__init__()
+		self.embed = embed_first
+		if self.embed:
+			self.emb = nn.Linear(in_dim, in_dim)
 		self.enc = nn.Sequential(
 				nn.Conv1d(in_channel, out_channel, kernel_size=kernel_size),
 				nn.MaxPool1d(2)
@@ -50,6 +53,8 @@ class CNNEncoder(nn.Module):
 		self.out_size = ((out_channel * (in_dim - (kernel_size - 1))) - 2) // 2 + 1
 
 	def forward(self, input_tensor, *args):  # batch * in_channel * L -> batch * out_channel * Lout
+		if self.embed:
+			input_tensor = self.emb(input_tensor)
 		return self.enc(input_tensor).view(input_tensor.size(0), -1)
 
 class RNNEncoder(nn.Module):

@@ -225,6 +225,8 @@ class MSEEntEmbedding:
 			self.data = DataModule(mode, self.args)
 		else:
 			self.data = data
+		print(type(self.data))
+
 		if self.mode == "train":
 			self.encoder: nn.Module = SeparateEntityEncoder(self.args)
 			self.transformer: nn.Module = CNNVectorTransformer(self.encoder.max_input_dim, args.e_emb_dim, args.flags)
@@ -353,22 +355,30 @@ class MSEEntEmbedding:
 		oe_len = len(self.data.oe2i)
 		idx_label = idx_label.clone() - len(self.data.original_e2i)
 		neg_sample_size = 10
-		for pe, nl, idx, le in zip(pred_emb, new_ent_label, idx_label, emb_label):
+		softmax_loss = []
+		label_loc = np.random.randint(0, 10, idx_label.size(0))
+		lloc_filtered = []
+		for pe, nl, idx, le, lloc in zip(pred_emb, new_ent_label, idx_label, emb_label, label_loc):
 			if not nl:
 				loss += F.mse_loss(pe, le).to(self.device)
 			else:
 				# neg sampling
 				if torch.sum(le) == 0:
 					continue
-
+				lloc_filtered.append(lloc)
 				loss += F.mse_loss(pe, le).to(self.device)
 				samples = list(range(oe_len))
 				samples.remove(idx.item())
 				nsamples = np.random.choice(samples, neg_sample_size)
+				emb_samples = [self.data.train_oe_embedding[x].to(self.device) for x in nsamples]
+				emb_samples[lloc] = le.to(self.device)
+				similarity_targets = torch.cat(emb_samples).view(-1, self.data.ee_dim)
+				sims = torch.softmax(get_pred(pe, similarity_targets), 0)
+				softmax_loss.append(sims)
+		if len(softmax_loss) > 0:
 
-				similarity_targets = torch.cat([self.data.train_oe_embedding[x] for x in nsamples]).view(-1, self.data.ee_dim).clone().detach()
+			loss += F.cross_entropy(torch.cat(softmax_loss).view(-1, 10).to(self.device), torch.tensor(lloc_filtered, device=self.device))
 
-				loss += sum(get_pred(pe, similarity_targets).to(self.device)) / neg_sample_size
 		return loss
 
 

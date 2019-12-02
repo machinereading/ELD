@@ -187,6 +187,7 @@ class DataModule:
 		assert self.mode == "train"
 		emb_map = {}
 		l = len(self.e2i)
+		pred_emb = pred_emb.clone().detach()
 		for flag, i, e in zip(new_entity_flag, gold_idx, pred_emb):
 			i = i.item()
 			if i not in emb_map:
