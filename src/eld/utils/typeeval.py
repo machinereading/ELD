@@ -4,12 +4,8 @@ from ...utils import jsonload
 class TypeEvaluator:
 	def __call__(self, ent, type_pred, type_label):
 		assert len(ent) == len(type_pred) == len(type_label)
-		top_items = ["http://dbpedia.org/ontology/Person",
-		             "http://dbpedia.org/ontology/Place",
-		             "http://dbpedia.org/ontology/Agent",
-		             "http://dbpedia.org/ontology/Activity",
-		             ]
-
+		top_items = ["Person", "Place", "Organisation", "Device", "Event", "Food", "MeanOfTransportation"]
+		top_items = ["http://dbpedia.org/ontology/" + x for x in top_items]
 		pred = 0
 		recall = 0
 		correct = 0

@@ -14,7 +14,7 @@ for model in models:
 	scores = {i: [] for i in range(1, 10)}
 	max_score = 0
 	max_preds = []
-
+	label = []
 	for i in range(5):
 		name = model + "_" + str(i)
 		result_json = jsonload("runs/eld/%s/%s_test.json" % (name, name))
@@ -29,13 +29,21 @@ for model in models:
 				max_score = f
 				max_preds = pred
 	for k, v in scores.items():
-		p = ms([x[0] for x in v])
-		r = ms([x[1] for x in v])
-		f = ms([x[2] for x in v])
+		mp, mr, mf = 0, 0, 0
+		for p, r, f in v:
+			if f > mf:
+				mp = p
+				mr = r
+				mf = f
+		# p = max([x[0] for x in v])
+		# r = max([x[1] for x in v])
+		# f = max([x[2] for x in v])
+		p, r, f = mp, mr, mf
 		result[model][k] = [p, r, f]
 
 	precision, recall, _ = precision_recall_curve(label, max_preds)
 	average_precision = average_precision_score(label, max_preds)
+	print(len(label), len(max_preds))
 	plt.step(recall, precision, color='b', alpha=0.2,
 	         where='post')
 	plt.fill_between(recall, precision, alpha=0.2, color='b')
@@ -47,6 +55,7 @@ for model in models:
 	plt.title('2-class Precision-Recall curve: AP={0:0.2f}'.format(
 	          average_precision))
 	plt.savefig("%s.png" % model)
+	plt.clf()
 	# result[model] = {i: [list(ms(v[0])), list(ms(v[1])), list(ms(v[2]))] for i, v in scores.items()}
 
 jsondump(result, "discovery_result.json")

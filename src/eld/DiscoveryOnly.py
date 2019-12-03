@@ -113,7 +113,7 @@ class DiscoveryModel:
 			kwargs["avg_degree"] = avg_degree
 		return args, kwargs
 
-	def pred(self, batch, *, pred_mode=False, eld_items=None, dump_name=""):
+	def pred(self, batch, *, pred_mode=False, eld_items=None, dump_name="", return_as_dict=False):
 		self.model.eval()
 		preds = []
 		labels = []
@@ -140,12 +140,27 @@ class DiscoveryModel:
 			if f > ms[-1]:
 				ms = (p, r, f)
 				mi = i * 0.1
+		j = generate_result_dict(eld_items, ms, preds, labels)
 		if eld_items is not None and dump_name != "":
 			if not os.path.isdir("runs/eld/%s" % self.model_name):
 				os.mkdir("runs/eld/%s" % self.model_name)
-			jsondump(generate_result_dict(eld_items, ms, preds, labels), "runs/eld/%s/%s_%s.json" % (self.model_name, self.model_name, dump_name))
-
+			jsondump(j, "runs/eld/%s/%s_%s.json" % (self.model_name, self.model_name, dump_name))
+		if return_as_dict: return j
 		return ms, mi
+
+	def test(self, test_data):
+		self.load_model()
+		with torch.no_grad():
+			self.model.eval()
+			self.data.initialize_corpus_tensor(test_data)
+			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
+			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+			result_dict = self.pred(test_batch, eld_items=test_dataset.eld_items, return_as_dict=True)
+			return result_dict
+			# p, r, f = test_score
+			# gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
+			# self.args.out_kb_threshold = test_threshold
+			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def __call__(self, data: Corpus, batch_size=512):
 		self.data.initialize_corpus_tensor(data)

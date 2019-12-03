@@ -221,11 +221,11 @@ class MSEEntEmbedding:
 		self.model_name = model_name
 		self.args = args
 		self.device = "cuda" if self.mode != "demo" else "cpu"
-		if data is None:
-			self.data = DataModule(mode, self.args)
-		else:
-			self.data = data
-		print(type(self.data))
+		if self.mode == "train":
+			if data is None:
+				self.data = DataModule(mode, self.args)
+			else:
+				self.data = data
 
 		if self.mode == "train":
 			self.encoder: nn.Module = SeparateEntityEncoder(self.args)
@@ -234,7 +234,11 @@ class MSEEntEmbedding:
 		else:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
-
+		if self.mode != "train":
+			if data is None:
+				self.data = DataModule(mode, self.args)
+			else:
+				self.data = data
 		self.encoder.to(self.device)
 		self.transformer.to(self.device)
 		self.args.device = self.device
@@ -424,6 +428,7 @@ class MSEEntEmbedding:
 					mt = self.data.calc_threshold(k)
 			gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (p * 100, r * 100, f * 100, mt))
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
+
 			return self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name)
 			# jsondump(self.args.to_json(), self.args.arg_path)
 
