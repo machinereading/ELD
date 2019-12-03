@@ -318,7 +318,7 @@ class MSEEntEmbedding:
 						kp, kr, kf = v[0]
 						if kf > f:
 							p, r, f = kp, kr, kf
-							mt = 0.5 + k * 0.02
+							mt = self.data.calc_threshold(k)
 
 					gl.logger.info("Epoch %d eval score: P %.2f R %.2f F %.2f @ threshold %.1f" % (epoch, p * 100, r * 100, f * 100, mt))
 					if f > max_score[-1]:

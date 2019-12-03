@@ -61,8 +61,8 @@ class DataModule:
 		assert len(self.e2i) == self.entity_embedding.size(0)
 		# print(len(self.e2i), len(self.i2e), self.entity_embedding.shape)
 		if self.use_cache_kb:
-			self.cache_entity_embedding = {i: torch.zeros([0, ee.shape[-1]], dtype=torch.float) for i in range(1, 10)}
-			self.cache_entity_surface_dict = {i: [] for i in range(1, 10)}
+			self.cache_entity_embedding = {i: torch.zeros([0, ee.shape[-1]], dtype=torch.float) for i in range(1, 20)}
+			self.cache_entity_surface_dict = {i: [] for i in range(1, 20)}
 			self.pred_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
 			self.pred_entity_surface_dict = []
 			self.pred_i2e = {}
@@ -213,8 +213,8 @@ class DataModule:
 
 	def reset_new_entity(self):
 		if self.use_cache_kb:
-			self.cache_entity_embedding = {i: torch.zeros([0, self.ee_dim], dtype=torch.float) for i in range(1, 10)}
-			self.cache_entity_surface_dict = {i: [] for i in range(1, 10)}
+			self.cache_entity_embedding = {i: torch.zeros([0, self.ee_dim], dtype=torch.float) for i in range(1, 20)}
+			self.cache_entity_surface_dict = {i: [] for i in range(1, 20)}
 		else: # Threshold별로 저장하는 대신 매번 predict할때마다 reset하게 바꿈.
 			self.entity_embedding = self.original_entity_embedding
 			self.surface_ent_dict = self.original_surface_ent_dict
@@ -408,7 +408,7 @@ class DataModule:
 	def predict_entity_with_embedding_train(self, eld_items, embedding, out_kb_flags=None):
 		idx_result = {i: [] for i in range(1, 10)}
 		sim_result = {i: [] for i in range(1, 10)}
-		for idx in range(1, 10):
+		for idx in range(1, 20):
 			threshold = self.calc_threshold(idx)
 			if self.use_cache_kb:
 				if out_kb_flags is None:
