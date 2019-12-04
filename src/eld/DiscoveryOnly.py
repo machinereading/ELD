@@ -23,6 +23,10 @@ class DiscoveryModel:
 		self.device = "cuda" if self.mode != "demo" else "cpu"
 
 		if self.mode == "train":
+			if data is None:
+				self.data = DataModule(mode, self.args)
+			else:
+				self.data = data
 			self.model: nn.Module = SeparateEntityEncoder(self.args)
 			self.save_model()
 			self.model.to(self.device)
@@ -31,10 +35,11 @@ class DiscoveryModel:
 			self.args = ELDArgs.from_json("models/eld/%s_args.json" % model_name)
 			self.load_model()
 		self.args.device = self.device
-		if data is None:
-			self.data = DataModule(mode, self.args)
-		else:
-			self.data = data
+		if self.mode != "train":
+			if data is None:
+				self.data = DataModule(mode, self.args)
+			else:
+				self.data = data
 		gl.logger.info("Finished discovery model initialization")
 
 	def train(self, train_data, dev_data, test_data=None):
@@ -78,15 +83,21 @@ class DiscoveryModel:
 				if self.args.early_stop <= epoch - max_score_epoch:
 					break
 		if test_data is not None:
-			self.load_model()
+			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
+
+	def test(self, test_data):
+		self.load_model()
+		with torch.no_grad():
+			self.model.eval()
 			self.data.initialize_corpus_tensor(test_data)
 			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
-			test_score, test_threshold = self.pred(test_batch, eld_items=test_dataset.eld_items, dump_name="test")
-			p, r, f = test_score
-			gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
-			self.args.out_kb_threshold = test_threshold
-			jsondump(self.args.to_json(), self.args.arg_path)
+			result_dict = self.pred(test_batch, eld_items=test_dataset.eld_items, return_as_dict=True)
+			return result_dict
+			# p, r, f = test_score
+			# gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
+			# self.args.out_kb_threshold = test_threshold
+			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def load_model(self):
 		self.model: nn.Module = SeparateEntityEncoder(self.args)
@@ -97,7 +108,7 @@ class DiscoveryModel:
 		self.model.to(self.device)
 
 	def save_model(self):
-		jsondump(self.args.to_json(), )
+		jsondump(self.args.to_json(), self.args.arg_path)
 		torch.save(self.model.state_dict(), self.args.model_path)
 
 	def prepare_input(self, batch):
@@ -148,19 +159,6 @@ class DiscoveryModel:
 		if return_as_dict: return j
 		return ms, mi
 
-	def test(self, test_data):
-		self.load_model()
-		with torch.no_grad():
-			self.model.eval()
-			self.data.initialize_corpus_tensor(test_data)
-			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
-			result_dict = self.pred(test_batch, eld_items=test_dataset.eld_items, return_as_dict=True)
-			return result_dict
-			# p, r, f = test_score
-			# gl.logger.info("Test score @ threshold %.2f: P %.2f R %.2f F %.2f" % (test_threshold, p * 100, r * 100, f * 100))
-			# self.args.out_kb_threshold = test_threshold
-			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def __call__(self, data: Corpus, batch_size=512):
 		self.data.initialize_corpus_tensor(data)

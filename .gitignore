@@ -16,8 +16,8 @@ stat/
 exec/old/
 log/
 cloc-1.80.exe
-!scripts/*Train*
-!scripts/*Test*
+!exec/*Train*
+!exec/*Test*
 .pyc
 .idea/
 models/

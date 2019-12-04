@@ -412,11 +412,11 @@ class MSEEntEmbedding:
 			preds = torch.cat(preds)
 
 			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_flags)
-			for item in idx.values():
-				print(max(item) - len(self.data.original_e2i))
+			# for item in idx.values():
+			# 	print(max(item) - len(self.data.original_e2i))
 			labels = torch.cat(labels)
 			evals = {}
-			for threshold_idx in range(1, 10):
+			for threshold_idx in range(1, 20):
 				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_labels, labels)
 				evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = 0, 0, 0
@@ -429,7 +429,7 @@ class MSEEntEmbedding:
 			gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (p * 100, r * 100, f * 100, mt))
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
 
-			return self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name)
+			return self.generate_result_dict(test_data.eld_items, idx, sims, evals)
 			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def prepare_input(self, batch):
@@ -502,7 +502,7 @@ class MSEEntEmbedding:
 			v = eval_result[k]
 			pred = preds[k]
 			sim = sims[k]
-			result["score"][k] = {
+			result["score"][self.data.calc_threshold(k)] = {
 				"Total" : list(v[0]),
 				"In-KB" : list(v[1]),
 				"Out-KB": list(v[2]),
@@ -522,8 +522,8 @@ class MSEEntEmbedding:
 				if len(result["data"]) <= i:
 					result["data"].append({
 						"Surface": e.surface,
-						"Context": " ".join([x.surface for x in e.lctx[-5:]] + ["[%s]" % e.surface] + [x.surface for x in e.rctx[:5]]),
-						"EntPred": {k: "%s:%.2f" % (p, s)},
+						"Context": " ".join([x.surface for x in e.lctx] + ["[%s]" % e.surface] + [x.surface for x in e.rctx]),
+						"EntPred": {self.data.calc_threshold(k): "%s:%.2f" % (p, s)},
 						"Entity" : e.entity
 					})
 				else:

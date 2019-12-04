@@ -31,7 +31,7 @@ class Evaluator:
 				if p == l:
 					target_dict["TP"] += 1
 
-		print(len(eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
+		# print(len(eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		assert len(eld_items) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
 		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, [1 if x > self.new_ent_threshold else 0 for x in new_ent_pred], average="binary")
 
