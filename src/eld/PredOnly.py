@@ -426,7 +426,7 @@ class MSEEntEmbedding:
 				if kf > f:
 					p, r, f = kp, kr, kf
 					mt = self.data.calc_threshold(k)
-			gl.logger.info("Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (p * 100, r * 100, f * 100, mt))
+			gl.logger.info("%s Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (self.model_name, p * 100, r * 100, f * 100, mt))
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
 
 			return self.generate_result_dict(test_data.eld_items, idx, sims, evals)
@@ -605,7 +605,7 @@ class NoRegister(MSEEntEmbedding):
 		self.model_name = "noreg"
 
 	def test(self, test_data: Corpus):
-		self.load_model()
+		# self.load_model()
 		with torch.no_grad():
 			self.encoder.eval()
 			self.transformer.eval()
@@ -634,7 +634,7 @@ class NoRegister(MSEEntEmbedding):
 			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_preds, idx[1], out_kb_labels, labels)
 			evals = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = total_score[0]
-			gl.logger.info("Test score: P %.2f R %.2f F %.2f" % (p * 100, r * 100, f * 100))
+			gl.logger.info("%s Test score: P %.2f R %.2f F %.2f" % (self.model_name, p * 100, r * 100, f * 100))
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
 			return self.generate_result_dict(test_data.eld_items, idx, evals)
 

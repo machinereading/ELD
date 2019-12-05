@@ -17,3 +17,4 @@ for model in [model1]:
 	j2 = model.test(corpus2)
 	jsondump(j1, "discovery_amb_%s.json" % model.model_name)
 	jsondump(j2, "discovery_test_%s.json" % model.model_name)
+	del model

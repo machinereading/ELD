@@ -28,7 +28,7 @@ class MulRelRanker(LocalCtxAttRanker):
         self.n_loops = config['n_loops']
         self.n_rels = config['n_rels']
         self.dr = config['dr']
-        self.device = config["device"]
+        self.device = config["device"] if "device" in config else "cuda"
         self.ew_hid_dims = self.emb_dims
 
         self.max_dist = 1000

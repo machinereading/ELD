@@ -76,6 +76,8 @@ class ELDDataset(Dataset):
 		if self.ce_flag:
 			cl = ce.size()[0]
 			ce = pad(ce, self.max_jamo_len_in_word)
+		else:
+			ce = torch.zeros(1, dtype=torch.float)
 		if self.we_flag:
 			wl = we.size()[0]
 			we = pad(we, self.max_word_len_in_entity)
