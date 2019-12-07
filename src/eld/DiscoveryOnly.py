@@ -113,9 +113,9 @@ class DiscoveryModel:
 
 	def prepare_input(self, batch):
 		if self.mode in ["train", "test"]:
-			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-6]]
 		else:
-			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
 		args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 		kwargs = {"surface_dict_flag": None, "cand_entities": None, "avg_degree": None}
 		if self.args.use_surface_info:
@@ -143,14 +143,17 @@ class DiscoveryModel:
 		ms = (0, 0, 0)
 
 		mi = 0
-		for i in range(1, 10):
-			pl = [1 if x > 0.1 * i else 0 for x in preds]
+		scores = {}
+		for i in range(1, 20):
+			pl = [1 if x > self.data.calc_threshold(i) else 0 for x in preds]
 			l = [x for x in labels]
 			p, r, f, _ = precision_recall_fscore_support(l, pl, average="binary")
-			gl.logger.debug("Threshold %.2f: P %.2f R %.2f F %.2f" % (0.1 * i, p * 100, r * 100, f * 100))
+
 			if f > ms[-1]:
 				ms = (p, r, f)
-				mi = i * 0.1
+				mi = i
+			scores[self.data.calc_threshold(i)] = [p, r, f]
+		gl.logger.debug("Threshold %.2f: P %.2f R %.2f F %.2f" % (self.data.calc_threshold(mi), ms[0] * 100, ms[1] * 100, ms[2] * 100))
 		j = generate_result_dict(eld_items, ms, preds, labels)
 		if eld_items is not None and dump_name != "":
 			if not os.path.isdir("runs/eld/%s" % self.model_name):

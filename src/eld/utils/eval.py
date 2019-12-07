@@ -33,6 +33,7 @@ class Evaluator:
 
 		# print(len(eld_items), len(new_ent_pred), len(idx_pred), len(new_ent_label), len(idx_label))
 		assert len(eld_items) == len(new_ent_pred) == len(idx_pred) == len(new_ent_label) == len(idx_label)
+		idx_pred = [int(x) for x in idx_pred]
 		kb_expect_prec, kb_expect_rec, kb_expect_f1, _ = precision_recall_fscore_support(new_ent_label, [1 if x > self.new_ent_threshold else 0 for x in new_ent_pred], average="binary")
 
 		# give entity uri to each cluster
@@ -44,8 +45,8 @@ class Evaluator:
 		total_u, in_kb_u, out_kb_u, no_surface_u = [{"TP": 0, "P": 0, "R": 0, "Total": 0, "Correct": 0} for _ in range(4)]
 		# kb_pred = {"Total": 0, "Correct": 0}
 		for e, new_ent, idx in zip(eld_items, new_ent_pred, idx_pred):
-			if type(idx) is torch.Tensor:
-				idx = idx.item()
+			# if type(idx) is torch.Tensor:
+			# 	idx = idx.item()
 			if type(new_ent) is torch.Tensor:
 				new_ent = new_ent.item()
 			new_ent = new_ent > self.new_ent_threshold
@@ -89,12 +90,12 @@ class Evaluator:
 		for pred_idx, gc in pe_dark_id_to_ge_entity_map.items():
 			if pred_idx not in mapping_result_clustered:
 				mapping_result_clustered[pred_idx] = -list(sorted([[k, v] for k, v in gc.items()], key=lambda x: x[1], reverse=True))[0][0]
+		# assert len(mapping_result_clustered.values()) == len(set(mapping_result_clustered.values()))
 		# print(mapping_result_clustered)
-		idx_pred_clustered = idx_pred[:]
-		for pred_idx, mapping_idx in mapping_result_clustered.items():
-			for i in range(len(idx_pred_clustered)):
-				if idx_pred_clustered[i] == pred_idx:
-					idx_pred_clustered[i] = mapping_idx
+		idx_pred_clustered = []
+		for i in idx_pred:
+			idx_pred_clustered.append(mapping_result_clustered[i] if i in mapping_result_clustered else i)
+
 		# unclustered mapping
 		mapping_result_unclustered = {}
 		for pred_idx, mapping in pe_dark_id_to_ge_entity_map.items():  # out-kb pred to label matching
@@ -107,15 +108,16 @@ class Evaluator:
 			else:  # out-kb 매핑 불가 - 틀림
 				mapping_idx = 0  # not in candidate(wrong)
 			mapping_result_unclustered[pred_idx] = mapping_idx
-		idx_pred_unclustered = idx_pred[:]
-
-		for pred_idx, mapping_idx in mapping_result_unclustered.items():
-			for i in range(len(idx_pred_unclustered)):
-				if idx_pred_unclustered[i] == pred_idx:
-					idx_pred_unclustered[i] = mapping_idx
-
+		# idx_pred_unclustered = idx_pred[:]
+		#
+		# for pred_idx, mapping_idx in mapping_result_unclustered.items():
+		# 	for i in range(len(idx_pred_unclustered)):
+		# 		if idx_pred_unclustered[i] == pred_idx:
+		# 			idx_pred_unclustered[i] = mapping_idx
+		idx_pred_unclustered = []
+		for i in idx_pred:
+			idx_pred_unclustered.append(mapping_result_unclustered[i] if i in mapping_result_unclustered else i)
 		in_surface_dict_flags = [x.in_surface_dict for x in eld_items]
-		new_ent_flags = [x.is_new_entity for x in eld_items]
 		for e, nep, ipc, ipu, nel, il, in_surface_dict in zip(eld_items, new_ent_pred, idx_pred_clustered, idx_pred_unclustered, new_ent_label, idx_label, in_surface_dict_flags):
 			# set record targets
 			record_targets_c = [total_c]

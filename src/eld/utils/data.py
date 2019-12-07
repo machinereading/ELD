@@ -36,6 +36,7 @@ class DataModule:
 		self.use_heuristic = args.use_heuristic
 		self.type_predict = args.type_prediction
 		self.cand_only = args.cand_only
+		self.use_cand = True
 
 		self.calc_threshold = lambda x: x * 0.05
 
@@ -100,9 +101,10 @@ class DataModule:
 
 
 		self.oe2i = {}
-		self.oe2i["NOT_IN_CANDIDATE"] = 0
-		self.i2oe = {v: k for k, v in self.oe2i.items()}
-		self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
+		self.i2oe = {}
+		# self.oe2i["NOT_IN_CANDIDATE"] = 0
+		# self.i2oe = {v: k for k, v in self.oe2i.items()}
+		self.train_oe_embedding = torch.nn.Embedding(0, 300)
 		self.err_entity = set([])
 			# self.corpus = Corpus.load_corpus(args.corpus_dir, limit=1000 if args.test_mode else 0, min_token=10)
 
@@ -132,7 +134,9 @@ class DataModule:
 				token.target = False
 			self.initialize_token_tensor(token, pred, train)
 		self.i2oe = {v: k for k, v in self.oe2i.items()}
-		self.train_oe_embedding = torch.zeros(len(self.oe2i), self.ee_dim, dtype=torch.float)
+		if self.mode == "train":
+			self.train_oe_embedding = torch.nn.Embedding(len(self.oe2i), self.ee_dim).to(torch.float)
+			self.give_candidates(corpus)
 
 	def initialize_token_tensor(self, token: Vocabulary, pred=False, train=True):
 		if token.is_entity:
@@ -180,11 +184,13 @@ class DataModule:
 					token.target = False
 		return token
 
-	def update_new_entity_embedding(self, dataset, new_entity_flag, gold_idx, pred_emb, epoch):
+	def update_new_entity_embedding(self, dataset: Corpus, new_entity_flag, gold_idx, pred_emb, epoch):
 		"""
 		Train 과정에서 label별로 entity embedding을 업데이트 하는 함수, prediction에서는 안쓰임
+		candidate도 여기서 update하는게 좋을듯
 		"""
 		assert self.mode == "train"
+
 		emb_map = {}
 		l = len(self.e2i)
 		pred_emb = pred_emb.clone().detach()
@@ -194,23 +200,41 @@ class DataModule:
 				emb_map[i] = []
 			emb_map[i].append(e)
 		for k, v in emb_map.items():
-			if k > l:
+			if k >= l:
 				idx = k - len(self.e2i)
 				update_target = self.train_oe_embedding
-			else:
-				idx = k
-				update_target = self.entity_embedding
-			result = (sum(v) / len(v)).to(self.device)
-			# print("UPDATED", k - len(self.e2i), self.i2oe[k - len(self.e2i)], result)
-			target = update_target[idx].to(self.device)
-			# self.train_oe_embedding[idx] = result
-			if sum(target) == 0:
-				update_target[idx] = result
-			else:
-				update_target[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
+				result = (sum(v) / len(v)).to(self.device)
+
+				target = self.train_oe_embedding[idx].to(self.device)
+				if sum(target) == 0:
+					update_target[idx] = result
+				else:
+					update_target[idx] = (result * (0.5 - epoch * 0.001) + target * (0.5 + epoch * 0.001)).clone().detach()  # stabilize
 		for token in dataset.eld_items:
-			if token.target and token.is_new_entity:
+			if token.is_new_entity:
 				token.entity_label_embedding = self.train_oe_embedding[token.entity_label_idx - len(self.e2i)].clone().detach()
+		self.give_candidates(dataset)
+
+	def give_candidates(self, dataset: Corpus):
+		oe_len = len(self.oe2i)
+		ie_len = len(self.original_e2i)
+		rands = np.random.randint(0, 10, len(dataset.eld_items))
+		neg_sample_size = 10
+		for token, r in zip(dataset.eld_items, rands):
+			token.answer_in_candidate = r
+			if token.is_new_entity:
+				samples = list(range(oe_len))
+				samples.pop(token.entity_label_idx - ie_len)
+				nsamples = torch.tensor(np.random.choice(samples, neg_sample_size))
+				emb_samples = self.train_oe_embedding(nsamples)
+				emb_samples[r] = token.entity_label_embedding
+			else:
+				samples = list(range(ie_len))
+				samples.pop(token.entity_label_idx)
+				nsamples = np.random.choice(samples, neg_sample_size)
+				emb_samples = torch.stack([self.entity_embedding[x] for x in nsamples])
+				emb_samples[r] = token.entity_label_embedding
+			token.candidiate_entity_emb = emb_samples.to(self.device)
 
 	def reset_new_entity(self):
 		if self.use_cache_kb:
@@ -407,8 +431,8 @@ class DataModule:
 		# return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
 	def predict_entity_with_embedding_train(self, eld_items, embedding, out_kb_flags=None):
-		idx_result = {i: [] for i in range(1, 10)}
-		sim_result = {i: [] for i in range(1, 10)}
+		idx_result = {i: [] for i in range(1, 20)}
+		sim_result = {i: [] for i in range(1, 20)}
 		for idx in range(1, 20):
 			threshold = self.calc_threshold(idx)
 			if self.use_cache_kb:
@@ -423,25 +447,30 @@ class DataModule:
 						else:
 							target_emb = torch.cat([self.entity_embedding[i] for i in candidates])
 					else:
-						target_emb = []
-						for i, s in enumerate(self.cache_entity_surface_dict[idx]):
-							if ent.surface in s:
-								candidates.append(i)
-								target_emb.append(self.cache_entity_embedding[idx][i])
-							elif len(ent.surface) > 3:
-								for stored_surface in s:
-									if ent.surface in stored_surface or stored_surface in ent.surface:
-										candidates.append(i)
-										target_emb.append(self.cache_entity_embedding[idx][i])
-										break
-						if len(candidates) == 0:
-							if not self.cand_only:
-								target_emb = self.cache_entity_embedding[idx]
-								candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+						if self.use_cand:
+							target_emb = []
+							for i, s in enumerate(self.cache_entity_surface_dict[idx]):
+								if ent.surface in s:
+									candidates.append(i)
+									target_emb.append(self.cache_entity_embedding[idx][i])
+								elif len(ent.surface) > 3:
+									for stored_surface in s:
+										if ent.surface in stored_surface or stored_surface in ent.surface:
+											candidates.append(i)
+											target_emb.append(self.cache_entity_embedding[idx][i])
+											break
+							if len(candidates) == 0:
+								if not self.cand_only:
+									target_emb = self.cache_entity_embedding[idx]
+									candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+								else:
+									target_emb = []
 							else:
-								target_emb = []
+								target_emb = torch.cat(target_emb)
 						else:
-							target_emb = torch.cat(target_emb)
+							target_emb = self.cache_entity_embedding[idx]
+							candidates = [x for x in range(len(self.cache_entity_surface_dict[idx]))]
+
 					if len(candidates) > 0:
 						if target_emb.dim() == 1:
 							target_emb = target_emb.view(-1, self.ee_dim)
@@ -456,6 +485,7 @@ class DataModule:
 							self.cache_entity_embedding[idx] = torch.cat([self.cache_entity_embedding[idx], emb.cpu().clone().detach().unsqueeze(0)]).view(-1, self.ee_dim)
 							self.cache_entity_surface_dict[idx].append({ent.surface})
 							assert self.cache_entity_embedding[idx].size(0) == len(self.cache_entity_surface_dict[idx])
+							sim = -1 # 새로 등록 표시
 						else: # link cache kb
 							self.cache_entity_surface_dict[idx][pred_idx].add(ent.surface)
 							if self.modify_entity_embedding:

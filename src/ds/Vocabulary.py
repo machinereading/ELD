@@ -37,7 +37,8 @@ class Vocabulary:
 		self.entity_label_idx: int = -1
 		self.relation: List[Relation] = []
 		self.eld_pred_entity = None
-		self.candidiate_entity_index = torch.zeros(1, dtype=torch.float)
+		self.candidiate_entity_emb = torch.zeros(10, 300, dtype=torch.float)
+		self.answer_in_candidate = -1
 		self.is_dark_entity = False
 		self.kb_score = 0
 		self.confidence_score = 0

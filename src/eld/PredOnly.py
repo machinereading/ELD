@@ -249,18 +249,18 @@ class MSEEntEmbedding:
 		gl.logger.info("Training prediction model")
 
 		batch_size = 512
-		optimizer = torch.optim.Adam(list(self.encoder.parameters()) + list(self.transformer.parameters()), lr=1e-4, weight_decay=1e-4)
+		optimizer = torch.optim.SGD(list(self.encoder.parameters()) + list(self.transformer.parameters()), lr=1e-4, weight_decay=1e-4)
 		tqdmloop = tqdm(range(1, self.args.epochs + 1))
 		self.data.initialize_corpus_tensor(train_data)
 		train_dataset = ELDDataset(self.mode, train_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-		train_batch = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+		train_batch = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
 		self.args.jamo_limit = train_dataset.max_jamo_len_in_word
 		self.args.word_limit = train_dataset.max_word_len_in_entity
 		dev_batch = None
 		if dev_data is not None:
 			self.data.initialize_corpus_tensor(dev_data, train=False)
 			dev_dataset = ELDDataset(self.mode, dev_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-			dev_batch = DataLoader(dataset=dev_dataset, batch_size=512, shuffle=False, num_workers=4)
+			dev_batch = DataLoader(dataset=dev_dataset, batch_size=512, shuffle=False)
 
 		evaluator = Evaluator(ELDArgs(), self.data)
 		max_score = (0, 0, 0)
@@ -278,23 +278,25 @@ class MSEEntEmbedding:
 			losssum = 0
 			for batch in train_batch:
 				optimizer.zero_grad()
-				ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, _, _, _ = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
-				args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
-				# args, kwargs = self.prepare_input(batch)
+				# ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, _, _ = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-6]]
+				# args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
+				args, kwargs = self.prepare_input(batch)
 				_, encoded_mention = self.encoder(*args)
 				transformed = self.transformer(encoded_mention)
 				preds.append(transformed)
 				newent_flags.append(batch[-4])
 				ee_label = batch[-3].to(self.device)
 				entity_idxs.append(batch[-2])
+				candidate_embs = batch[-6]
+				answers = batch[-5]
 
 				# loss = sum([F.mse_loss(p, g) if torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for p, g in zip(transformed, ee_label)]) / ee_label.size(0) #
-				loss = self.loss(transformed, batch[-4], batch[-2], ee_label).to(self.device)
+				loss = self.loss(transformed, batch[-4], candidate_embs, answers).to(self.device)
 				loss.backward() # update new entity embedding에서 grad function이 있는 상태로 저장되는듯?
 				optimizer.step()
 				losssum += float(loss)
 				tqdmloop.set_description("Epoch %d - Loss %.4f" % (epoch, losssum))
-			self.data.update_new_entity_embedding(train_dataset, torch.cat(newent_flags), torch.cat(entity_idxs), torch.cat(preds), epoch)
+			# self.data.update_new_entity_embedding(train_dataset, torch.cat(newent_flags), torch.cat(entity_idxs), torch.cat(preds), epoch)
 			if dev_data is not None and epoch % self.args.eval_per_epoch == 0:
 				with torch.no_grad():
 					self.encoder.eval()
@@ -315,18 +317,24 @@ class MSEEntEmbedding:
 
 					labels = torch.cat(labels)
 					evals = {}
-					for threshold_idx in range(1, 10):
+					for threshold_idx in range(1, 20):
 						_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(dev_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_flags, labels)
 						evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 					p, r, f = 0, 0, 0
+					okp, okr, okf = 0, 0, 0
 					mt = 0
+					cl = 0
 					for k, v in evals.items():
 						kp, kr, kf = v[0]
 						if kf > f:
 							p, r, f = kp, kr, kf
+							okp, okr, okf = v[2]
 							mt = self.data.calc_threshold(k)
+							cl = len(v[4])
 
 					gl.logger.info("Epoch %d eval score: P %.2f R %.2f F %.2f @ threshold %.1f" % (epoch, p * 100, r * 100, f * 100, mt))
+					gl.logger.info("%s Out-KB score: P %.2f R %.2f F %.2f @ threshold %.2f" % (self.model_name, okp * 100, okr * 100, okf * 100, mt))
+					gl.logger.info("%s # of cluster: %d @ threshold %.2f" % (self.model_name, cl, mt))
 					if f > max_score[-1]:
 						max_score = (p, r, f)
 						max_score_epoch = epoch
@@ -344,8 +352,8 @@ class MSEEntEmbedding:
 		if test_data is not None:
 			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-	def loss(self, pred_emb, new_ent_label, idx_label, emb_label):
-		assert pred_emb.size(0) == new_ent_label.size(0) == idx_label.size(0) == emb_label.size(0)
+	def loss(self, pred_emb, new_ent_label, candidates, answers):
+		assert pred_emb.size(0) == new_ent_label.size(0) == candidates.size(0) == answers.size(0)
 		def get_pred(tensor, emb):
 			assert emb.dim() == 2
 			if emb.size(0) == 0: return 0, 0
@@ -356,38 +364,21 @@ class MSEEntEmbedding:
 			# dist += 1 # prevent zero division
 			return cos_sim
 		loss = torch.zeros(1, dtype=torch.float).to(self.device)
-		oe_len = len(self.data.oe2i)
-		idx_label = idx_label.clone() - len(self.data.original_e2i)
-		neg_sample_size = 10
-		softmax_loss = []
-		label_loc = np.random.randint(0, 10, idx_label.size(0))
-		lloc_filtered = []
-		for pe, nl, idx, le, lloc in zip(pred_emb, new_ent_label, idx_label, emb_label, label_loc):
-			if not nl:
-				loss += F.mse_loss(pe, le).to(self.device)
-			else:
-				# neg sampling
-				if torch.sum(le) == 0:
-					continue
-				lloc_filtered.append(lloc)
-				loss += F.mse_loss(pe, le).to(self.device)
-				samples = list(range(oe_len))
-				samples.remove(idx.item())
-				nsamples = np.random.choice(samples, neg_sample_size)
-				emb_samples = [self.data.train_oe_embedding[x].to(self.device) for x in nsamples]
-				emb_samples[lloc] = le.to(self.device)
-				similarity_targets = torch.cat(emb_samples).view(-1, self.data.ee_dim)
-				sims = torch.softmax(get_pred(pe, similarity_targets), 0)
-				softmax_loss.append(sims)
-		if len(softmax_loss) > 0:
 
-			loss += F.cross_entropy(torch.cat(softmax_loss).view(-1, 10).to(self.device), torch.tensor(lloc_filtered, device=self.device))
+		softmax_loss = []
+
+		for pe, nl, cand in zip(pred_emb, new_ent_label, candidates):
+			sims = torch.softmax(get_pred(pe, cand), 0)
+			softmax_loss.append(sims)
+
+		loss += F.cross_entropy(torch.stack(softmax_loss).to(self.device), torch.tensor(answers, device=self.device))
 
 		return loss
 
 
 	def test(self, test_data: Corpus, out_kb_flags=None):
 		self.load_model()
+		self.data.oe2i = {}
 		with torch.no_grad():
 			self.encoder.eval()
 			self.transformer.eval()
@@ -396,7 +387,7 @@ class MSEEntEmbedding:
 			self.data.initialize_corpus_tensor(test_data)
 			evaluator = Evaluator(ELDArgs(), self.data)
 			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
-			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
+			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False)
 			preds = []
 			labels = []
 			out_kb_labels = [x.is_new_entity for x in test_data.eld_items]
@@ -420,13 +411,21 @@ class MSEEntEmbedding:
 				_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[threshold_idx], out_kb_labels, labels)
 				evals[threshold_idx] = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = 0, 0, 0
+			okp, okr, okf = 0, 0, 0
+			cl = 0
 			mt = 0
 			for k, v in evals.items():
 				kp, kr, kf = v[0]
 				if kf > f:
 					p, r, f = kp, kr, kf
+					okp, okr, okf = v[2]
+					cl = len(v[4])
 					mt = self.data.calc_threshold(k)
+			print()
 			gl.logger.info("%s Test score: P %.2f R %.2f F %.2f @ threshold %.2f" % (self.model_name, p * 100, r * 100, f * 100, mt))
+			gl.logger.info("%s Out-KB score: P %.2f R %.2f F %.2f @ threshold %.2f" % (self.model_name, okp * 100, okr * 100, okf * 100, mt))
+			gl.logger.info("%s # of cluster: %d @ threshold %.2f" % (self.model_name, cl, mt))
+
 			# jsondump(self.generate_result_dict(test_data.eld_items, idx, sims, evals), "runs/eld/%s/%s_test2.json" % (self.model_name, self.model_name))
 
 			return self.generate_result_dict(test_data.eld_items, idx, sims, evals)
@@ -434,9 +433,9 @@ class MSEEntEmbedding:
 
 	def prepare_input(self, batch):
 		if self.mode in ["train", "test"]:
-			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-6]]
 		else:
-			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, cand_emb, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
 		args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
 		kwargs = {"surface_dict_flag": None, "cand_entities": None, "avg_degree": None}
 		if self.args.use_surface_info:
@@ -493,10 +492,10 @@ class MSEEntEmbedding:
 	def __call__(self, data: Corpus):
 		return self.predict(data)
 
-	def generate_result_dict(self, eld_items, preds, sims, eval_result):
+	def generate_result_dict(self, eld_items, preds, sims, eval_result, out_kb_only=True):
 		result = {
 			"score": {},
-			"data" : []
+			"data" : {}
 		}
 		for k in eval_result.keys():
 			v = eval_result[k]
@@ -510,6 +509,7 @@ class MSEEntEmbedding:
 			}
 			mapping_result = v[4]
 			for i, (e, p, s) in enumerate(zip(eld_items, pred, sim)):
+				original_pred = p
 				if p >= self.data.original_entity_embedding.size(0):
 					preassigned = mapping_result[p] < 0
 					mapping = mapping_result[p] if not preassigned else mapping_result[p] * -1
@@ -519,15 +519,18 @@ class MSEEntEmbedding:
 						p += "_preassigned"
 				else:
 					p = self.data.i2e[p]
-				if len(result["data"]) <= i:
-					result["data"].append({
+					if out_kb_only:
+						continue
+				if i not in result["data"]:
+					result["data"][i] = {
 						"Surface": e.surface,
 						"Context": " ".join([x.surface for x in e.lctx] + ["[%s]" % e.surface] + [x.surface for x in e.rctx]),
-						"EntPred": {self.data.calc_threshold(k): "%s:%.2f" % (p, s)},
+						"EntPred": {"%.2f" % self.data.calc_threshold(k): "%s:%d:%.2f" % (p, original_pred, s)},
 						"Entity" : e.entity
-					})
+					}
 				else:
-					result["data"][i]["EntPred"][k] = "%s:%.2f" % (p, s)
+					result["data"][i]["EntPred"]["%.2f" % self.data.calc_threshold(k)] = "%s:%d:%.2f" % (p, original_pred, s)
+		result["data"] = [v for k, v in sorted(result["data"].items(), key=lambda x: x[0])]
 		return result
 
 class DictBasedPred:

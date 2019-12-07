@@ -124,21 +124,20 @@ class ELDDataset(Dataset):
 			te = torch.zeros(1, dtype=torch.float)
 		if not hasattr(target, "in_cand_dict"):
 			target.in_cand_dict = target.surface in self.cand_dict
-			if self.e2i is not None:
-				target.candidiate_entity_index = []
-				for cand, _, score in self.cand_dict[target.surface, self.max_cand]:
-					target.candidiate_entity_embedding.append(self.e2i[cand])
-				target.candidiate_entity_index += [0] * (5 - len(target.candidiate_entity_index))
-				target.candidiate_entity_index = torch.tensor(target.candidiate_entity_index)
+		# 	if self.e2i is not None:
+		# 		target.candidiate_entity_index = []
+		# 		for cand, _, score in self.cand_dict[target.surface, self.max_cand]:
+		# 			target.candidiate_entity_embedding.append(self.e2i[cand])
+		# 		target.candidiate_entity_index += [0] * (5 - len(target.candidiate_entity_index))
+		# 		target.candidiate_entity_index = torch.tensor(target.candidiate_entity_index)
 
 		is_in_cand_dict = target.in_cand_dict
-		candidate_entity_index = target.candidiate_entity_index
 		l = len(target.lctx_ent + target.rctx_ent)
 		avg_degree = sum([x.degree for x in target.lctx_ent + target.rctx_ent])
 		if self.mode in ["train", "test"]:
-			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_entity_index, avg_degree, new_ent, ee_label, eidx, index
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, avg_degree, target.candidiate_entity_emb, target.answer_in_candidate, new_ent, ee_label, eidx, index
 		else:
-			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, candidate_entity_index, avg_degree
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, avg_degree
 
 	def __len__(self):
 		return len(self.eld_items)

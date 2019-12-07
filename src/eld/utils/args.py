@@ -11,7 +11,7 @@ class ELDArgs(AbstractArgument):
 		# self.dev_filter = "corpus/namu_handtag_only_dev"
 		# self.test_filter = "corpus/namu_handtag_only_test"
 		self.epochs = 300
-		self.eval_per_epoch = 5
+		self.eval_per_epoch = 2
 		self.early_stop = 30
 		self.train_corpus_limit = None
 		self.dev_corpus_limit = None
@@ -52,8 +52,8 @@ class ELDArgs(AbstractArgument):
 		self.out_kb_entity_file = "data/eld/namu_no_ent_in_kb"
 		self.character_file = "data/eld/char"
 		self.character_embedding_file = "data/eld/character_embedding.npy"
-		self.word_file = "data/embedding/wiki_stem.word"
-		self.word_embedding_file = "data/embedding/wiki_stem.npy"
+		self.word_file = "data/eld/namu_tokenized.word"
+		self.word_embedding_file = "data/eld/namu_tokenized.npy"
 		self.entity_file = "data/eld/entities"
 		# self.entity_file = "data/eld/handtag_only.word"
 		self.entity_embedding_file = "data/eld/entity_embeddings.npy"
