@@ -64,6 +64,7 @@ class DataModule:
 		if self.use_cache_kb:
 			self.cache_entity_embedding = {i: torch.zeros([0, ee.shape[-1]], dtype=torch.float) for i in range(1, 20)}
 			self.cache_entity_surface_dict = {i: [] for i in range(1, 20)}
+			self.cache_entity_embedding_items = {i: [] for i in range(1, 20)}
 			self.pred_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
 			self.pred_entity_surface_dict = []
 			self.pred_i2e = {}
@@ -127,18 +128,22 @@ class DataModule:
 
 	@TimeUtil.measure_time
 	def initialize_corpus_tensor(self, corpus: Corpus, pred=False, train=True):
-		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
+		for token in corpus.eld_items:
 			if token.is_entity and token.entity.startswith("namu_") and token.entity not in self.oe2i:
 				self.oe2i[token.entity] = len(self.oe2i)
 			if token.is_entity and not token.entity.startswith("namu_") and token.entity not in self.e2i:
 				token.target = False
-			self.initialize_token_tensor(token, pred, train)
-		self.i2oe = {v: k for k, v in self.oe2i.items()}
-		if self.mode == "train":
+		if train:
 			self.train_oe_embedding = torch.nn.Embedding(len(self.oe2i), self.ee_dim).to(torch.float)
+		self.i2oe = {v: k for k, v in self.oe2i.items()}
+		for token in tqdm(corpus.token_iter(), total=corpus.token_len, desc="Initializing Tensors"):
+			self.initialize_token_tensor(token, pred, train)
+		if train:
 			self.give_candidates(corpus)
 
-	def initialize_token_tensor(self, token: Vocabulary, pred=False, train=True):
+
+
+	def initialize_token_tensor(self, token: Vocabulary, pred_mode=False, is_train_data=True):
 		if token.is_entity:
 			token.entity_embedding = self.entity_embedding[self.e2i[token.entity] if token.entity in self.e2i else 0]
 			if self.use_kb_relation_info:
@@ -150,7 +155,7 @@ class DataModule:
 			words = KoreanUtil.tokenize(token.surface)
 			if len(words) == 0: words = [token.surface]
 			token.word_embedding = self.word_embedding(torch.tensor([self.w2i[x] if x in self.w2i else 0 for x in words]))
-		if not pred and not token.target: return token  # train mode에서는 target이 아닌 것의 relation과 type 정보는 필요없음
+		if not pred_mode and not token.target: return token  # train mode에서는 target이 아닌 것의 relation과 type 정보는 필요없음
 		if self.re_flag:
 			relations = []
 			for rel in token.relation:
@@ -167,12 +172,12 @@ class DataModule:
 		if self.te_flag:
 			ne_type = token.ne_type[:2].upper() if token.ne_type is not None else None
 			token.type_embedding = torch.tensor(one_hot(self.t2i[ne_type] if ne_type in self.t2i else 0, self.te_dim))
-		if not pred and token.target:  # train mode 전용 label setting
+		if not pred_mode and token.target:  # train mode 전용 label setting
 			if token.entity in self.e2i:
-				token.entity_label_embedding = self.entity_embedding[self.e2i[token.entity]]
+				if is_train_data: token.entity_label_embedding = self.entity_embedding[self.e2i[token.entity]]
 				token.entity_label_idx = self.e2i[token.entity]
 			elif token.entity in self.oe2i:
-				token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
+				if is_train_data: token.entity_label_embedding = self.train_oe_embedding(torch.tensor(self.oe2i[token.entity])).clone().detach()
 				token.entity_label_idx = self.oe2i[token.entity] + len(self.e2i)
 			else:
 				if token.entity not in self.err_entity:
@@ -180,7 +185,7 @@ class DataModule:
 					self.err_entity.add(token.entity)
 				token.entity_label_embedding = torch.zeros(self.ee_dim, dtype=torch.float)
 				token.entity_label_idx = -1
-				if train:
+				if is_train_data:
 					token.target = False
 		return token
 
@@ -216,6 +221,7 @@ class DataModule:
 		self.give_candidates(dataset)
 
 	def give_candidates(self, dataset: Corpus):
+		gl.logger.info("Generating candidates")
 		oe_len = len(self.oe2i)
 		ie_len = len(self.original_e2i)
 		rands = np.random.randint(0, 10, len(dataset.eld_items))
@@ -234,12 +240,13 @@ class DataModule:
 				nsamples = np.random.choice(samples, neg_sample_size)
 				emb_samples = torch.stack([self.entity_embedding[x] for x in nsamples])
 				emb_samples[r] = token.entity_label_embedding
-			token.candidiate_entity_emb = emb_samples.to(self.device)
+			token.candidiate_entity_emb = emb_samples
 
 	def reset_new_entity(self):
 		if self.use_cache_kb:
 			self.cache_entity_embedding = {i: torch.zeros([0, self.ee_dim], dtype=torch.float) for i in range(1, 20)}
 			self.cache_entity_surface_dict = {i: [] for i in range(1, 20)}
+			self.cache_entity_embedding_items = {i: [] for i in range(1, 20)}
 		else: # Threshold별로 저장하는 대신 매번 predict할때마다 reset하게 바꿈.
 			self.entity_embedding = self.original_entity_embedding
 			self.surface_ent_dict = self.original_surface_ent_dict
@@ -484,13 +491,16 @@ class DataModule:
 							pred_idx = len(self.e2i) + self.cache_entity_embedding[idx].size(0)
 							self.cache_entity_embedding[idx] = torch.cat([self.cache_entity_embedding[idx], emb.cpu().clone().detach().unsqueeze(0)]).view(-1, self.ee_dim)
 							self.cache_entity_surface_dict[idx].append({ent.surface})
+							self.cache_entity_embedding_items[idx].append([emb.clone().detach().cpu()])
 							assert self.cache_entity_embedding[idx].size(0) == len(self.cache_entity_surface_dict[idx])
 							sim = -1 # 새로 등록 표시
 						else: # link cache kb
 							self.cache_entity_surface_dict[idx][pred_idx].add(ent.surface)
 							if self.modify_entity_embedding:
-								self.cache_entity_embedding[idx][pred_idx] *= 1 - self.modify_entity_embedding_weight
-								self.cache_entity_embedding[idx][pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
+								self.cache_entity_embedding_items[idx][pred_idx].append(emb.clone().detach().cpu())
+								# self.cache_entity_embedding[idx][pred_idx] *= 1 - self.modify_entity_embedding_weight
+								# self.cache_entity_embedding[idx][pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
+								self.cache_entity_embedding[idx][pred_idx] = torch.sum(self.cache_entity_embedding_items[idx][pred_idx]) / len(self.cache_entity_embedding_items[idx][pred_idx])
 							pred_idx += len(self.e2i)
 					idx_result[idx].append(pred_idx)
 					sim_result[idx].append(sim)

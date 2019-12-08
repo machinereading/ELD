@@ -21,7 +21,6 @@ class ELDDataset(Dataset):
 		self.max_jamo_len_in_word = args.jamo_limit
 		self.max_word_len_in_entity = args.word_limit
 		self.max_token_len_in_sentence = max(map(len, self.corpus))
-		self.device = args.device
 		self.window_size = args.context_window_size
 
 		self.ce_dim = args.c_emb_dim
@@ -134,8 +133,10 @@ class ELDDataset(Dataset):
 		is_in_cand_dict = target.in_cand_dict
 		l = len(target.lctx_ent + target.rctx_ent)
 		avg_degree = sum([x.degree for x in target.lctx_ent + target.rctx_ent])
-		if self.mode in ["train", "test"]:
+		if self.mode == "train":
 			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, avg_degree, target.candidiate_entity_emb, target.answer_in_candidate, new_ent, ee_label, eidx, index
+		elif self.mode == "test":
+			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, avg_degree, new_ent, ee_label, eidx, index
 		else:
 			return ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, is_in_cand_dict, avg_degree
 

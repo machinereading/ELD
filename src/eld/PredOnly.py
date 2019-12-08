@@ -249,8 +249,8 @@ class MSEEntEmbedding:
 		gl.logger.info("Training prediction model")
 
 		batch_size = 512
-		optimizer = torch.optim.SGD(list(self.encoder.parameters()) + list(self.transformer.parameters()), lr=1e-4, weight_decay=1e-4)
-		tqdmloop = tqdm(range(1, self.args.epochs + 1))
+		optimizer = torch.optim.Adam(list(self.encoder.parameters()) + list(self.transformer.parameters()), lr=0.001, weight_decay=1e-3)
+
 		self.data.initialize_corpus_tensor(train_data)
 		train_dataset = ELDDataset(self.mode, train_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 		train_batch = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
@@ -266,15 +266,10 @@ class MSEEntEmbedding:
 		max_score = (0, 0, 0)
 		max_score_epoch = 0
 		max_threshold = 0
+		tqdmloop = tqdm(range(1, self.args.epochs + 1))
 		for epoch in tqdmloop:
 			self.encoder.train()
 			self.transformer.train()
-			# nel = []
-			# gei = []
-			# preds = []
-			newent_flags = []
-			entity_idxs = []
-			preds = []
 			losssum = 0
 			for batch in train_batch:
 				optimizer.zero_grad()
@@ -283,15 +278,13 @@ class MSEEntEmbedding:
 				args, kwargs = self.prepare_input(batch)
 				_, encoded_mention = self.encoder(*args)
 				transformed = self.transformer(encoded_mention)
-				preds.append(transformed)
-				newent_flags.append(batch[-4])
-				ee_label = batch[-3].to(self.device)
-				entity_idxs.append(batch[-2])
+				new_ent_label = batch[-4]
 				candidate_embs = batch[-6]
 				answers = batch[-5]
+				ee_label = batch[-3]
 
 				# loss = sum([F.mse_loss(p, g) if torch.sum(g) != 0 else torch.zeros_like(F.mse_loss(p, g)) for p, g in zip(transformed, ee_label)]) / ee_label.size(0) #
-				loss = self.loss(transformed, batch[-4], candidate_embs, answers).to(self.device)
+				loss = self.loss(transformed, candidate_embs, answers, ee_label).to(self.device)
 				loss.backward() # update new entity embedding에서 grad function이 있는 상태로 저장되는듯?
 				optimizer.step()
 				losssum += float(loss)
@@ -352,28 +345,29 @@ class MSEEntEmbedding:
 		if test_data is not None:
 			jsondump(self.test(test_data), "runs/eld/%s/%s_test.json" % (self.model_name, self.model_name))
 
-	def loss(self, pred_emb, new_ent_label, candidates, answers):
-		assert pred_emb.size(0) == new_ent_label.size(0) == candidates.size(0) == answers.size(0)
+	def loss(self, pred_emb, candidates, answers, ee_label):
+		assert pred_emb.size(0) == candidates.size(0) == answers.size(0)
 		def get_pred(tensor, emb):
 			assert emb.dim() == 2
 			if emb.size(0) == 0: return 0, 0
 			emb = emb.to(self.device)
 			expanded = tensor.expand_as(emb)
 			cos_sim = F.cosine_similarity(expanded, emb)
+			# cos_sim = torch.bmm(emb.unsqueeze(1), expanded.unsqueeze(2)).squeeze()
 			# dist = F.pairwise_distance(expanded, emb)
 			# dist += 1 # prevent zero division
 			return cos_sim
-		loss = torch.zeros(1, dtype=torch.float).to(self.device)
 
 		softmax_loss = []
 
-		for pe, nl, cand in zip(pred_emb, new_ent_label, candidates):
-			sims = torch.softmax(get_pred(pe, cand), 0)
+		for pe, cand in zip(pred_emb, candidates):
+			sims = torch.softmax(get_pred(pe, cand.clone().detach()), 0)
 			softmax_loss.append(sims)
 
-		loss += F.cross_entropy(torch.stack(softmax_loss).to(self.device), torch.tensor(answers, device=self.device))
+		l1 = F.cross_entropy(torch.stack(softmax_loss).to(self.device), answers.to(self.device), reduction="mean")
+		l2 = F.mse_loss(pred_emb.to(self.device), ee_label.to(self.device), reduction="sum") / pred_emb.size(0)
+		return l1 + l2
 
-		return loss
 
 
 	def test(self, test_data: Corpus, out_kb_flags=None):
@@ -384,7 +378,7 @@ class MSEEntEmbedding:
 			self.transformer.eval()
 			self.data.reset_new_entity()
 
-			self.data.initialize_corpus_tensor(test_data)
+			self.data.initialize_corpus_tensor(test_data, train=False)
 			evaluator = Evaluator(ELDArgs(), self.data)
 			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False)
@@ -432,8 +426,10 @@ class MSEEntEmbedding:
 			# jsondump(self.args.to_json(), self.args.arg_path)
 
 	def prepare_input(self, batch):
-		if self.mode in ["train", "test"]:
+		if self.mode == "train":
 			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-6]]
+		elif self.mode == "test":
+			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch[:-4]]
 		else:
 			ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl, in_cand_dict_flag, avg_degree = [x.to(self.device, torch.float32) if x is not None else None for x in batch]
 		args = (ce, cl, we, wl, lwe, lwl, rwe, rwl, lee, lel, ree, rel, re, rl, te, tl)
@@ -545,7 +541,7 @@ class DictBasedPred:
 		self.model_name = "dictbased"
 
 	def test(self, data: Corpus):
-		self.data.initialize_corpus_tensor(data, pred=True)
+		self.data.initialize_corpus_tensor(data, pred=True, train=False)
 		evaluator = Evaluator(ELDArgs(), self.data)
 		preds = []
 		labels = []
@@ -614,7 +610,7 @@ class NoRegister(MSEEntEmbedding):
 			self.transformer.eval()
 			self.data.reset_new_entity()
 
-			self.data.initialize_corpus_tensor(test_data)
+			self.data.initialize_corpus_tensor(test_data, train=False)
 			evaluator = Evaluator(ELDArgs(), self.data)
 			test_dataset = ELDDataset(self.mode, test_data, self.args, cand_dict=self.data.surface_ent_dict, limit=self.args.train_corpus_limit)
 			test_batch = DataLoader(dataset=test_dataset, batch_size=512, shuffle=False, num_workers=4)
