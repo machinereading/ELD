@@ -5,6 +5,7 @@ from src.eld.utils import DataModule, ELDArgs
 from src.utils import jsondump, jsonload
 import numpy as np
 import traceback
+import os
 corpus1 = Corpus.load_corpus("corpus/nokim_fixed.json")
 corpus2 = Corpus.load_corpus("corpus/namu_eld_handtag_test2/")
 filter_entities = ["namu_읍내", "namu_음악캠프"]
@@ -13,19 +14,31 @@ for item in corpus2.eld_items:
 		item.target = False
 args = ELDArgs()
 args.in_kb_linker = "mulrel"
-pred0 = NoRegister("train", "noreg", args=args)
-
-# pred1 = DictBasedPred(DataModule("test", ELDArgs()))
+# pred0 = NoRegister("train", "noreg", args=args)
+pred1 = DictBasedPred("test", "pred_with_neg_namu_word_emb")
+# pred2 = MSEEntEmbedding("test", "pred_with_neg_namu_word_emb")
+# pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char")
+# pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context")
+# pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context")
+# pred6 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type")
 # pred2 = MSEEntEmbedding("test", "pred_mse_4")
-# pred3 = MSEEntEmbedding("test", "pred_mse_wo_modify_0")
-# discovery = DiscoveryModel("test", "discovery_degree_surface_4")
-pred2_1 = MSEEntEmbedding("test", "pred_mse_4")
-pred3_2 = MSEEntEmbedding("test", "pred_with_neg_sampling_4")
-pred4_1 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
+# # pred3 = MSEEntEmbedding("test", "pred_mse_wo_modify_0")
+# # discovery = DiscoveryModel("test", "discovery_degree_surface_4")
+# pred2_1 = MSEEntEmbedding("test", "pred_mse_4")
+# pred3_2 = MSEEntEmbedding("test", "pred_with_neg_sampling_4")
+# pred4_1 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
+#
+# pred4_2 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
+# pred4_2.data.cand_only = False
+# pred4_3 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
+# pred0 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word")
+# pred1 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context")
+# pred2 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context")
+# pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type")
+# pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char")
+# pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel")
+# pred4 = MSEEntEmbedding("test", " ")
 
-pred4_2 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
-pred4_2.data.cand_only = False
-pred4_3 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
 # pred5 = MSEEntEmbedding("test", "pred_with_neg_sampling_4")
 # pred6 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_4")
 # d = jsonload("runs/eld/discovery_degree_surface_4/discovery_degree_surface_4_test.json")
@@ -39,38 +52,147 @@ pred4_3 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_j
 # pred5 = NoRegister("test", "pred_mse_4")
 result1 = {}
 result2 = {}
-for model in [pred0, pred3, pred4, pred5]:
-# for model in [pred1, pred2, pred3, pred4, pred5]:
-	j1 = model.test(corpus1)
-	ms = 0
-	mv = 0
-	jsondump(j1, "eld_test/pred_test_ambset_%s.json" % model.model_name)
-	try:
-		for i, (s, v) in enumerate(j1["score"].items()):
-			score = v["Total"][-1]
-			if score > ms:
-				ms = score
-				mv = i + 1
-		np.save("eld_test/%s_cache_emb_ambset.npy" % model.model_name, model.data.cache_entity_embedding[mv])
-		jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], "eld_test/%s_cache_dict_ambset.json" % model.model_name)
-	except:
-		traceback.print_exc()
-	j2 = model.test(corpus2)
-	jsondump(j2, "eld_test/pred_test_testset_%s.json" % model.model_name)
-	# score1 = j1["score"] if type(j1) is dict else j1
-	ms = 0
-	mv = 0
-	try:
-		for i, (s, v) in enumerate(j1["score"].items()):
-			score = v["Total"][-1]
-			if score > ms:
-				ms = score
-				mv = i + 1
-		np.save("eld_test/%s_cache_emb_ambset.npy" % model.model_name, model.data.cache_entity_embedding[mv])
-		jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], "eld_test/%s_cache_dict_ambset.json" % model.model_name)
-	except:
-		traceback.print_exc()
-	del model
+test_nocand_nomod = False
+test_cand_nomod = True
+test_nocand_mod = False
+test_cand_mod = False
+# for model in [pred0, pred1, pred2, pred3, pred4, pred5]:
+for model in [pred1]:
+	target_dir = "eld_test/%s/" % model.model_name
+	if not os.path.isdir(target_dir):
+		os.mkdir(target_dir)
+	if test_nocand_nomod:
+		print("NOCAND, NOMOD")
+		j1 = model.test(corpus1)
+		ms = 0
+		mv = 0
+		jsondump(j1, target_dir + "pred_test_nocand_ambset.json")
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_nocand_ambset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_nocand_ambset.json")
+		except:
+			traceback.print_exc()
+		j2 = model.test(corpus2)
+		jsondump(j2, target_dir + "pred_test_nocand_testset.json" )
+		# score1 = j1["score"] if type(j1) is dict else j1
+		ms = 0
+		mv = 0
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_nocand_testset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_nocand_testset.json" )
+		except:
+			traceback.print_exc()
+
+	if test_cand_nomod:
+		print("CAND, NOMOD")
+		model.data.cand_only = True
+
+		j1 = model.test(corpus1)
+		ms = 0
+		mv = 0
+		jsondump(j1, target_dir + "pred_test_cand_ambset.json")
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_cand_ambset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_cand_ambset.json")
+		except:
+			traceback.print_exc()
+		j2 = model.test(corpus2)
+		jsondump(j2, target_dir + "pred_test_cand_testset.json")
+		# score1 = j1["score"] if type(j1) is dict else j1
+		ms = 0
+		mv = 0
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_cand_testset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_cand_testset.json")
+		except:
+			traceback.print_exc()
+
+	if test_nocand_mod:
+		print("NOCAND, MOD")
+		model.data.cand_only = False
+		model.data.modify_entity_embedding = True
+		j1 = model.test(corpus1)
+		ms = 0
+		mv = 0
+		jsondump(j1, target_dir + "pred_test_nocand_mod_ambset.json")
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_nocand_mod_ambset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_nocand_mod_ambset.json")
+		except:
+			traceback.print_exc()
+		j2 = model.test(corpus2)
+		jsondump(j2, target_dir + "pred_test_nocand_mod_testset.json")
+		# score1 = j1["score"] if type(j1) is dict else j1
+		ms = 0
+		mv = 0
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_nocand_mod_testset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_nocand_mod_testset.json")
+		except:
+			traceback.print_exc()
+
+	if test_cand_mod:
+		print("CAND, MOD")
+		model.data.cand_only = True
+		j1 = model.test(corpus1)
+		ms = 0
+		mv = 0
+		jsondump(j1, target_dir + "pred_test_cand_mod_ambset.json")
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_cand_mod_ambset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_cand_mod_ambset.json")
+		except:
+			traceback.print_exc()
+		j2 = model.test(corpus2)
+		jsondump(j2, target_dir + "pred_test_cand_mod_testset.json")
+		# score1 = j1["score"] if type(j1) is dict else j1
+		ms = 0
+		mv = 0
+		try:
+			for i, (s, v) in enumerate(j1["score"].items()):
+				score = v["Total"][-1]
+				if score > ms:
+					ms = score
+					mv = i + 1
+			np.save(target_dir + "cache_emb_cand_mod_testset.npy", model.data.cache_entity_embedding[mv])
+			jsondump([list(x) for x in model.data.cache_entity_surface_dict[mv]], target_dir + "cache_dict_cand_mod_testset.json")
+		except:
+			traceback.print_exc()
 	# result1[model.model_name] = score1
 	# result2[model.model_name] = score2
 #

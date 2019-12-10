@@ -116,6 +116,9 @@ class ELDDataset(Dataset):
 			re = target.relation_embedding
 			rl = re.size()[0]
 			re = pad(re, self.r_limit)
+		else:
+			re = torch.zeros(1, dtype=torch.float)
+			rl = 0
 		if self.te_flag:
 			te = target.type_embedding
 			tl = te.size()[0]
