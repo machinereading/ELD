@@ -33,7 +33,12 @@ t1 = get_max_threshold(d1)
 t2 = get_max_threshold(d2)
 d1 = [x["NewEntPred"] > t1 for x in d1["data"]]
 d2 = [x["NewEntPred"] > t2 for x in d2["data"]]
-
-pred_model = MSEEntEmbedding("test", "pred_with_neg_namu_word_emb")
-p1 = pred_model.test(corpus1, d1)
-p2 = pred_model.test(corpus2, d2)
+d0 = [0 for _ in corpus2.eld_items]
+pred1 = MSEEntEmbedding("test", "pred_with_neg_namu_word_emb")
+pred2 = NoRegister("test",  "pred_with_neg_namu_word_emb")
+for p in [pred1, pred2]:
+	# p1 = p.test(corpus1, d1)
+	p1 = p.test(corpus2, d0) # all-0
+	p2 = p.test(corpus2, d2) # discovery model
+	p3 = p.test(corpus2) # oracle discovery
+	# jsondump(p2, "joint_test.json")

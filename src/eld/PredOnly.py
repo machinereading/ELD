@@ -546,7 +546,7 @@ class NoRegister(MSEEntEmbedding):
 		super(NoRegister, self).__init__(mode, model_name, args, data)
 		self.model_name = "noreg"
 
-	def test(self, test_data: Corpus):
+	def test(self, test_data: Corpus, out_kb_flags=None):
 		# self.load_model()
 		with torch.no_grad():
 			self.encoder.eval()
@@ -560,7 +560,7 @@ class NoRegister(MSEEntEmbedding):
 			preds = []
 			labels = []
 			out_kb_labels = [x.is_new_entity for x in test_data.eld_items]
-			out_kb_preds = [0 for _ in test_data.eld_items]
+			out_kb_flags = [0 for _ in test_data.eld_items] if out_kb_flags is None else out_kb_flags
 			for batch in test_batch:
 				args, kwargs = self.prepare_input(batch)
 				label = batch[-2]
@@ -570,10 +570,10 @@ class NoRegister(MSEEntEmbedding):
 				labels.append(label)
 			preds = torch.cat(preds)
 
-			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_preds)
+			idx, sims = self.data.predict_entity_with_embedding_train(test_data.eld_items, preds, out_kb_flags)
 
 			labels = torch.cat(labels)
-			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_preds, idx[1], out_kb_labels, labels)
+			_, total_score, in_kb_score, out_kb_score, _, ari, mapping_result, _ = evaluator.evaluate(test_data.eld_items, out_kb_flags, idx[1], out_kb_labels, labels)
 			evals = [total_score[0], in_kb_score[0], out_kb_score[0], ari, mapping_result]
 			p, r, f = total_score[0]
 			gl.logger.info("%s Test score: P %.2f R %.2f F %.2f" % (self.model_name, p * 100, r * 100, f * 100))

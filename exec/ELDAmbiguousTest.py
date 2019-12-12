@@ -7,6 +7,9 @@ import numpy as np
 import traceback
 import os
 corpus1 = Corpus.load_corpus("corpus/nokim_fixed.json")
+for item in corpus1.eld_items:
+	if "namu_" not in item.entity:
+		item.entity = "namu_" + item.entity
 corpus2 = Corpus.load_corpus("corpus/namu_eld_handtag_test2/")
 filter_entities = ["namu_읍내", "namu_음악캠프"]
 for item in corpus2.eld_items:
@@ -15,8 +18,8 @@ for item in corpus2.eld_items:
 args = ELDArgs()
 args.in_kb_linker = "mulrel"
 # pred0 = NoRegister("train", "noreg", args=args)
-pred1 = DictBasedPred("test", "pred_with_neg_namu_word_emb")
-# pred2 = MSEEntEmbedding("test", "pred_with_neg_namu_word_emb")
+# pred1 = DictBasedPred("test", "pred_with_neg_namu_word_emb")
+
 # pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char")
 # pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context")
 # pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context")
@@ -31,12 +34,13 @@ pred1 = DictBasedPred("test", "pred_with_neg_namu_word_emb")
 # pred4_2 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
 # pred4_2.data.cand_only = False
 # pred4_3 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
-# pred0 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word")
-# pred1 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context")
-# pred2 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context")
-# pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type")
-# pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char")
-# pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel")
+pred0 = MSEEntEmbedding("test", "pred_full_ffnn_transformer")
+pred1 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_ffnn")
+pred2 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context_ffnn")
+pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context_ffnn")
+pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type_ffnn")
+pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char_ffnn")
+pred6 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel_ffnn")
 # pred4 = MSEEntEmbedding("test", " ")
 
 # pred5 = MSEEntEmbedding("test", "pred_with_neg_sampling_4")
@@ -52,13 +56,13 @@ pred1 = DictBasedPred("test", "pred_with_neg_namu_word_emb")
 # pred5 = NoRegister("test", "pred_mse_4")
 result1 = {}
 result2 = {}
-test_nocand_nomod = False
+test_nocand_nomod = True
 test_cand_nomod = True
-test_nocand_mod = False
-test_cand_mod = False
-# for model in [pred0, pred1, pred2, pred3, pred4, pred5]:
-for model in [pred1]:
-	target_dir = "eld_test/%s/" % model.model_name
+test_nocand_mod = True
+test_cand_mod = True
+for model in [pred0, pred1, pred2, pred3, pred4, pred5, pred6]:
+# for model in [pred2]:
+	target_dir = "eld_test2/%s/" % model.model_name
 	if not os.path.isdir(target_dir):
 		os.mkdir(target_dir)
 	if test_nocand_nomod:

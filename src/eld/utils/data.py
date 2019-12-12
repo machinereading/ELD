@@ -500,7 +500,7 @@ class DataModule:
 								self.cache_entity_embedding_items[idx][pred_idx].append(emb.clone().detach().cpu())
 								# self.cache_entity_embedding[idx][pred_idx] *= 1 - self.modify_entity_embedding_weight
 								# self.cache_entity_embedding[idx][pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
-								self.cache_entity_embedding[idx][pred_idx] = torch.sum(self.cache_entity_embedding_items[idx][pred_idx]) / len(self.cache_entity_embedding_items[idx][pred_idx])
+								self.cache_entity_embedding[idx][pred_idx] = sum(self.cache_entity_embedding_items[idx][pred_idx]) / len(self.cache_entity_embedding_items[idx][pred_idx])
 							pred_idx += len(self.e2i)
 					idx_result[idx].append(pred_idx)
 					sim_result[idx].append(sim)
