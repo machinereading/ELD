@@ -1,10 +1,13 @@
 import logging
+import os
 
 from tqdm import tqdm
+from typing import Iterator, List
 
 from .Cluster import Cluster
 from .Sentence import Sentence
-from ..utils import jsonload, TimeUtil
+from .Vocabulary import Vocabulary
+from ..utils import jsonload, TimeUtil, diriter, readfile
 
 class Corpus:
 	def __init__(self):
@@ -12,12 +15,13 @@ class Corpus:
 		self.tagged_voca_lens = []
 		self.cluster = {}  # dict of str(entity form): Cluster
 		self.additional_cluster = []
+		self._eld_items: List[Vocabulary] = []
 
 	def add_sentence(self, sentence):
 		self.sentences.append(sentence)
 		sentence.id = len(self.sentences)
 
-	def __iter__(self):
+	def __iter__(self) -> Iterator[Sentence]:
 		for item in self.sentences:
 			yield item
 
@@ -37,7 +41,7 @@ class Corpus:
 		return max([x.max_jamo for x in self.cluster_list])
 
 	@TimeUtil.measure_time
-	def __getitem__(self, ind):
+	def __getitem__(self, ind) -> Vocabulary:
 		acclen = 0
 		accbuf = 0
 		senind = 0
@@ -53,25 +57,34 @@ class Corpus:
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path):
+	def load_corpus(cls, path, limit=None, min_token=0):
 		# load from crowdsourcing form
 		if type(path) is str:
-			try:
-				path = jsonload(path)
-			except PermissionError or IsADirectoryError:
+			if os.path.isfile(path):
 				try:
-					import os
-					if path[-1] != "/": path += "/"
-					path = [jsonload(path+f) for f in os.listdir(path)]
-				except:
-					raise Exception("Data format error")
+					path = jsonload(path)
+				except PermissionError or IsADirectoryError:
+					try:
+						if path[-1] != "/": path += "/"
+						path = [jsonload(path + f) for f in os.listdir(path)]
+					except:
+						raise Exception("Data format error")
+			else:
+				path = [x for x in map(jsonload, diriter(path))]
 		assert type(path) is list
-		logging.info("Loading corpus")
+		# logging.info("Loading corpus")
 		corpus = cls()
+		if limit is not None and limit > 0:
+			path = path[:limit]
 		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
-			if sentence is None: continue
-			if len(sentence.entities) == 0: continue
+			if sentence is None:
+				# print("Sentence is None")
+				continue
+			if len(sentence.entities) == 0:
+				# print("No entities")
+				continue
+			if min_token > 0 and len(sentence) < min_token: continue
 			corpus.add_sentence(sentence)
 
 			for nt in sentence.entities:
@@ -146,3 +159,43 @@ class Corpus:
 				if token.ec_cluster not in self.cluster:
 					self.cluster[token.ec_cluster] = Cluster(str(token.ec_cluster))
 				self.cluster[token.ec_cluster].add_elem(token)
+
+	@property
+	def token_len(self):
+		return sum(map(len, self))
+
+	def token_iter(self):
+		for sent in self:
+			for token in sent:
+				yield token
+
+	def _entity_iter(self):
+		for sent in self:
+			for ent in sent.entities:
+				yield ent
+	# for ELD
+	@property
+	def eld_len(self):
+		return len(self.eld_items)
+
+	def eld_get_item(self, idx):
+		if type(idx) is int:
+			if idx > self.eld_len: raise IndexError(idx, self.eld_len)
+
+			return self.eld_items[idx]
+		elif type(idx) is slice:
+			return self.eld_items[idx]
+
+	@property
+	def eld_items(self) -> List[Vocabulary]:
+		return [x for x in self._entity_iter() if x.target]
+
+	@property
+	def entities(self):
+		return [x for x in self._entity_iter()]
+
+	@classmethod
+	def from_string(cls, *corpus):
+		from ..utils.datafunc import text_to_etri, etri_to_ne_dict
+		return cls.load_corpus(list(map(etri_to_ne_dict, map(text_to_etri, corpus))))
+

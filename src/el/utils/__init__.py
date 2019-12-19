@@ -1,5 +1,3 @@
-from .CandidateDict import CandidateDict
-
 # with TimeUtil.TimeChecker("Entity dict load"):
 # 	with open("data/el/wiki_entity_dict.json", encoding="UTF8") as f:
 # 		candidate_dict = CandidateDict.from_file(f)

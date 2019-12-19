@@ -256,7 +256,6 @@ def get_batch(data, batch_size, word_alphabet=None, unk_replace=0.):
 def iterate_batch(data, batch_size, word_alphabet=None, unk_replace=0., shuffle=False):
     data, max_char_length = data
     bucket_sizes = [len(data[b]) for b in range(len(_buckets))]
-    total_size = float(sum(bucket_sizes))
     bucket_indices = np.arange(len(_buckets))
     if shuffle:
         np.random.shuffle((bucket_indices))

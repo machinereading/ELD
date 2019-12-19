@@ -56,8 +56,6 @@ class ValidationModel(nn.Module):
 		# cluster -> representation
 		# print(jamo_index.size(), cluster_word_lctx.size(), cluster_entity_lctx.size())
 		# split into 100
-		chunks = jamo_index.size()[0] * jamo_index.size()[1] // self.chunk_size
-		size = (size - 1) // self.chunk_size + 1
 		jamo_size = jamo_index.size()[-1]
 
 		# print(jamo_index.size())

@@ -8,10 +8,8 @@ class BiContextEmbedder(nn.Module):
 	def __init__(self, model, input_dim, output_dim):
 		super(BiContextEmbedder, self).__init__()
 		# self.lctx_model = ModelFactory.load_model(args.er_model, input_dim, args.er_output_dim)
-		self.lctx_model = module[model.lower()](input_size=input_dim, hidden_size=output_dim, batch_first=True,
-		                                        bidirectional=False)
-		self.rctx_model = module[model.lower()](input_size=input_dim, hidden_size=output_dim, batch_first=True,
-		                                        bidirectional=False)
+		self.lctx_model = module[model.lower()](input_size=input_dim, hidden_size=output_dim, batch_first=True, bidirectional=False)
+		self.rctx_model = module[model.lower()](input_size=input_dim, hidden_size=output_dim, batch_first=True, bidirectional=False)
 
 	def forward(self, lctx, rctx):
 		lctx_emb, _ = self.lctx_model(lctx)

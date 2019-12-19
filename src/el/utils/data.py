@@ -9,10 +9,10 @@ from ...ds import *
 from ...utils import KoreanUtil, readfile, pickleload
 
 class DataModule:
-	def __init__(self, args):
+	def __init__(self, args, surface_ent_dict=None):
 		self.ent_list = [x for x in readfile(args.ent_list_path)]
 		self.redirects = pickleload(args.redirects_path)
-		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
+		self.surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects) if surface_ent_dict is None else surface_ent_dict
 		self.word_voca, self.word_embedding = U.load_voca_embs(args.word_voca_path, args.word_embedding_path)
 		self.snd_word_voca, self.snd_word_embedding = U.load_voca_embs(args.snd_word_voca_path,
 		                                                               args.snd_word_embedding_path)
@@ -34,8 +34,8 @@ class DataModule:
 		entities = [x.to_json() for x in sentence.tokens if x.is_entity]
 		for entity in entities:
 			entity["candidates"] = self.surface_ent_dict[entity["surface"]]
-			entity["start"] = entity["char_ind"]
-			entity["end"] = entity["char_ind"] + len(entity["surface"])
+			entity["start"] = entity["char_idx"]
+			entity["end"] = entity["char_idx"] + len(entity["surface"])
 		return {
 			"text"    : sentence.original_sentence,
 			"entities": entities,
@@ -43,6 +43,8 @@ class DataModule:
 		}
 
 	def make_json(self, ne_marked_dict, predict=False):
+		if ne_marked_dict is None:
+			return None
 		cs_form = {}
 		cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict[
 			"text"]
@@ -82,12 +84,13 @@ class DataModule:
 
 	def generate_input(self, sentence, predict=False):
 		preprocess = {str: datafunc.mark_ne, Sentence: self.sentence_to_json, dict: lambda x: x}
-		sentence = self.make_json(preprocess[type(sentence)](sentence), predict=predict)
 
+		sentence = self.make_json(preprocess[type(sentence)](sentence), predict=predict)
+		# fname = sentence["fileName"]
+		# sentence = self.make_json(datafunc.mark_ne(sentence["text"]), predict=predict)
+		# sentence["fileName"] = fname
 		# at this point, sentence should be in Crowdsourcing form
-		result = []
 		links = []
-		print_flag = False
 		# sentence["entities"] = list(filter(lambda entity: (redirects[entity["keyword"]] if entity["keyword"] in redirects else entity["keyword"]) in ent_form, sentence["entities"]))
 		for entity in sentence["entities"]:
 			redirected_entity = self.redirects[entity["answer"]] if entity["answer"] in self.redirects else entity[
@@ -142,6 +145,7 @@ class DataModule:
 		last_link = None
 		added = []
 		for morph, pos in zip(morphs, inds):
+			error_flag = False
 			for m, link in datafunc.morph_split((morph, pos), links):
 				if link is None:  # if train mode, skip if candidate set is empty
 					conlls.append(m)
@@ -151,7 +155,11 @@ class DataModule:
 				bi = "I" if last_label != "O" and last_link is not None and link == last_link else "B"
 				ne, en, sp, ep, cand = link
 				last_link = link
-				assert m in ne, "%s, %s, %s" % (sentence, m, ne)
+				if m not in ne or error_flag:
+					conlls.append(m)
+					error_flag = True
+					continue
+				assert m in ne
 				conlls.append([m, bi, ne, en, "%s%s" % (datafunc.dbpedia_prefix, en), "000", "000"])
 				if bi == "B":
 					added.append(link)
@@ -206,54 +214,6 @@ class DataModule:
 			except Exception:
 				import traceback
 				traceback.print_exc()
+				cw_form.append({})
 		return cw_form, conlls, tsvs
 
-class CandDict:
-	def __init__(self, kb, init_dict, redirect_dict):
-		self._kb = kb
-		self._dict = init_dict
-		self._redirects = redirect_dict
-		self._calc_dict = {}  # lazy property
-		self._update_flag = False
-
-	def add_instance(self, surface, entity):
-		if surface not in self._dict:
-			self._dict[surface] = {}
-		if entity not in self._dict[surface]:
-			self._dict[surface][entity] = 0
-		self._dict[surface][entity] += 1
-		self._update_flag = False
-
-	def generate_calc_dict(self):
-		self._calc_dict = {}
-		idx = 0
-		for ent in self._kb:
-			try:
-				s = sum(self._dict[ent])
-				if ent in self._dict[ent]:
-					self._calc_dict[ent][ent] += s // 5
-				else:
-					self._calc_dict[ent][ent] = max(s // 5, 1)
-			except:
-				self._dict[ent] = {ent: 1}
-		for m, e in self._dict.items():
-			x = list(e.values())
-			values = np.around(x / np.sum(x), 4)
-			self._calc_dict[m] = {}
-			for i, (key, value) in enumerate(e.items()):
-				self._calc_dict[m][key] = (values[i], idx)
-				idx += 1
-		self._update_flag = True
-
-	def __getitem__(self, item):
-		if not self._update_flag:
-			self.generate_calc_dict()
-
-		candidates = self._calc_dict[item] if item in self._calc_dict else {}
-		cand_list = []
-		for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
-			cand_name = self._redirects[cand_name] if cand_name in self._redirects else cand_name
-			if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
-				score, id = cand_score
-				cand_list.append((cand_name, id, score))
-		return cand_list

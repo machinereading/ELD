@@ -1,12 +1,12 @@
 import sys
 
 import numpy as np
-
+import torch
 if sys.version_info >= (3, 6):
 	pass
 
-from pytorch_pretrained_bert.modeling import *
-
+# from pytorch_transformers.modeling import *
+import torch.nn as nn
 class Embedding(nn.Module):
 	embedding_path_dict = {}
 	def __init__(self, embedding_type):
@@ -48,28 +48,28 @@ class Embedding(nn.Module):
 			embedding.embedding_dim = e.shape[1]
 		elif embedding_type == "elmo":
 			pass
-		elif embedding_type == "bert":
-			embedding.embedding = BertModel.from_pretrained('bert-base-multilingual-cased')
-			embedding.embedding_dim = 768
+		# elif embedding_type == "bert":
+		# 	embedding.embedding = BertModel.from_pretrained('bert-base-multilingual-cased')
+		# 	embedding.embedding_dim = 768
 		cls.embedding_path_dict[embedding_path] = embedding
 		return embedding
 
-class Bert(BertPreTrainedModel):
-	def __init__(self, config):
-		super(Bert, self).__init__(config)
-		self.bert = BertModel(config)
-
-	def forward(self, input):
-		return self.bert(input)
-
-def bert_tokenizer(text):
-	orig_tokens = text
-	bert_tokens = []
-	orig_to_tok_map = []
-	bert_tokens.append("[CLS]")
-	for orig_token in orig_tokens:
-		orig_to_tok_map.append(len(bert_tokens))
-		bert_tokens.extend(tokenizer.tokenize(orig_token))
-	bert_tokens.append("[SEP]")
-
-	return orig_tokens, bert_tokens, orig_to_tok_map
+# class Bert(BertPreTrainedModel):
+# 	def __init__(self, config):
+# 		super(Bert, self).__init__(config)
+# 		self.bert = BertModel(config)
+#
+# 	def forward(self, input):
+# 		return self.bert(input)
+#
+# def bert_tokenizer(text):
+# 	orig_tokens = text
+# 	bert_tokens = []
+# 	orig_to_tok_map = []
+# 	bert_tokens.append("[CLS]")
+# 	for orig_token in orig_tokens:
+# 		orig_to_tok_map.append(len(bert_tokens))
+# 		bert_tokens.extend(tokenizer.tokenize(orig_token))
+# 	bert_tokens.append("[SEP]")
+#
+# 	return orig_tokens, bert_tokens, orig_to_tok_map

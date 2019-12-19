@@ -66,7 +66,6 @@ class AvgTransformer(nn.Module):
 		self.use_stddev = getattr(args, "use_stddev", False)
 		er_input_dim = args.er_output_dim
 		el_input_dim = args.el_output_dim
-		jamo_dim = args.char_embedding_dim
 		in_dim = args.jamo_embed_dim + er_input_dim * 2 + el_input_dim * 2
 		if args.use_stddev:
 			in_dim += 2

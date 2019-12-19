@@ -24,6 +24,8 @@ def evaluate(iter_el_result, label):
 	predicted_cluster = []
 	cclk2i = {}
 	pclk2i = {}
+	sent_result = []
+	cluster_assigned = 0
 	for sentence, ls in zip(iter_el_result, label):
 		for l in ls["entities"]:
 			for e in sentence.entities:
@@ -41,6 +43,7 @@ def evaluate(iter_el_result, label):
 				if l["entity"] not in id_to_entity_map[cluster_id]:
 					id_to_entity_map[cluster_id][l["entity"]] = 0
 				id_to_entity_map[cluster_id][l["entity"]] += 1
+				cluster_assigned += 1
 			except:
 				marked_entity = ne.entity
 				correct_entity = l["manual_entity"] if "manual_entity" in l else l["entity"]
@@ -61,8 +64,10 @@ def evaluate(iter_el_result, label):
 	for i, v in id_to_entity_map.items():
 		maxk = max(v.items(), key=operator.itemgetter(1))[0]
 		ide[i] = maxk
+
 	for sentence, ls in zip(iter_el_result, label):
 		for l in ls["entities"]:
+			if l["dataType"] != "namu": continue
 			for e in sentence.entities:
 				if e.char_ind == l["start"] and e.surface == l["surface"]:
 					ne = e
@@ -70,6 +75,7 @@ def evaluate(iter_el_result, label):
 			else:
 				continue
 			correct_entity = l["manual_entity"] if "manual_entity" in l else l["entity"]
+			l["answer"] = correct_entity
 			tagged = "manual_entity" in l
 			cluster_flag = False
 			try:
@@ -82,18 +88,25 @@ def evaluate(iter_el_result, label):
 				marked_entity = ne.entity
 			if marked_entity == nic:
 				marked_entity = nae
+			l["predict"] = marked_entity
 			if marked_entity != nae:
 				if tagged:
 					gold_only["P"] += 1
+				else:
+					el_count["P"] += 1
 				additional_el_count["P"] += 1
 				if marked_entity == correct_entity:
 					additional_el_count["TP"] += 1
 					if tagged:
 						gold_only["TP"] += 1
+					else:
+						el_count["TP"] += 1
 			if correct_entity != nae:
 				additional_el_count["R"] += 1
 				if tagged:
 					gold_only["R"] += 1
+				else:
+					el_count["R"] += 1
 			# nae eval
 
 			if correct_entity != nae and marked_entity != nae:
@@ -116,6 +129,7 @@ def evaluate(iter_el_result, label):
 				total_dark += 1
 				if marked_entity != nic and "_fake" not in marked_entity:
 					found_entity += 1
+		sent_result.append(ls) # TODO
 	p = lambda x: x["TP"] / x["P"] if x["P"] > 0 else 0
 	r = lambda x: x["TP"] / x["R"] if x["R"] > 0 else 0
 	elp = el_count["TP"] / el_count["P"] if el_count["P"] > 0 else 0
@@ -133,10 +147,13 @@ def evaluate(iter_el_result, label):
 	# for c, p in zip(correct_cluster[:20], predicted_cluster[:20]):
 	# 	print(c, p)
 	ari = adjusted_rand_score(correct_cluster, predicted_cluster)
+	print(el_count)
 	print("EL Score: %.4f, %.4f, %.4f" % (elp * 100, elr * 100, elf1 * 100))
+	print(additional_el_count)
 	print("Additional EL Score: %.4f, %.4f, %.4f" % (aelp * 100, aelr * 100, aelf1 * 100))
 	print("NAE Score: %.4f, %.4f, %.4f" % (naep * 100, naer * 100, naef1 * 100))
 	print("ARI: %.4f" % ari)
 	print("Gold only: %.4f, %.4f, %.4f" % (gp * 100, gr * 100, gf *100))
 	print("Dark entity found: %d / %d" % (found_entity, total_dark))
-	return {"EL": [elp, elr, elf1], "AEL": [aelp, aelr, aelf1], "NAE": [naep, naer, naef1], "ARI": ari, "DEFound": [found_entity, total_dark], "Gold": [gp, gr, gf]}
+	print("Cluster assigned: %d" % cluster_assigned)
+	return {"EL": [elp, elr, elf1], "AEL": [aelp, aelr, aelf1], "NAE": [naep, naer, naef1], "ARI": ari, "DEFound": [found_entity, total_dark], "Gold": [gp, gr, gf]}, sent_result, ide

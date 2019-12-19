@@ -8,7 +8,7 @@ import string
 from functools import reduce
 
 from ... import GlobalValues as gl
-from ...utils import TimeUtil
+from ...utils import TimeUtil, getETRI
 
 # from . import candidate_dict
 
@@ -24,48 +24,50 @@ dbpedia_prefix = "ko.dbpedia.org/resource/"
 # with open("data/el/redirects.pickle", "rb") as f:
 # 	redirects = pickle.load(f)
 
+#
+# @TimeUtil.measure_time
+# def candidates(word):
+# 	candidates = candidate_dict[word]
+# 	return candidates
+#
+# def candidates_old(word):
+# 	candidates = ent_dict[word] if word in ent_dict else {}
+# 	cand_list = []
+# 	for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
+# 		cand_name = redirects[cand_name] if cand_name in redirects else cand_name
+# 		if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
+# 			score, id = cand_score
+# 			cand_list.append((cand_name, id, score))
+# 	return cand_list
 
-@TimeUtil.measure_time
-def candidates(word):
-	candidates = candidate_dict[word]
-	return candidates
-
-def candidates_old(word):
-	candidates = ent_dict[word] if word in ent_dict else {}
-	cand_list = []
-	for cand_name, cand_score in sorted(candidates.items(), key=lambda x: -x[1][0]):
-		cand_name = redirects[cand_name] if cand_name in redirects else cand_name
-		if (cand_name in cand_list and cand_list[cand_name] < cand_score) or cand_name not in cand_list:
-			score, id = cand_score
-			cand_list.append((cand_name, id, score))
-	return cand_list
-
-@TimeUtil.measure_time
-def getETRI(text):
-	host = '143.248.135.146'
-	port = 33333
-
-	ADDR = (host, port)
-	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	try:
-		clientSocket.connect(ADDR)
-	except Exception as e:
-		gl.logger.warning("ETRI connection failed")
-		return None
-	try:
-		clientSocket.sendall(str.encode(text))
-		buffer = bytearray()
-		while True:
-			data = clientSocket.recv(1024)
-			if not data:
-				break
-			buffer.extend(data)
-		result = json.loads(buffer.decode(encoding='utf-8'))
-		return result
-
-	except Exception as e:
-		gl.logger.warning("ETRI connection lost")
-		return None
+# @TimeUtil.measure_time
+# def getETRI(text):
+# 	host = '143.248.135.146'
+# 	port = 33333
+#
+# 	ADDR = (host, port)
+# 	clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# 	try:
+# 		clientSocket.connect(ADDR)
+# 	except Exception:
+# 		gl.logger.warning("ETRI connection failed")
+# 		return None
+# 	try:
+# 		clientSocket.sendall(str.encode(text))
+# 		buffer = bytearray()
+# 		while True:
+# 			data = clientSocket.recv(1024)
+# 			if not data:
+# 				break
+# 			buffer.extend(data)
+# 		result = json.loads(buffer.decode(encoding='utf-8'))
+# 		return result
+#
+# 	except Exception:
+# 		gl.logger.warning("ETRI connection lost")
+# 		return None
+# 	finally:
+# 		clientSocket.close()
 
 def find_ne_pos(j):
 	def find_in_wsd(wsd, ind):
@@ -76,6 +78,7 @@ def find_ne_pos(j):
 		raise IndexError(ind)
 
 	if j is None:
+		gl.logger.debug("ETRI result is None")
 		return None
 	original_text = reduce(lambda x, y: x + y, list(map(lambda z: z["text"], j["sentence"])))
 	# original_text = j["sentence"]
@@ -84,7 +87,6 @@ def find_ne_pos(j):
 	j["NE"] = []
 	try:
 		for v in j["sentence"]:
-			sentence = v["text"]
 			for ne in v["NE"]:
 				morph_start = find_in_wsd(v["morp"], ne["begin"])
 				# morph_end = find_in_wsd(v["WSD"],ne["end"])
@@ -116,47 +118,47 @@ def is_not_korean(char):
 def mark_ne(text):
 	return find_ne_pos(getETRI(text))
 
-def make_json(ne_marked_dict, predict=False):
-	cs_form = {}
-	cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
-	cs_form["entities"] = []
-	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in
-	                              range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict["fileName"] == "" else \
-		ne_marked_dict["fileName"]
-	entities = ne_marked_dict["NE"] if "NE" in ne_marked_dict else ne_marked_dict["entities"]
-	for item in entities:
-		skip_flag = False
-		if "type" in item:
-			for prefix in ["QT", "DT"]:  # HARD-CODED: ONLY WORKS FOR ETRI TYPES
-				if item["type"].startswith(prefix): skip_flag = True
-			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
-		surface = item["text"] if "text" in item else item["surface"]
-		if "keyword" in item or "entity" in item:
-			keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
-		else:
-			keyword = "NOT_IN_CANDIDATE"
-		# if keyword == "NOT_AN_ENTITY":
-		# 	keyword = "NOT_IN_CANDIDATE"
-		if "dark_entity" in item:
-			keyword = "DARK_ENTITY"
-		start = item["char_start"] if "char_start" in item else item["start"]
-		end = item["char_end"] if "char_end" in item else item["end"]
-		if all(list(map(is_not_korean, surface))): continue
+# def make_json(ne_marked_dict, predict=False):
+# 	cs_form = {}
+# 	cs_form["text"] = ne_marked_dict["original_text"] if "original_text" in ne_marked_dict else ne_marked_dict["text"]
+# 	cs_form["entities"] = []
+# 	cs_form["fileName"] = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in
+# 	                              range(7)) if "fileName" not in ne_marked_dict or ne_marked_dict["fileName"] == "" else \
+# 		ne_marked_dict["fileName"]
+# 	entities = ne_marked_dict["NE"] if "NE" in ne_marked_dict else ne_marked_dict["entities"]
+# 	for item in entities:
+# 		skip_flag = False
+# 		if "type" in item:
+# 			for prefix in ["QT", "DT"]:  # HARD-CODED: ONLY WORKS FOR ETRI TYPES
+# 				if item["type"].startswith(prefix): skip_flag = True
+# 			if item["type"] in ["CV_RELATION", "TM_DIRECTION"] or skip_flag: continue
+# 		surface = item["text"] if "text" in item else item["surface"]
+# 		if "keyword" in item or "entity" in item:
+# 			keyword = "NOT_IN_CANDIDATE" if predict else (item["keyword"] if "keyword" in item else item["entity"])
+# 		else:
+# 			keyword = "NOT_IN_CANDIDATE"
+# 		# if keyword == "NOT_AN_ENTITY":
+# 		# 	keyword = "NOT_IN_CANDIDATE"
+# 		if "dark_entity" in item:
+# 			keyword = "DARK_ENTITY"
+# 		start = item["char_start"] if "char_start" in item else item["start"]
+# 		end = item["char_end"] if "char_end" in item else item["end"]
+# 		if all(list(map(is_not_korean, surface))): continue
+#
+# 		cs_form["entities"].append({
+# 			"surface"   : surface,
+# 			"candidates": candidates_old(surface),
+# 			"answer"    : keyword,
+# 			"start"     : start,
+# 			"end"       : end,
+# 			"ne_type"   : item["type"] if "type" in item else ""
+# 		})
+# 	return cs_form
 
-		cs_form["entities"].append({
-			"surface"   : surface,
-			"candidates": candidates_old(surface),
-			"answer"    : keyword,
-			"start"     : start,
-			"end"       : end,
-			"ne_type"   : item["type"] if "type" in item else ""
-		})
-	return cs_form
-
-def add_candidates(j):
-	for entity in j["entities"]:
-		if "candidates" in entity: continue
-		entity["candidates"] = candidates(entity["surface"])
+# def add_candidates(j):
+# 	for entity in j["entities"]:
+# 		if "candidates" in entity: continue
+# 		entity["candidates"] = candidates(entity["surface"])
 
 def overlap(ent1, ent2):
 	s1 = ent1["start"]
@@ -199,7 +201,7 @@ def get_context_words(text, pos, direction, maximum_context=30):
 	ind = pos
 	buf = ""
 	text = text.replace("\n", " ")
-	while len(result) < maximum_context and ind > 0 and ind < len(text) - 1:
+	while len(result) < maximum_context and 0 < ind < len(text) - 1:
 		ind += direction
 		if text[ind] == " ":
 			if len(buf) > 0:
@@ -350,3 +352,4 @@ def get_context_words(text, pos, direction, maximum_context=30):
 # 		except Exception as e:
 # 			pass
 # 	return cw_form, conlls, tsvs
+

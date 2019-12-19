@@ -9,6 +9,8 @@ def merge_item(j, result_dict, delete_candidate=True):
 		# ind = 0
 		# print("----")
 		for item in j:
+			if "fileName" not in item:
+				continue
 			if item["fileName"] == doc_name:
 				target_json = item
 				for item in target_json["entities"]:
@@ -19,7 +21,7 @@ def merge_item(j, result_dict, delete_candidate=True):
 					item["text"] = item["surface"]
 					item["dataType"] = item["ne_type"]
 					del item["ne_type"]
-					del item["surface"]
+					# del item["surface"]
 				break
 		else:
 			raise Exception("No such file name: %s" % target_name)

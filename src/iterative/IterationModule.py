@@ -5,7 +5,7 @@ from .. import GlobalValues as gl
 from ..ds import *
 from ..ec import EC
 from ..el import EL
-from ..ev import EV, EVAll, EVRandom, EVNone
+from ..ev import EV, EVAll, EVRandom, EVNone, EVGold
 from ..utils import jsonload, jsondump, diriter, pickleload, pickledump
 import torch
 import os
@@ -15,7 +15,7 @@ class IterationModule:
 
 	def __init__(self, el_model_name, ev_model_name):
 		gl.logger.info("Initializing IterationModule")
-		ev_redirection = {"ev_all": EVAll, "ev_random": EVRandom, "ev_none": EVNone}
+		ev_redirection = {"ev_all": EVAll, "ev_random": EVRandom, "ev_none": EVNone, "ev_gold": EVGold}
 		self.args = IterationArgs()
 		self.args.el_model_name = el_model_name
 		self.args.ev_model_name = ev_model_name
@@ -71,6 +71,9 @@ class IterationModule:
 			print("MAX AFTER: %d" % max([len(x) for x in clustered.cluster_list]))
 		validated = self.ev_model(clustered)
 
+		del self.ev_model
+		torch.cuda.empty_cache()
+		jsondump([x.to_json() for x in validated.cluster_list], "data/namu_iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
 
 		gl.logger.debug("Generating new embedding")
 		new_cluster = list(filter(lambda x: x.kb_uploadable, validated.cluster_list))
@@ -108,3 +111,15 @@ class IterationModule:
 		# except Exception as e:
 		# 	print("Error dumping pickle", e)
 
+		jsondump(test_corpus.to_json(), "data/namu_iterative_result_%s_with_fake.json" % self.args.ev_model_name)
+		eval_result, eval_detail, cluster_mapping_info = eval.evaluate(test_corpus, answer)
+		for i, v in cluster_mapping_info.items():
+			for item in new_cluster:
+				try:
+					if int(item.target_entity) == i:
+						item["target_entity"] = v
+				except:
+					pass
+		jsondump([x.to_json() for x in new_cluster], "data/namu_iteration_validation_result_%s_with_fake.json" % self.args.ev_model_name)
+		jsondump(eval_result, "data/namu_iterative_score_%s_with_fake_final.json" % self.args.ev_model_name)
+		jsondump(eval_detail, "data/namu_iterative_el_result_%s_with_fake.json" % self.args.ev_model_name)

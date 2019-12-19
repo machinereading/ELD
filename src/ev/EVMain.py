@@ -84,8 +84,6 @@ class EV:
 		dev_dataloader = DataLoader(dev_generator, batch_size=self.batch_size, shuffle=False, pin_memory=True)
 		for epoch in range(1, self.args.epoch + 1):
 			self.validation_model.train()
-			tp = []
-			tl = []
 			err_count = 0
 			for batch in train_dataloader:
 				try:
@@ -152,7 +150,6 @@ class EV:
 
 
 		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=self.args.max_jamo)
-		batch_size = 4
 		loader = DataLoader(ClusterGenerator(corpus, filter_nik=True), batch_size=self.batch_size, pin_memory=True)
 		gl.logger.info("Clusters to validate: %d" % len(corpus.cluster_list))
 		# validate tensor
@@ -230,4 +227,17 @@ class EVNone:
 		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=108)
 		for cluster in corpus.cluster_list:
 			cluster.kb_uploadable = False
+		return corpus
+
+class EVGold:
+	def __init__(self):
+		self.args = EVArgs("EVGold")
+		self.args.device = "cuda"
+		self.dataset = DataModule("test", self.args)
+
+	def __call__(self, corpus):
+		corpus = self.dataset.generate_fake_cluster(corpus)
+		corpus = self.dataset.convert_cluster_to_tensor(corpus, max_jamo_restriction=108)
+		for cluster in corpus.cluster_list:
+			cluster.kb_uploadable = type(cluster) is not FakeCluster
 		return corpus

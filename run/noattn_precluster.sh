@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=2 python -m exec.ELDScript --mode train --model_name noattn_precluster --char_encoder cnn --word_encoder cnn --relation_encoder cnn --type_encoder ffnn --register_policy pre_cluster --train_limit 2500 --dev_limit 1000

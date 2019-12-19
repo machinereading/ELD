@@ -81,3 +81,8 @@ class Vocabulary:
             self.word2id[token] = len(self.id2word) - 1
             self.counts.append(1)
         return self
+
+    def add_instance(self, voca):
+        if voca not in self.id2word:
+            self.id2word.append(voca)
+            self.word2id[voca] = len(self.id2word) - 1
