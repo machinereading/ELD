@@ -8,7 +8,7 @@ import traceback
 import os
 corpus1 = Corpus.load_corpus("corpus/nokim_fixed.json")
 for item in corpus1.eld_items:
-	if "namu_" not in item.entity:
+	if not item.entity.startswith("namu_"):
 		item.entity = "namu_" + item.entity
 corpus2 = Corpus.load_corpus("corpus/namu_eld_handtag_test2/")
 filter_entities = ["namu_읍내", "namu_음악캠프"]
@@ -34,13 +34,15 @@ args.in_kb_linker = "mulrel"
 # pred4_2 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
 # pred4_2.data.cand_only = False
 # pred4_3 = MSEEntEmbedding("test", "mse_pred_cand_only_with_neg_softmax_without_jamo_4")
+# pred0 = MSEEntEmbedding("test", "pred_with_neg_namu_word_emb")
+#
 pred0 = MSEEntEmbedding("test", "pred_full_ffnn_transformer")
-pred1 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_ffnn")
-pred2 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context_ffnn")
-pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context_ffnn")
-pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type_ffnn")
-pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char_ffnn")
-pred6 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel_ffnn")
+# pred1 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_ffnn")
+# pred2 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_word_context_ffnn")
+# pred3 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_entity_context_ffnn")
+# pred4 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_type_ffnn")
+# pred5 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_char_ffnn")
+# pred6 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel_ffnn")
 # pred4 = MSEEntEmbedding("test", " ")
 
 # pred5 = MSEEntEmbedding("test", "pred_with_neg_sampling_4")
@@ -57,12 +59,12 @@ pred6 = MSEEntEmbedding("test", "pred_with_neg_softmax_no_rel_ffnn")
 result1 = {}
 result2 = {}
 test_nocand_nomod = True
-test_cand_nomod = True
-test_nocand_mod = True
-test_cand_mod = True
-for model in [pred0, pred1, pred2, pred3, pred4, pred5, pred6]:
-# for model in [pred2]:
-	target_dir = "eld_test2/%s/" % model.model_name
+test_cand_nomod = False
+test_nocand_mod = False
+test_cand_mod = False
+# for model in [pred0, pred1, pred2, pred3, pred4, pred5, pred6]:
+for model in [pred0]:
+	target_dir = "eld_test/%s/" % model.model_name
 	if not os.path.isdir(target_dir):
 		os.mkdir(target_dir)
 	if test_nocand_nomod:
