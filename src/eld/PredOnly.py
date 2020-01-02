@@ -216,6 +216,13 @@ class SkipGramEntEmbedding:
 
 class MSEEntEmbedding:
 	def __init__(self, mode: str, model_name: str, args: ELDArgs=None, data: DataModule = None):
+		"""
+		MSE 방식으로 학습한 임베딩 유사도 기반 transformer
+		@param mode: "train", "test", "demo" 중 하나
+		@param model_name: 모델 이름, mode == "train"이면 모델을 생성하고, train이 아닌 경우 설정과 모델을 읽어와서 구축함
+		@param args: ELDArgs 객체
+		@param data: DataModule 다중 로딩을 피하기 위해 Data를 미리 만들어 둔 경우 인자로 전달해 주면 됨.
+		"""
 		gl.logger.info("Initializing prediction model")
 		self.mode = mode
 		self.model_name = model_name
@@ -249,6 +256,13 @@ class MSEEntEmbedding:
 		gl.logger.info("Finished prediction model initialization")
 
 	def train(self, train_data: Corpus, dev_data: Corpus = None, test_data: Corpus = None):
+		"""
+		train data에 대해 학습 진행, dev corpus에서의 점수를 기반으로 모델 저장, test corpus를 기준으로 최종 점수 산출.
+		@param train_data: train corpus
+		@param dev_data: dev corpus
+		@param test_data: test corpus
+		@return: None. 모델은 자동 저장됨
+		"""
 		gl.logger.info("Training prediction model")
 
 		batch_size = 512
@@ -374,6 +388,12 @@ class MSEEntEmbedding:
 
 
 	def test(self, test_data: Corpus, out_kb_flags=None):
+		"""
+		점수를 내기 위한 코드
+		@param test_data: 정답이 마킹된 corpus
+		@param out_kb_flags: test_data의 test instance와 같은 길이의 int list -> entity discovery 결과
+		@return:
+		"""
 		self.load_model()
 		self.data.oe2i = {}
 		with torch.no_grad():

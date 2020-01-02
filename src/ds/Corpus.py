@@ -1,27 +1,37 @@
-import logging
 import os
+from typing import Iterator, List
 
 from tqdm import tqdm
-from typing import Iterator, List
 
 from .Cluster import Cluster
 from .Sentence import Sentence
 from .Vocabulary import Vocabulary
-from ..utils import jsonload, TimeUtil, diriter, readfile
+from ..utils import jsonload, TimeUtil, diriter
 
 class Corpus:
 	def __init__(self):
 		self.sentences = []  # list of sentence
-		self.tagged_voca_lens = []
-		self.cluster = {}  # dict of str(entity form): Cluster
-		self.additional_cluster = []
-		self._eld_items: List[Vocabulary] = []
+		self.tagged_voca_lens = []  # For Iterative
+		self.cluster = {}  # dict of str(entity form): Cluster --> for Clustering, Iterative
+		self.additional_cluster = []  # For Iterative
+		self._eld_items: List[Vocabulary] = []  # for ELD
 
-	def add_sentence(self, sentence):
+	def add_sentence(self, sentence: Sentence):
+		"""
+		sentence를 추가하고 sentence에 id 부여
+		@param sentence: 추가하고자 하는 sentence 개체
+		@return: None
+		"""
 		self.sentences.append(sentence)
 		sentence.id = len(self.sentences)
 
 	def __iter__(self) -> Iterator[Sentence]:
+		"""
+		for문 돌릴 수 있게 만드는 것
+
+		Sentence iteration을 돌림.
+		@return: sentence iterator
+		"""
 		for item in self.sentences:
 			yield item
 
@@ -33,7 +43,7 @@ class Corpus:
 		return [x for x in self.cluster.values()] + self.additional_cluster
 
 	@property
-	def id2c(self):
+	def id2c(self):  # For Iterative
 		return {i: v for i, v in enumerate(self.cluster_list)}
 
 	@property
@@ -57,7 +67,16 @@ class Corpus:
 		return self.cluster_list[ind]
 
 	@classmethod
-	def load_corpus(cls, path, limit=None, min_token=0):
+	def load_corpus(cls, path, limit: int = 0, min_token: int = 0):
+		"""
+		path에 있는 파일(들)에서 corpus를 뽑아내는 것. 이 때 path의 파일(들)은 crowdsourcing form이어야 함.
+		@param path: 다음 중 하나.
+			- list of dict: crowdsourcing form의 list
+			- str: 단일 파일을 가리키는 위치 또는 파일들이 들어있는 디렉토리 위치
+		@param limit: default: 0. 1 이상의 정수일 경우 앞에서부터 limit까지만 읽어옴
+		@param min_token: default: 0. 문장의 token이 min_token 이하인 경우 자름
+		@return: Crowdsourcing form을 읽어낸 Corpus object
+		"""
 		# load from crowdsourcing form
 		if type(path) is str:
 			if os.path.isfile(path):
@@ -74,7 +93,7 @@ class Corpus:
 		assert type(path) is list
 		# logging.info("Loading corpus")
 		corpus = cls()
-		if limit is not None and limit > 0:
+		if limit > 0:
 			path = path[:limit]
 		for item in tqdm(path, desc="Loading corpus"):
 			sentence = Sentence.from_cw_form(item)
@@ -100,11 +119,11 @@ class Corpus:
 		# corpus.id2c = {i: v for i, v in enumerate(corpus.cluster_list)}
 		return corpus
 
-	def to_json(self):
+	def to_json(self): # 안씀
 		return [sent.to_json() for sent in self.sentences]
 
 	@classmethod
-	def from_json(cls, json):
+	def from_json(cls, json): # 안씀
 		if type(json) is str:
 			json = jsonload(json)
 		corpus = cls()
@@ -126,6 +145,11 @@ class Corpus:
 		return corpus
 
 	def split_sentence_to_dev(self):
+		"""
+		Corpus 내의 sentence를 9:1 로 잘라내어 train corpus와 dev corpus로 분리.
+		아마 안 쓸 듯?
+		@return: train corpus, dev corpus
+		"""
 		train = Corpus()
 		dev = Corpus()
 		for i, sent in enumerate(self.sentences):
@@ -135,7 +159,7 @@ class Corpus:
 				train.add_sentence(sent)
 		return train, dev
 
-	def split_cluster_to_dev(self):
+	def split_cluster_to_dev(self): # For Iterative
 		train = Corpus()
 		dev = Corpus()
 		for i, (k, v) in enumerate(self.cluster.items()):
@@ -151,7 +175,7 @@ class Corpus:
 
 		return train, dev
 
-	def recluster(self):
+	def recluster(self): # For Iterative
 		self.cluster = {}
 		for sentence in self:
 			for token in sentence.entities:
@@ -161,7 +185,7 @@ class Corpus:
 				self.cluster[token.ec_cluster].add_elem(token)
 
 	@property
-	def token_len(self):
+	def token_len(self): # 전체 token 길이
 		return sum(map(len, self))
 
 	def token_iter(self):
@@ -173,6 +197,7 @@ class Corpus:
 		for sent in self:
 			for ent in sent.entities:
 				yield ent
+
 	# for ELD
 	@property
 	def eld_len(self):
@@ -198,4 +223,3 @@ class Corpus:
 	def from_string(cls, *corpus):
 		from ..utils.datafunc import text_to_etri, etri_to_ne_dict
 		return cls.load_corpus(list(map(etri_to_ne_dict, map(text_to_etri, corpus))))
-

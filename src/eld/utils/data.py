@@ -438,6 +438,13 @@ class DataModule:
 		# return ELDDataset(mode, corpus, self.args, cand_dict=self.surface_ent_dict)
 
 	def predict_entity_with_embedding_train(self, eld_items, embedding, out_kb_flags=None):
+		"""
+		threshold를 20단계로 나누어서 등록 및 연결 수행
+		@param eld_items:
+		@param embedding:
+		@param out_kb_flags:
+		@return:
+		"""
 		idx_result = {i: [] for i in range(1, 20)}
 		sim_result = {i: [] for i in range(1, 20)}
 		for idx in range(1, 20):
