@@ -16,10 +16,20 @@ jamo_len = len(cho) + len(jung) + len(jong)
 digits = [str(x) for x in range(10)]
 parenthesis = [x for x in "{}[]()<>"]
 
-def is_korean_character(char):
+def is_korean_character(char: str):
+	"""
+	글자가 한글 글자(가-힣, 자모 아님!)인지 판단
+	@param char: 글자
+	@return: 한글 글자인 경우 true
+	"""
 	return 0xAC00 <= ord(char) <= 0xD7A3
 
 def is_alphabet(char):
+	"""
+	글자가
+	@param char:
+	@return:
+	"""
 	return 'a' <= char <= 'z' or 'A' <= char <= 'Z'
 
 def is_digit(char):

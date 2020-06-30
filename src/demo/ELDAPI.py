@@ -66,11 +66,11 @@ def generate_output(c: Corpus):
 	return result
 
 def run(text):
-	corpus = Corpus.from_string(text)
-	corpus = el.pred_corpus(corpus)
-	corpus = discovery(corpus)
-	corpus = pred(corpus)
-	corpus = typepred.pred(corpus)
+	corpus = Corpus.from_string(text) # string에서 corpus 추출(ETRI 포함)
+	corpus = el.pred_corpus(corpus) # EL을 일단 돌림
+	corpus = discovery(corpus) # 모든 entity에 대해서 discovery 점수 추출
+	corpus = pred(corpus) # 캐시 지식베이스에서 연결 또는 등록
+	corpus = typepred.pred(corpus) #
 	for item in corpus.entities:
 		postprocess.postprocess(item)
 	return json.dumps(generate_output(corpus), ensure_ascii=False)
