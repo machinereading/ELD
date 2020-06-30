@@ -1,4 +1,5 @@
 import numpy as np
+import os
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -10,7 +11,7 @@ from ..modules.InKBLinker import MulRel, PEM, Dist, InKBLinker
 from ..modules.TypePred import TypeGiver
 from ... import GlobalValues as gl
 from ...ds import *
-from ...utils import readfile, pickleload, TimeUtil, one_hot, KoreanUtil
+from ...utils import *
 
 class DataModule:
 	def __init__(self, mode: str, args: ELDArgs):
@@ -68,6 +69,10 @@ class DataModule:
 			self.pred_entity_embedding = torch.zeros([0, ee.shape[-1]], dtype=torch.float)
 			self.pred_entity_surface_dict = []
 			self.pred_i2e = {}
+			if os.path.isfile("cache_kb_entity_names.txt"):
+				self.pred_i2e = {i: k for i, k in enumerate(readfile("cache_kb_entity_names.txt"))}
+				self.pred_entity_surface_dict = jsonload("cache_kb_ent_surface_dict.json")
+				self.pred_entity_embedding = torch.tensor(np.load("cache_kb_entity_embedding.npy"))
 		self.original_entity_embedding = self.entity_embedding.clone()
 		self.original_surface_ent_dict = CandDict(self.ent_list, pickleload(args.entity_dict_path), self.redirects)
 		self.original_e2i = {k: v for k, v in self.e2i.items()}
@@ -572,13 +577,16 @@ class DataModule:
 						self.pred_i2e[len(self.pred_i2e)] = ent_name
 						result.append(ent_name)
 						assert self.pred_entity_embedding.size(0) == len(self.pred_entity_surface_dict)
-
+						writefile([x for x in self.pred_i2e.values()], "cache_kb_entity_names.txt")
+						np.save("cache_kb_entity_embedding.npy", self.pred_entity_embedding.numpy())
 					else: # link cache kb
 						self.pred_entity_surface_dict[pred_idx].add(ent.surface)
 						if self.modify_entity_embedding:
 							self.pred_entity_embedding[pred_idx] *= 1 - self.modify_entity_embedding_weight
 							self.pred_entity_embedding[pred_idx] += emb.cpu().clone().detach() * self.modify_entity_embedding_weight
+							np.save("cache_kb_entity_embedding.npy", self.pred_entity_embedding.numpy())
 						result.append(self.pred_i2e[pred_idx])
+					jsondump(self.pred_entity_surface_dict, "cache_kb_ent_surface_dict.json")
 				else:
 					result.append(self.i2e[pred_idx])
 				sim_result.append(sim)
